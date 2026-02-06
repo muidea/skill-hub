@@ -208,6 +208,10 @@ func runApply() error {
 			// 实际应用技能
 			if err := adapter.Apply(skillID, prompt, skillVars.Variables); err != nil {
 				fmt.Printf("❌ 应用技能 %s 到 %s 失败: %v\n", skillID, adapterName, err)
+				// 尝试恢复操作
+				if recoveryErr := attemptRecovery(adapter, skillID); recoveryErr != nil {
+					fmt.Printf("⚠️  恢复操作失败: %v\n", recoveryErr)
+				}
 				continue
 			}
 
@@ -228,6 +232,34 @@ func runApply() error {
 		fmt.Println("使用 'skill-hub status' 检查技能状态")
 	} else {
 		fmt.Println("\nℹ️  没有技能被应用到任何适配器")
+	}
+
+	return nil
+}
+
+// attemptRecovery 尝试恢复失败的技能应用
+func attemptRecovery(adpt adapter.Adapter, skillID string) error {
+	// 尝试从适配器移除残留内容
+	if err := adpt.Remove(skillID); err != nil {
+		return fmt.Errorf("移除残留内容失败: %w", err)
+	}
+
+	// 检查适配器是否支持备份恢复
+	if cursorAdapter, ok := adpt.(*cursor.CursorAdapter); ok {
+		// 对于Cursor适配器，检查备份文件
+		filePath, err := cursorAdapter.GetFilePath()
+		if err != nil {
+			return err
+		}
+
+		backupPath := filePath + ".bak"
+		if _, err := os.Stat(backupPath); err == nil {
+			// 备份文件存在，尝试恢复
+			if err := os.Rename(backupPath, filePath); err != nil {
+				return fmt.Errorf("恢复备份失败: %w", err)
+			}
+			return nil
+		}
 	}
 
 	return nil

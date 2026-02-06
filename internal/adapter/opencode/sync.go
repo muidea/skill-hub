@@ -24,7 +24,7 @@ func createSkillDirectory(skillDir string) error {
 
 	// 创建临时目录
 	tmpDir := skillDir + ".tmp"
-	if err := os.RemoveAll(tmpDir); err != nil {
+	if err := os.RemoveAll(tmpDir); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("清理临时目录失败: %w", err)
 	}
 
@@ -36,10 +36,25 @@ func createSkillDirectory(skillDir string) error {
 	if err := os.Rename(tmpDir, skillDir); err != nil {
 		// 清理临时目录
 		os.RemoveAll(tmpDir)
+		// 尝试恢复备份
+		if backupDir := skillDir + ".bak"; fileExists(backupDir) {
+			os.Rename(backupDir, skillDir)
+		}
 		return fmt.Errorf("重命名目录失败: %w", err)
 	}
 
+	// 清理备份目录
+	if backupDir := skillDir + ".bak"; fileExists(backupDir) {
+		os.RemoveAll(backupDir)
+	}
+
 	return nil
+}
+
+// fileExists 检查文件是否存在
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // writeSkillMDFile 写入SKILL.md文件（原子操作）
@@ -93,7 +108,7 @@ func restoreBackup(skillDir string) error {
 	}
 
 	// 删除当前目录（如果存在）
-	if err := os.RemoveAll(skillDir); err != nil {
+	if err := os.RemoveAll(skillDir); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("删除当前目录失败: %w", err)
 	}
 

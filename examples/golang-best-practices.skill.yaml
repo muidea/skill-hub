@@ -1,0 +1,177 @@
+name: golang-best-practices
+version: 1.0.0
+description: Go语言最佳实践和代码规范指导
+author: Skill Hub Team
+tags:
+  - golang
+  - best-practices
+  - code-review
+  - coding-standards
+preferred_target: cursor
+targets:
+  cursor: true
+  claude_code: true
+  open_code: true
+variables:
+  project_name: "{{ .ProjectName }}"
+  package_name: "{{ .PackageName }}"
+  use_viper: "{{ .UseViper }}"
+  use_cobra: "{{ .UseCobra }}"
+content: |
+  # Go语言最佳实践技能
+
+  ## 核心原则
+  1. **简洁性**: 代码应该简单明了，易于理解
+  2. **可读性**: 代码是给人读的，其次才是给机器执行
+  3. **一致性**: 遵循项目统一的编码风格
+  4. **错误处理**: 错误是值，应该被正确处理
+
+  ## 代码组织
+  ### 包结构
+  ```
+  project/
+  ├── cmd/          # 可执行程序入口
+  │   └── app/      # 主程序
+  ├── internal/     # 私有包（外部不可导入）
+  │   ├── api/      # API接口
+  │   ├── service/  # 业务逻辑
+  │   └── repo/     # 数据访问
+  ├── pkg/          # 公共库（可被外部导入）
+  ├── api/          # API定义（protobuf/OpenAPI）
+  ├── configs/      # 配置文件
+  ├── scripts/      # 构建和部署脚本
+  ├── test/         # 测试数据和工具
+  └── vendor/       # 依赖包（如果使用vendor）
+  ```
+
+  ### 文件命名
+  - 使用小写字母，单词间用下划线分隔
+  - 测试文件：`xxx_test.go`
+  - 示例文件：`example_test.go`
+  - 平台特定文件：`xxx_linux.go`, `xxx_windows.go`
+
+  ## 编码规范
+  ### 命名约定
+  - **包名**: 小写，简短，单数形式
+  - **接口名**: 以`er`结尾（如`Reader`, `Writer`）
+  - **变量名**: 驼峰式，简短但描述性
+  - **常量名**: 全大写，下划线分隔
+
+  ### 错误处理
+  ```go
+  // 推荐：使用errors.New或fmt.Errorf
+  if err != nil {
+      return fmt.Errorf("operation failed: %w", err)
+  }
+
+  // 自定义错误类型
+  type NotFoundError struct {
+      Resource string
+  }
+
+  func (e *NotFoundError) Error() string {
+      return fmt.Sprintf("%s not found", e.Resource)
+  }
+  ```
+
+  ### 并发安全
+  ```go
+  // 使用sync.Mutex保护共享资源
+  type SafeCounter struct {
+      mu    sync.Mutex
+      count int
+  }
+
+  func (c *SafeCounter) Increment() {
+      c.mu.Lock()
+      defer c.mu.Unlock()
+      c.count++
+  }
+  ```
+
+  ## 性能优化
+  ### 内存分配
+  - 预分配切片容量：`make([]T, 0, n)`
+  - 避免在循环中分配内存
+  - 使用`sync.Pool`重用对象
+
+  ### 字符串处理
+  - 使用`strings.Builder`进行字符串拼接
+  - 避免频繁的字符串转换
+
+  ## 测试规范
+  ### 单元测试
+  ```go
+  func TestAdd(t *testing.T) {
+      tests := []struct {
+          name     string
+          a, b     int
+          expected int
+      }{
+          {"positive numbers", 1, 2, 3},
+          {"negative numbers", -1, -2, -3},
+          {"zero", 0, 0, 0},
+      }
+
+      for _, tt := range tests {
+          t.Run(tt.name, func(t *testing.T) {
+              result := Add(tt.a, tt.b)
+              if result != tt.expected {
+                  t.Errorf("Add(%d, %d) = %d, want %d", tt.a, tt.b, result, tt.expected)
+              }
+          })
+      }
+  }
+  ```
+
+  ### 基准测试
+  ```go
+  func BenchmarkConcat(b *testing.B) {
+      for i := 0; i < b.N; i++ {
+          Concat("hello", "world")
+      }
+  }
+  ```
+
+  ## 工具链
+  ### 必备工具
+  - `go fmt`: 代码格式化
+  - `go vet`: 静态分析
+  - `golangci-lint`: 代码检查
+  - `go test -race`: 竞态检测
+
+  ### 构建配置
+  ```makefile
+  .PHONY: build test lint clean
+
+  build:
+      go build -o bin/app ./cmd/app
+
+  test:
+      go test -v -race ./...
+
+  lint:
+      golangci-lint run
+
+  clean:
+      rm -rf bin/
+  ```
+
+  ## 常见陷阱
+  1. **循环变量捕获**: 在goroutine中使用循环变量需要复制
+  2. **接口nil检查**: 接口值为nil时，其类型可能不为nil
+  3. **defer执行时机**: defer在函数返回时执行，但参数在defer语句处求值
+  4. **map并发访问**: map不是并发安全的，需要加锁或使用sync.Map
+
+  ## 最佳实践检查清单
+  - [ ] 错误是否被正确处理？
+  - [ ] 资源是否被正确释放？
+  - [ ] 代码是否有适当的注释？
+  - [ ] 测试覆盖率是否足够？
+  - [ ] 性能关键路径是否优化？
+  - [ ] 并发代码是否安全？
+
+  ## 参考资料
+  - [Effective Go](https://golang.org/doc/effective_go)
+  - [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
+  - [Uber Go Style Guide](https://github.com/uber-go/guide)

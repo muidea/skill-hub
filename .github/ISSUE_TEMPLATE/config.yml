@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/muidea/skill-hub#readme
+    about: Check the README for usage instructions
+  - name: Discussions
+    url: https://github.com/muidea/skill-hub/discussions
+    about: Ask questions and share ideas
+  - name: Skill Repository
+    url: https://github.com/muidea/skill-hub/tree/main/examples
+    about: Browse available skills
