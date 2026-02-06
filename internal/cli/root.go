@@ -7,10 +7,23 @@ import (
 )
 
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version string
+	commit  string
+	date    string
 )
+
+func init() {
+	// 设置默认值（如果未在构建时设置）
+	if version == "" {
+		version = "dev"
+	}
+	if commit == "" {
+		commit = "none"
+	}
+	if date == "" {
+		date = "unknown"
+	}
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "skill-hub",

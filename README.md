@@ -10,32 +10,12 @@
 
 ## 功能特性
 
-### ✅ 已完全实现
-- **技能管理**：创建、查看、启用、禁用技能 (`internal/cli/list.go:10-69`, `internal/cli/use.go:14-114`)
-- **变量支持**：技能模板支持变量替换 (`internal/cli/status.go:221-229`, `internal/adapter/claude/adapter.go:246-255`)
-- **标记块技术**：非侵入式修改目标配置文件 (`internal/adapter/claude/adapter.go:386-406`, `internal/adapter/cursor.go:24-26`)
-- **原子操作**：安全的文件写入和备份 (`internal/adapter/claude/adapter.go:202-229`, `internal/adapter/cursor.go:151-170`)
-- **跨平台**：支持Linux、macOS、Windows (`Makefile:23-26`)
-
-### ⚠️ 部分实现/待完善
-- **差异检测**：自动检测手动修改 (`internal/cli/status.go:136-144`)
-  - ✅ 支持SHA256哈希比较检测修改
-  - ❌ 缺少详细的差异显示和智能合并
-- **反馈闭环**：将修改反向更新到技能仓库 (`internal/cli/feedback.go:16-211`)
-  - ✅ 支持手动修改反馈和版本更新
-  - ❌ 缺少变量提取和智能模板更新
-
-### ✅ 新增Git集成功能
-- **Git仓库管理**：完整的Git操作封装 (`internal/git/repository.go`)
-- **技能仓库同步**：克隆、拉取、推送、提交 (`internal/git/skill_repo.go`)
-- **Git CLI命令**：完整的Git命令行接口 (`internal/cli/git.go`)
-- **配置支持**：Git远程URL和认证配置 (`internal/config/config.go:12-22`)
-
-### ❌ 未实现/缺失功能
-- **技能创建**：交互式创建新技能
-- **批量操作**：批量应用/移除技能
-- **冲突解决**：智能合并冲突
-- **GitHub搜索**：GitHub技能仓库搜索（search命令占位）
+- **技能管理**：创建、查看、启用、禁用技能
+- **变量支持**：技能模板支持变量替换
+- **跨工具同步**：支持 Cursor、Claude Code、OpenCode 等AI工具
+- **版本控制**：基于Git的技能版本管理
+- **差异检测**：自动检测手动修改并支持反馈
+- **安全操作**：原子文件写入和备份机制
 
 ## 快速开始
 
@@ -69,17 +49,22 @@ sudo make install
    skill-hub use git-expert
    ```
 
-4. **应用技能到项目**
+4. **设置项目首选目标**
+   ```bash
+   skill-hub set-target open_code
+   ```
+
+5. **应用技能到项目**
    ```bash
    skill-hub apply
    ```
 
-5. **检查技能状态**
+6. **检查技能状态**
    ```bash
    skill-hub status
    ```
 
-6. **反馈手动修改**
+7. **反馈手动修改**
    ```bash
    skill-hub feedback git-expert
    ```
@@ -90,15 +75,17 @@ sudo make install
 |------|------|------|
 | `init` | 初始化Skill Hub工作区 | `skill-hub init [git-url]` |
 | `list` | 列出所有可用技能 | `skill-hub list` |
-| `use` | 在当前项目启用技能 | `skill-hub use git-expert` |
+| `use` | 在当前项目启用技能 | `skill-hub use git-expert --target open_code` |
+| `set-target` | 设置项目首选目标 | `skill-hub set-target open_code` |
 | `apply` | 将技能应用到项目 | `skill-hub apply --dry-run` |
 | `status` | 检查技能状态 | `skill-hub status` |
 | `feedback` | 反馈手动修改 | `skill-hub feedback git-expert` |
-| `update` | 更新技能仓库（Git同步） | `skill-hub update` |
-| `search` | 搜索GitHub技能（占位） | `skill-hub search ai` |
+| `update` | 更新技能仓库 | `skill-hub update` |
+| `remove` | 从项目移除技能 | `skill-hub remove git-expert` |
 | `git` | Git仓库操作 | `skill-hub git --help` |
 
 ### Git子命令
+
 | 命令 | 描述 | 示例 |
 |------|------|------|
 | `git clone` | 克隆远程技能仓库 | `skill-hub git clone <url>` |
@@ -111,6 +98,7 @@ sudo make install
 ## 技能规范
 
 ### 目录结构
+
 ```
 /skills
   /git-expert
@@ -120,6 +108,7 @@ sudo make install
 ```
 
 ### skill.yaml 格式
+
 ```yaml
 id: "git-expert"
 name: "Git 提交专家"
@@ -129,7 +118,8 @@ description: "根据变更自动生成符合 Conventional Commits 规范的说�
 tags: ["git", "workflow"]
 compatibility:
   cursor: true
-  claude_code: false
+  claude_code: true
+  open_code: true
 variables:
   - name: "LANGUAGE"
     default: "zh-CN"
@@ -138,90 +128,43 @@ dependencies: []
 ```
 
 ### 模板变量
+
 在 `prompt.md` 中使用 Go Template 语法：
+
 ```markdown
 # 技能说明
 语言: {{.LANGUAGE}}
 ```
 
-## 架构设计
+## 支持的AI工具
 
-```
-Data Layer (Git)
-    ↓
-Logic Layer (Go CLI)
-    ↓
-Application Layer (Adapters)
-    ↓
-Target Tools (Cursor, Claude, etc.)
-```
+| 工具 | 支持状态 | 配置文件位置 |
+|------|----------|--------------|
+| **Cursor** | ✅ 完全支持 | `~/.cursor/rules` |
+| **Claude Code** | ✅ 完全支持 | `~/.claude/config.json` |
+| **OpenCode** | ✅ 完全支持 | `~/.config/opencode/skills/` 或项目级 `.agents/skills/` |
 
-### 核心组件（实际实现）
-- **CLI框架**: ✅ Cobra + Viper (`cmd/skill-hub/main.go`, `internal/cli/`)
-- **Git引擎**: ✅ go-git实现 (`internal/git/repository.go`)
-- **模板引擎**: ⚠️ 简化版字符串替换 (`internal/cli/status.go:221-229`)
-- **文件适配器**: 
-  - ✅ Cursor (.cursorrules) (`internal/adapter/cursor.go`)
-  - ✅ Claude (config.json) (`internal/adapter/claude/adapter.go`)
-- **状态管理**: ✅ JSON状态文件 (`internal/state/manager.go`)
-- **技能规范**: ✅ YAML定义 (`pkg/spec/skill.go`)
-- **Git集成**: ✅ 完整Git操作支持 (`internal/git/`, `internal/cli/git.go`)
+## 项目状态管理
 
-### 命令实现状态
-| 命令 | 状态 | 文件位置 | 备注 |
-|------|------|----------|------|
-| `init` | ✅ | `internal/cli/init.go` | 初始化工作区，支持Git URL |
-| `list` | ✅ | `internal/cli/list.go` | 列出可用技能 |
-| `use` | ✅ | `internal/cli/use.go` | 启用技能到项目 |
-| `apply` | ✅ | `internal/cli/apply.go` | 应用技能到工具 |
-| `status` | ✅ | `internal/cli/status.go` | 检查技能状态 |
-| `feedback` | ⚠️ | `internal/cli/feedback.go` | 反馈修改（基础版） |
-| `update` | ✅ | `internal/cli/update.go` | 使用Git同步技能仓库 |
-| `search` | ❌ | `internal/cli/search.go` | 占位符，未实现 |
-| `git` | ✅ | `internal/cli/git.go` | Git仓库操作命令集 |
+Skill Hub 使用状态文件跟踪项目与技能的关联：
 
-### Git子命令状态
-| 命令 | 状态 | 功能 |
-|------|------|------|
-| `git clone` | ✅ | 克隆远程技能仓库 |
-| `git sync` | ✅ | 同步技能仓库 |
-| `git status` | ✅ | 查看仓库状态 |
-| `git commit` | ✅ | 提交更改 |
-| `git push` | ✅ | 推送更改 |
-| `git remote` | ✅ | 设置远程仓库 |
-| `git pull` | ✅ | 拉取更新 |
-
-## 开发
-
-### 项目结构
-```
-skill-hub/
-├── cmd/skill-hub/          # 程序入口
-├── internal/               # 私有逻辑
-│   ├── adapter/            # 工具适配器
-│   ├── cli/                # Cobra命令定义
-│   ├── config/             # 配置管理
-│   ├── engine/             # 核心引擎
-│   ├── git/                # Git操作封装
-│   ├── state/              # 状态管理
-│   └── ui/                 # 终端交互
-├── pkg/spec/               # 公共定义
-└── go.mod
+```json
+{
+  "/path/to/project": {
+    "project_path": "/path/to/project",
+    "preferred_target": "open_code",
+    "skills": {
+      "web3-testing": {
+        "skill_id": "web3-testing",
+        "version": "1.0.0",
+        "variables": {}
+      }
+    }
+  }
+}
 ```
 
-### 构建
-```bash
-make build    # 编译
-make test     # 运行测试
-make lint     # 代码检查
-make release  # 跨平台发布
-```
-
-## 许可证
-
-MIT License - 详见 [LICENSE](LICENSE) 文件
-
-## 贡献
+## 贡献指南
 
 欢迎提交Issue和Pull Request！
 
@@ -230,3 +173,83 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 3. 提交更改 (`git commit -m 'Add amazing feature'`)
 4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 开启Pull Request
+
+### 开发要求
+
+- 遵循现有代码风格
+- 添加适当的测试
+- 更新相关文档
+- 确保向后兼容性
+
+## 构建和发布
+
+### 本地构建
+
+```bash
+# 开发构建
+make build
+
+# 发布构建（所有平台）
+make release-all VERSION=1.0.0
+
+# 查看帮助
+make help
+```
+
+### 自动发布
+
+项目使用GitHub Actions实现自动发布：
+
+1. **CI流程**：每次推送到main分支或PR时运行测试
+2. **发布流程**：创建git标签时自动构建并发布预编译二进制
+
+#### 使用发布脚本（推荐）：
+
+```bash
+# 使用发布助手脚本
+./scripts/create-release.sh
+```
+
+#### 手动创建发布版本：
+
+```bash
+# 1. 确保代码是最新的
+git pull origin main
+
+# 2. 运行测试
+make test
+
+# 3. 创建标签
+git tag -a v1.0.0 -m "Release v1.0.0"
+
+# 4. 推送标签到GitHub
+git push origin v1.0.0
+```
+
+GitHub Actions将自动：
+- 为Linux (amd64/arm64)、macOS (amd64/arm64)、Windows (amd64/arm64)构建二进制
+- 生成SHA256校验和
+- 创建GitHub Release并上传所有文件
+
+### 发布文件说明
+
+每个发布版本包含以下文件：
+- `skill-hub-{platform}-{arch}.tar.gz` - 压缩包（包含二进制、README、LICENSE）
+- `skill-hub-{platform}-{arch}.sha256` - 校验和文件
+- `checksums.txt` - 所有文件的校验和汇总
+
+## CI/CD状态
+
+[![CI](https://github.com/your-username/skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/skill-hub/actions/workflows/ci.yml)
+[![Release](https://github.com/your-username/skill-hub/actions/workflows/release.yml/badge.svg)](https://github.com/your-username/skill-hub/actions/workflows/release.yml)
+
+## 许可证
+
+MIT License - 详见 [LICENSE](LICENSE) 文件
+
+## 问题反馈
+
+如遇到问题或有功能建议，请：
+1. 查看现有Issue是否已解决
+2. 创建新的Issue，详细描述问题
+3. 提供复现步骤和环境信息

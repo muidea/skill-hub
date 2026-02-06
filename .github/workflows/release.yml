@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*" # 匹配 v1.0.0, v2.1.0-beta 等标签
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          # 从标签获取版本号（移除v前缀）
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build for Linux
+        run: |
+          # 构建Linux版本
+          GOOS=linux GOARCH=amd64 go build -ldflags="-X 'main.version=${{ steps.get_version.outputs.VERSION }}' -X 'main.commit=${{ github.sha }}' -X 'main.date=$(date -u)'" -o skill-hub-linux-amd64 ./cmd/skill-hub
+          GOOS=linux GOARCH=arm64 go build -ldflags="-X 'main.version=${{ steps.get_version.outputs.VERSION }}' -X 'main.commit=${{ github.sha }}' -X 'main.date=$(date -u)'" -o skill-hub-linux-arm64 ./cmd/skill-hub
+
+      - name: Build for macOS
+        run: |
+          # 构建macOS版本
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-X 'main.version=${{ steps.get_version.outputs.VERSION }}' -X 'main.commit=${{ github.sha }}' -X 'main.date=$(date -u)'" -o skill-hub-darwin-amd64 ./cmd/skill-hub
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-X 'main.version=${{ steps.get_version.outputs.VERSION }}' -X 'main.commit=${{ github.sha }}' -X 'main.date=$(date -u)'" -o skill-hub-darwin-arm64 ./cmd/skill-hub
+
+      - name: Build for Windows
+        run: |
+          # 构建Windows版本
+          GOOS=windows GOARCH=amd64 go build -ldflags="-X 'main.version=${{ steps.get_version.outputs.VERSION }}' -X 'main.commit=${{ github.sha }}' -X 'main.date=$(date -u)'" -o skill-hub-windows-amd64.exe ./cmd/skill-hub
+          GOOS=windows GOARCH=arm64 go build -ldflags="-X 'main.version=${{ steps.get_version.outputs.VERSION }}' -X 'main.commit=${{ github.sha }}' -X 'main.date=$(date -u)'" -o skill-hub-windows-arm64.exe ./cmd/skill-hub
+
+      - name: Create checksums
+        run: |
+          # 为所有二进制文件创建SHA256校验和
+          for file in skill-hub-*; do
+            sha256sum "$file" > "$file.sha256"
+          done
+
+      - name: Create release archive
+        run: |
+          # 为每个平台创建压缩包
+          mkdir -p dist
+
+          # Linux amd64
+          mkdir -p skill-hub-linux-amd64-pkg
+          cp skill-hub-linux-amd64 skill-hub-linux-amd64-pkg/skill-hub
+          cp skill-hub-linux-amd64.sha256 skill-hub-linux-amd64-pkg/
+          cp README.md skill-hub-linux-amd64-pkg/
+          cp LICENSE skill-hub-linux-amd64-pkg/
+          tar -czf dist/skill-hub-linux-amd64.tar.gz -C skill-hub-linux-amd64-pkg .
+
+          # Linux arm64
+          mkdir -p skill-hub-linux-arm64-pkg
+          cp skill-hub-linux-arm64 skill-hub-linux-arm64-pkg/skill-hub
+          cp skill-hub-linux-arm64.sha256 skill-hub-linux-arm64-pkg/
+          cp README.md skill-hub-linux-arm64-pkg/
+          cp LICENSE skill-hub-linux-arm64-pkg/
+          tar -czf dist/skill-hub-linux-arm64.tar.gz -C skill-hub-linux-arm64-pkg .
+
+          # macOS amd64
+          mkdir -p skill-hub-darwin-amd64-pkg
+          cp skill-hub-darwin-amd64 skill-hub-darwin-amd64-pkg/skill-hub
+          cp skill-hub-darwin-amd64.sha256 skill-hub-darwin-amd64-pkg/
+          cp README.md skill-hub-darwin-amd64-pkg/
+          cp LICENSE skill-hub-darwin-amd64-pkg/
+          tar -czf dist/skill-hub-darwin-amd64.tar.gz -C skill-hub-darwin-amd64-pkg .
+
+          # macOS arm64
+          mkdir -p skill-hub-darwin-arm64-pkg
+          cp skill-hub-darwin-arm64 skill-hub-darwin-arm64-pkg/skill-hub
+          cp skill-hub-darwin-arm64.sha256 skill-hub-darwin-arm64-pkg/
+          cp README.md skill-hub-darwin-arm64-pkg/
+          cp LICENSE skill-hub-darwin-arm64-pkg/
+          tar -czf dist/skill-hub-darwin-arm64.tar.gz -C skill-hub-darwin-arm64-pkg .
+
+          # Windows amd64
+          mkdir -p skill-hub-windows-amd64-pkg
+          cp skill-hub-windows-amd64.exe skill-hub-windows-amd64-pkg/skill-hub.exe
+          cp skill-hub-windows-amd64.sha256 skill-hub-windows-amd64-pkg/
+          cp README.md skill-hub-windows-amd64-pkg/
+          cp LICENSE skill-hub-windows-amd64-pkg/
+          tar -czf dist/skill-hub-windows-amd64.tar.gz -C skill-hub-windows-amd64-pkg .
+
+          # Windows arm64
+          mkdir -p skill-hub-windows-arm64-pkg
+          cp skill-hub-windows-arm64.exe skill-hub-windows-arm64-pkg/skill-hub.exe
+          cp skill-hub-windows-arm64.sha256 skill-hub-windows-arm64-pkg/
+          cp README.md skill-hub-windows-arm64-pkg/
+          cp LICENSE skill-hub-windows-arm64-pkg/
+          tar -czf dist/skill-hub-windows-arm64.tar.gz -C skill-hub-windows-arm64-pkg .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.TAG_NAME }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            skill-hub-*.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
