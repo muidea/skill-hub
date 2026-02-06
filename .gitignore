@@ -21,7 +21,7 @@ profile.cov
 
 bin
 docs
-
+dist
 skill-hub
 
 !cmd/skill-hub
