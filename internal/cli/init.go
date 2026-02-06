@@ -233,7 +233,15 @@ claude:
 
 		if err := repo.CloneRemote(gitURL); err != nil {
 			fmt.Printf("⚠️  克隆远程仓库失败: %v\n", err)
-			fmt.Println("将继续使用本地示例技能")
+			fmt.Println("\n故障排除建议:")
+			fmt.Println("1. 对于SSH URL (git@...):")
+			fmt.Println("   - 确保SSH agent正在运行: eval $(ssh-agent) && ssh-add ~/.ssh/id_rsa")
+			fmt.Println("   - 或使用HTTPS URL代替: https://github.com/user/repo.git")
+			fmt.Println("2. 对于HTTPS URL:")
+			fmt.Println("   - 确保网络连接正常")
+			fmt.Println("   - 如果需要认证，设置Git token: skill-hub config set git_token YOUR_TOKEN")
+			fmt.Println("3. 检查URL格式是否正确")
+			fmt.Println("\n将继续使用本地示例技能")
 		} else {
 			fmt.Println("✅ 远程技能仓库克隆完成")
 			// 覆盖本地示例技能

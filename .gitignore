@@ -20,6 +20,10 @@ profile.cov
 bin
 docs
 
+skill-hub
+
+!cmd/skill-hub
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 

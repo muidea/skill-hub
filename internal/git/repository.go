@@ -3,11 +3,15 @@ package git
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
+	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"skill-hub/internal/config"
 )
 
@@ -103,13 +107,59 @@ func (r *Repository) Clone(url string) error {
 		}
 	}
 
-	// 克隆仓库
-	repo, err := git.PlainClone(r.path, false, &git.CloneOptions{
+	// 准备克隆选项
+	cloneOpts := &git.CloneOptions{
 		URL:      url,
 		Progress: os.Stdout,
-	})
+	}
+
+	// 根据URL类型设置认证
+	if strings.HasPrefix(url, "git@") || strings.Contains(url, "ssh://") {
+		// SSH URL
+		auth, err := r.getSSHAuth()
+		if err != nil {
+			return fmt.Errorf("SSH认证失败: %w", err)
+		}
+		cloneOpts.Auth = auth
+	} else if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+		// HTTP/HTTPS URL
+		auth, err := r.getAuth()
+		if err != nil {
+			return err
+		}
+		cloneOpts.Auth = auth
+	}
+
+	// 克隆仓库
+	repo, err := git.PlainClone(r.path, false, cloneOpts)
 	if err != nil {
-		return fmt.Errorf("克隆仓库失败: %w", err)
+		// 如果SSH克隆失败，尝试转换为HTTPS URL
+		if strings.HasPrefix(url, "git@") {
+			httpsURL := convertSSHToHTTPS(url)
+			if httpsURL != "" {
+				fmt.Printf("SSH克隆失败，尝试HTTPS URL: %s\n", httpsURL)
+				cloneOpts.URL = httpsURL
+				cloneOpts.Auth, _ = r.getAuth() // 使用HTTP认证
+				repo, err = git.PlainClone(r.path, false, cloneOpts)
+				if err == nil {
+					fmt.Println("✅ 使用HTTPS URL克隆成功")
+					r.repo = repo
+					r.remoteURL = httpsURL // 更新为HTTPS URL
+					return nil
+				}
+			}
+		}
+
+		if err != nil {
+			// 提供更详细的错误信息
+			errMsg := fmt.Sprintf("克隆仓库失败: %v", err)
+			if strings.Contains(err.Error(), "SSH_AUTH_SOCK") {
+				errMsg += "\nSSH认证失败: 请确保SSH agent正在运行或使用HTTPS URL"
+			} else if strings.Contains(err.Error(), "authentication required") {
+				errMsg += "\n认证失败: 请检查Git token配置或使用SSH key"
+			}
+			return fmt.Errorf(errMsg)
+		}
 	}
 
 	r.repo = repo
@@ -129,9 +179,18 @@ func (r *Repository) Pull() error {
 	}
 
 	// 获取认证信息
-	auth, err := r.getAuth()
-	if err != nil {
-		return err
+	var auth transport.AuthMethod
+	if strings.HasPrefix(r.remoteURL, "git@") || strings.Contains(r.remoteURL, "ssh://") {
+		auth, err = r.getSSHAuth()
+		if err != nil {
+			return fmt.Errorf("SSH认证失败: %w", err)
+		}
+	} else {
+		httpAuth, err := r.getAuth()
+		if err != nil {
+			return err
+		}
+		auth = httpAuth
 	}
 
 	err = worktree.Pull(&git.PullOptions{
@@ -319,4 +378,60 @@ func (r *Repository) MergeBranch(sourceBranch string) error {
 	// 简化实现：切换到目标分支并拉取最新更改
 	// 在实际实现中应该使用更复杂的合并逻辑
 	return r.Pull()
+}
+
+// getSSHAuth 获取SSH认证信息
+func (r *Repository) getSSHAuth() (transport.AuthMethod, error) {
+	// 尝试使用SSH agent
+	sshAuth, err := ssh.NewSSHAgentAuth("git")
+	if err != nil {
+		// 如果SSH agent不可用，尝试使用默认的SSH key
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("获取用户主目录失败: %w", err)
+		}
+
+		// 尝试常见的SSH key路径
+		sshKeyPaths := []string{
+			filepath.Join(homeDir, ".ssh", "id_rsa"),
+			filepath.Join(homeDir, ".ssh", "id_ed25519"),
+			filepath.Join(homeDir, ".ssh", "id_dsa"),
+		}
+
+		for _, keyPath := range sshKeyPaths {
+			if _, err := os.Stat(keyPath); err == nil {
+				sshAuth, err := ssh.NewPublicKeysFromFile("git", keyPath, "")
+				if err == nil {
+					return sshAuth, nil
+				}
+			}
+		}
+
+		return nil, fmt.Errorf("SSH认证失败: 请确保SSH agent运行或配置了SSH key")
+	}
+
+	return sshAuth, nil
+}
+
+// convertSSHToHTTPS 将SSH URL转换为HTTPS URL
+func convertSSHToHTTPS(sshURL string) string {
+	// 处理 git@github.com:user/repo.git 格式
+	if strings.HasPrefix(sshURL, "git@") {
+		parts := strings.Split(sshURL, ":")
+		if len(parts) == 2 {
+			host := strings.TrimPrefix(parts[0], "git@")
+			repoPath := strings.TrimSuffix(parts[1], ".git")
+			return fmt.Sprintf("https://%s/%s", host, repoPath)
+		}
+	}
+
+	// 处理 ssh://git@github.com/user/repo.git 格式
+	if strings.HasPrefix(sshURL, "ssh://") {
+		sshURL = strings.TrimPrefix(sshURL, "ssh://")
+		sshURL = strings.TrimPrefix(sshURL, "git@")
+		sshURL = strings.Replace(sshURL, ":", "/", 1)
+		return fmt.Sprintf("https://%s", strings.TrimSuffix(sshURL, ".git"))
+	}
+
+	return ""
 }
