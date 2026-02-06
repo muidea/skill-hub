@@ -12,6 +12,7 @@ import (
 type Config struct {
 	RepoPath         string `mapstructure:"repo_path"`
 	ClaudeConfigPath string `mapstructure:"claude_config_path"`
+	CursorConfigPath string `mapstructure:"cursor_config_path"`
 	DefaultTool      string `mapstructure:"default_tool"`
 	GitRemoteURL     string `mapstructure:"git_remote_url"`
 	GitToken         string `mapstructure:"git_token"`
@@ -54,6 +55,7 @@ func LoadConfig() error {
 	// 设置默认值
 	viper.SetDefault("repo_path", filepath.Join(configDir, "repo"))
 	viper.SetDefault("claude_config_path", filepath.Join(homeDir, ".claude", "config.json"))
+	viper.SetDefault("cursor_config_path", filepath.Join(homeDir, ".cursor", "rules"))
 	viper.SetDefault("default_tool", "cursor")
 	viper.SetDefault("git_remote_url", "")
 	viper.SetDefault("git_token", "")

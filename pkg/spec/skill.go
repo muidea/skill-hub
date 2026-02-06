@@ -60,10 +60,37 @@ type Registry struct {
 	Skills  []SkillMetadata `json:"skills"`
 }
 
-// ProjectState 表示项目与技能的关联状态
+// ProjectConfig 表示项目的配置信息（符合文档设计）
+type ProjectConfig struct {
+	PreferredTarget string            `json:"preferred_target,omitempty"` // cursor, claude_code, 或空
+	EnabledSkills   []string          `json:"enabled_skills,omitempty"`   // 技能ID数组
+	Vars            map[string]string `json:"vars,omitempty"`             // 项目级变量
+	LastSync        string            `json:"last_sync,omitempty"`
+}
+
+// 目标类型常量
+const (
+	TargetCursor     = "cursor"
+	TargetClaudeCode = "claude_code"
+	TargetClaude     = "claude" // 向后兼容
+	TargetUnknown    = "unknown"
+	TargetAll        = "all"
+)
+
+// NormalizeTarget 规范化目标类型（处理向后兼容）
+func NormalizeTarget(target string) string {
+	if target == TargetClaude {
+		return TargetClaudeCode
+	}
+	return target
+}
+
+// ProjectState 表示项目与技能的关联状态（向后兼容）
 type ProjectState struct {
-	ProjectPath string               `json:"project_path"`
-	Skills      map[string]SkillVars `json:"skills"`
+	ProjectPath     string               `json:"project_path"`
+	PreferredTarget string               `json:"preferred_target,omitempty"` // cursor, claude_code, 或空
+	Skills          map[string]SkillVars `json:"skills"`
+	LastSync        string               `json:"last_sync,omitempty"`
 }
 
 // SkillVars 表示项目中某个技能的变量配置

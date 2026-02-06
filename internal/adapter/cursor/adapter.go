@@ -1,4 +1,4 @@
-package adapter
+package cursor
 
 import (
 	"fmt"
@@ -6,19 +6,33 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"text/template"
+
+	"skill-hub/internal/config"
 )
 
 // CursorAdapter 实现Cursor规则的适配器
 type CursorAdapter struct {
 	filePath string
+	mode     string // "global" 或 "project"
 }
 
 // NewCursorAdapter 创建新的Cursor适配器
 func NewCursorAdapter() *CursorAdapter {
 	return &CursorAdapter{
-		filePath: ".cursorrules",
+		mode: "project", // 默认项目模式
 	}
+}
+
+// WithProjectMode 设置为项目模式
+func (a *CursorAdapter) WithProjectMode() *CursorAdapter {
+	a.mode = "project"
+	return a
+}
+
+// WithGlobalMode 设置为全局模式
+func (a *CursorAdapter) WithGlobalMode() *CursorAdapter {
+	a.mode = "global"
+	return a
 }
 
 // markerPattern 匹配技能标记块的正则表达式
@@ -26,14 +40,23 @@ var markerPattern = regexp.MustCompile(`(?s)# === SKILL-HUB BEGIN: (?P<id>.*?) =
 
 // Apply 应用技能到.cursorrules文件
 func (a *CursorAdapter) Apply(skillID string, content string, variables map[string]string) error {
-	// 渲染模板
-	rendered, err := a.renderTemplate(content, variables)
+	// 获取配置文件路径
+	filePath, err := a.getFilePath()
+	if err != nil {
+		return err
+	}
+	a.filePath = filePath
+
+	fmt.Printf("应用技能到Cursor配置文件: %s\n", filePath)
+
+	// 渲染模板内容
+	renderedContent, err := a.renderTemplate(content, variables)
 	if err != nil {
 		return fmt.Errorf("渲染模板失败: %w", err)
 	}
 
 	// 创建标记块
-	markerBlock := a.createMarkerBlock(skillID, rendered)
+	markerBlock := a.createMarkerBlock(skillID, renderedContent)
 
 	// 读取现有文件内容
 	existingContent, err := a.readFile()
@@ -50,10 +73,16 @@ func (a *CursorAdapter) Apply(skillID string, content string, variables map[stri
 
 // Extract 从.cursorrules文件提取技能内容
 func (a *CursorAdapter) Extract(skillID string) (string, error) {
+	filePath, err := a.getFilePath()
+	if err != nil {
+		return "", err
+	}
+	a.filePath = filePath
+
 	content, err := a.readFile()
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("文件不存在: %s", a.filePath)
+			return "", fmt.Errorf("文件不存在: %s", filePath)
 		}
 		return "", err
 	}
@@ -62,7 +91,8 @@ func (a *CursorAdapter) Extract(skillID string) (string, error) {
 	matches := markerPattern.FindAllStringSubmatch(content, -1)
 	for _, match := range matches {
 		if len(match) >= 4 && match[1] == skillID && match[3] == skillID {
-			return strings.TrimSpace(match[2]), nil
+			// 提取标记块内的内容
+			return a.extractMarkedContent(content, skillID)
 		}
 	}
 
@@ -71,6 +101,12 @@ func (a *CursorAdapter) Extract(skillID string) (string, error) {
 
 // Remove 从.cursorrules文件移除技能
 func (a *CursorAdapter) Remove(skillID string) error {
+	filePath, err := a.getFilePath()
+	if err != nil {
+		return err
+	}
+	a.filePath = filePath
+
 	content, err := a.readFile()
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -86,7 +122,7 @@ func (a *CursorAdapter) Remove(skillID string) error {
 	// 如果内容为空，删除文件
 	newContent = strings.TrimSpace(newContent)
 	if newContent == "" {
-		return os.Remove(a.filePath)
+		return os.Remove(filePath)
 	}
 
 	return a.writeFile(newContent)
@@ -94,6 +130,12 @@ func (a *CursorAdapter) Remove(skillID string) error {
 
 // List 列出.cursorrules文件中的所有技能
 func (a *CursorAdapter) List() ([]string, error) {
+	filePath, err := a.getFilePath()
+	if err != nil {
+		return nil, err
+	}
+	a.filePath = filePath
+
 	content, err := a.readFile()
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -121,17 +163,13 @@ func (a *CursorAdapter) Supports() bool {
 
 // renderTemplate 渲染模板内容
 func (a *CursorAdapter) renderTemplate(content string, variables map[string]string) (string, error) {
-	tmpl, err := template.New("skill").Parse(content)
-	if err != nil {
-		return "", fmt.Errorf("解析模板失败: %w", err)
+	// 简单替换变量
+	result := content
+	for key, value := range variables {
+		placeholder := "{{." + key + "}}"
+		result = strings.ReplaceAll(result, placeholder, value)
 	}
-
-	var buf strings.Builder
-	if err := tmpl.Execute(&buf, variables); err != nil {
-		return "", fmt.Errorf("执行模板失败: %w", err)
-	}
-
-	return buf.String(), nil
+	return result, nil
 }
 
 // createMarkerBlock 创建标记块
@@ -172,6 +210,28 @@ func (a *CursorAdapter) writeFile(content string) error {
 	return nil
 }
 
+// extractMarkedContent 从标记块中提取内容
+func (a *CursorAdapter) extractMarkedContent(content, skillID string) (string, error) {
+	beginMarker := fmt.Sprintf("# === SKILL-HUB BEGIN: %s ===", skillID)
+	endMarker := fmt.Sprintf("# === SKILL-HUB END: %s ===", skillID)
+
+	beginIdx := strings.Index(content, beginMarker)
+	if beginIdx == -1 {
+		return "", fmt.Errorf("未找到开始标记")
+	}
+
+	endIdx := strings.Index(content, endMarker)
+	if endIdx == -1 {
+		return "", fmt.Errorf("未找到结束标记")
+	}
+
+	// 提取标记块内的内容
+	start := beginIdx + len(beginMarker)
+	extracted := strings.TrimSpace(content[start:endIdx])
+
+	return extracted, nil
+}
+
 // replaceOrAddMarker 替换或添加标记块
 func (a *CursorAdapter) replaceOrAddMarker(existingContent, skillID, markerBlock string) string {
 	// 尝试替换现有标记块
@@ -190,11 +250,40 @@ func (a *CursorAdapter) replaceOrAddMarker(existingContent, skillID, markerBlock
 	return existingContent + "\n\n" + markerBlock
 }
 
-// GetFilePath 获取适配器管理的文件路径
-func (a *CursorAdapter) GetFilePath() string {
-	absPath, err := filepath.Abs(a.filePath)
-	if err != nil {
-		return a.filePath
+// GetFilePath 获取适配器管理的文件路径（公开方法）
+func (a *CursorAdapter) GetFilePath() (string, error) {
+	return a.getFilePath()
+}
+
+// getFilePath 获取配置文件路径
+func (a *CursorAdapter) getFilePath() (string, error) {
+	if a.mode == "project" {
+		// 项目级配置
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("获取当前目录失败: %w", err)
+		}
+		return filepath.Join(cwd, ".cursorrules"), nil
 	}
-	return absPath
+
+	// 全局配置
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return "", err
+	}
+
+	// 展开路径中的~
+	return expandPath(cfg.CursorConfigPath), nil
+}
+
+// expandPath 展开路径中的~为用户主目录
+func expandPath(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
+		return filepath.Join(homeDir, path[2:])
+	}
+	return path
 }

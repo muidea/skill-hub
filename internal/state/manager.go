@@ -15,6 +15,11 @@ type StateManager struct {
 	statePath string
 }
 
+// StateFile 表示状态文件的完整结构
+type StateFile struct {
+	Projects map[string]spec.ProjectConfig `json:"projects"`
+}
+
 // NewStateManager 创建新的状态管理器
 func NewStateManager() (*StateManager, error) {
 	repoPath, err := config.GetRepoPath()
@@ -99,9 +104,19 @@ func (m *StateManager) SaveProjectState(state *spec.ProjectState) error {
 
 // AddSkillToProject 添加技能到项目
 func (m *StateManager) AddSkillToProject(projectPath, skillID, version string, variables map[string]string) error {
+	return m.AddSkillToProjectWithTarget(projectPath, skillID, version, variables, "")
+}
+
+// AddSkillToProjectWithTarget 添加技能到项目并指定目标
+func (m *StateManager) AddSkillToProjectWithTarget(projectPath, skillID, version string, variables map[string]string, target string) error {
 	state, err := m.LoadProjectState(projectPath)
 	if err != nil {
 		return err
+	}
+
+	// 如果指定了target且当前没有preferred_target，则设置它
+	if target != "" && state.PreferredTarget == "" {
+		state.PreferredTarget = target
 	}
 
 	state.Skills[skillID] = spec.SkillVars{
@@ -111,6 +126,74 @@ func (m *StateManager) AddSkillToProject(projectPath, skillID, version string, v
 	}
 
 	return m.SaveProjectState(state)
+}
+
+// SetPreferredTarget 设置项目的首选目标
+func (m *StateManager) SetPreferredTarget(projectPath, target string) error {
+	state, err := m.LoadProjectState(projectPath)
+	if err != nil {
+		return err
+	}
+
+	// 验证目标值
+	normalizedTarget := spec.NormalizeTarget(target)
+	if normalizedTarget != spec.TargetCursor && normalizedTarget != spec.TargetClaudeCode && normalizedTarget != "" {
+		return fmt.Errorf("无效的目标值: %s，可用选项: %s, %s", target, spec.TargetCursor, spec.TargetClaudeCode)
+	}
+
+	state.PreferredTarget = normalizedTarget
+	return m.SaveProjectState(state)
+}
+
+// GetPreferredTarget 获取项目的首选目标
+func (m *StateManager) GetPreferredTarget(projectPath string) (string, error) {
+	state, err := m.LoadProjectState(projectPath)
+	if err != nil {
+		return "", err
+	}
+	return spec.NormalizeTarget(state.PreferredTarget), nil
+}
+
+// FindProjectByPath 通过路径查找项目（支持递归向上查找）
+func (m *StateManager) FindProjectByPath(path string) (*spec.ProjectState, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("获取绝对路径失败: %w", err)
+	}
+
+	// 读取所有项目状态
+	data, err := os.ReadFile(m.statePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // 文件不存在，返回nil
+		}
+		return nil, fmt.Errorf("读取状态文件失败: %w", err)
+	}
+
+	var allStates map[string]spec.ProjectState
+	if err := json.Unmarshal(data, &allStates); err != nil {
+		return nil, fmt.Errorf("解析状态文件失败: %w", err)
+	}
+
+	// 递归向上查找
+	currentPath := absPath
+	for {
+		// 检查当前路径是否有绑定
+		if state, exists := allStates[currentPath]; exists {
+			// 规范化目标类型
+			state.PreferredTarget = spec.NormalizeTarget(state.PreferredTarget)
+			return &state, nil
+		}
+
+		// 到达根目录，停止查找
+		parentPath := filepath.Dir(currentPath)
+		if parentPath == currentPath {
+			break
+		}
+		currentPath = parentPath
+	}
+
+	return nil, nil // 未找到
 }
 
 // RemoveSkillFromProject 从项目移除技能
@@ -142,4 +225,24 @@ func (m *StateManager) ProjectHasSkill(projectPath, skillID string) (bool, error
 
 	_, exists := skills[skillID]
 	return exists, nil
+}
+
+// UpdateSkillVariables 更新项目中技能的变量值
+func (m *StateManager) UpdateSkillVariables(projectPath, skillID string, variables map[string]string) error {
+	state, err := m.LoadProjectState(projectPath)
+	if err != nil {
+		return err
+	}
+
+	// 检查技能是否存在
+	skillVars, exists := state.Skills[skillID]
+	if !exists {
+		return fmt.Errorf("技能 '%s' 未在项目中启用", skillID)
+	}
+
+	// 更新变量值
+	skillVars.Variables = variables
+	state.Skills[skillID] = skillVars
+
+	return m.SaveProjectState(state)
 }

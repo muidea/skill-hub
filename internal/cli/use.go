@@ -11,14 +11,25 @@ import (
 	"skill-hub/internal/state"
 )
 
+var (
+	useTarget string
+)
+
 var useCmd = &cobra.Command{
 	Use:   "use [skill-id]",
 	Short: "在当前项目启用技能",
-	Long:  "在当前项目注册指定技能，并提示输入变量值。",
-	Args:  cobra.ExactArgs(1),
+	Long: `在当前项目启用指定技能，并提示输入变量值。
+
+使用 --target 参数指定首选目标工具 (cursor/claude)。
+如果项目尚未绑定目标，此参数将设置项目的首选目标。`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runUse(args[0])
 	},
+}
+
+func init() {
+	useCmd.Flags().StringVar(&useTarget, "target", "", "首选目标工具: cursor, claude_code")
 }
 
 func runUse(skillID string) error {
@@ -103,11 +114,16 @@ func runUse(skillID string) error {
 	}
 
 	// 保存到项目状态
-	if err := stateManager.AddSkillToProject(cwd, skillID, skill.Version, variables); err != nil {
+	if err := stateManager.AddSkillToProjectWithTarget(cwd, skillID, skill.Version, variables, useTarget); err != nil {
 		return fmt.Errorf("保存项目状态失败: %w", err)
 	}
 
 	fmt.Printf("\n✅ 技能 '%s' 已成功启用！\n", skillID)
+
+	// 显示目标信息
+	if useTarget != "" {
+		fmt.Printf("项目首选目标已设置为: %s\n", useTarget)
+	}
 	fmt.Println("使用 'skill-hub apply' 将技能应用到当前项目")
 
 	return nil

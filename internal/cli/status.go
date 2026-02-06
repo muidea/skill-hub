@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"skill-hub/internal/adapter"
 	"skill-hub/internal/adapter/claude"
+	"skill-hub/internal/adapter/cursor"
 	"skill-hub/internal/engine"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/spec"
@@ -39,6 +40,26 @@ func runStatus() error {
 		return err
 	}
 
+	// 获取项目状态以显示目标信息
+	projectState, err := stateManager.FindProjectByPath(cwd)
+	if err != nil {
+		return fmt.Errorf("查找项目状态失败: %w", err)
+	}
+
+	// 显示项目信息
+	fmt.Printf("项目路径: %s\n", cwd)
+	if projectState != nil && projectState.PreferredTarget != "" {
+		normalizedTarget := spec.NormalizeTarget(projectState.PreferredTarget)
+		targetName := "Cursor"
+		if normalizedTarget == spec.TargetClaudeCode {
+			targetName = "Claude Code"
+		}
+		fmt.Printf("Context Detected: %s | Project: %s\n", targetName, cwd)
+	} else {
+		fmt.Println("Context Detected: Unknown | Project: (未绑定)")
+	}
+	fmt.Println()
+
 	skills, err := stateManager.GetProjectSkills(cwd)
 	if err != nil {
 		return err
@@ -55,15 +76,20 @@ func runStatus() error {
 		adapter  adapter.Adapter
 		filePath string
 	}{
-		{"Cursor", adapter.NewCursorAdapter(), ""},
+		{"Cursor", cursor.NewCursorAdapter(), ""},
 		{"Claude", claude.NewClaudeAdapter(), ""},
 	}
 
 	// 检查文件是否存在并获取路径
 	for i := range adapters {
 		// 对于Cursor适配器，需要特殊处理获取路径
-		if cursorAdapter, ok := adapters[i].adapter.(*adapter.CursorAdapter); ok {
-			adapters[i].filePath = cursorAdapter.GetFilePath()
+		if cursorAdapter, ok := adapters[i].adapter.(*cursor.CursorAdapter); ok {
+			// 设置全局模式以获取路径
+			cursorAdapter.WithGlobalMode()
+			path, err := cursorAdapter.GetFilePath()
+			if err == nil {
+				adapters[i].filePath = path
+			}
 		} else if claudeAdapter, ok := adapters[i].adapter.(*claude.ClaudeAdapter); ok {
 			// Claude适配器需要设置模式
 			claudeAdapter.WithGlobalMode()
@@ -208,7 +234,7 @@ func runStatus() error {
 // checkAdapterSupport 检查适配器是否支持该技能
 func checkAdapterSupport(adpt adapter.Adapter, skill *spec.Skill) bool {
 	// 使用类型断言
-	if _, ok := adpt.(*adapter.CursorAdapter); ok {
+	if _, ok := adpt.(*cursor.CursorAdapter); ok {
 		return skill.Compatibility.Cursor
 	}
 	if _, ok := adpt.(*claude.ClaudeAdapter); ok {

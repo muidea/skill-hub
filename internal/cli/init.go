@@ -45,6 +45,7 @@ func runInit(args []string) error {
 		filepath.Join(skillHubDir, "repo"),
 		filepath.Join(skillHubDir, "repo", "skills"),
 		filepath.Join(skillHubDir, "repo", "templates"),
+		filepath.Join(homeDir, ".cursor"), // 全局Cursor配置目录
 	}
 
 	for _, dir := range dirs {
@@ -59,6 +60,7 @@ func runInit(args []string) error {
 	configContent := fmt.Sprintf(`# Skill Hub 配置文件
 repo_path: "~/.skill-hub/repo"
 claude_config_path: "~/.claude/config.json"
+cursor_config_path: "~/.cursor/rules"
 default_tool: "cursor"
 git_remote_url: "%s"
 git_token: ""
