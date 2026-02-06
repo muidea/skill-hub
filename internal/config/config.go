@@ -13,6 +13,9 @@ type Config struct {
 	RepoPath         string `mapstructure:"repo_path"`
 	ClaudeConfigPath string `mapstructure:"claude_config_path"`
 	DefaultTool      string `mapstructure:"default_tool"`
+	GitRemoteURL     string `mapstructure:"git_remote_url"`
+	GitToken         string `mapstructure:"git_token"`
+	GitBranch        string `mapstructure:"git_branch"`
 }
 
 var (
@@ -52,6 +55,9 @@ func LoadConfig() error {
 	viper.SetDefault("repo_path", filepath.Join(configDir, "repo"))
 	viper.SetDefault("claude_config_path", filepath.Join(homeDir, ".claude", "config.json"))
 	viper.SetDefault("default_tool", "cursor")
+	viper.SetDefault("git_remote_url", "")
+	viper.SetDefault("git_token", "")
+	viper.SetDefault("git_branch", "main")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return fmt.Errorf("读取配置文件失败: %w", err)

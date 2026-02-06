@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"skill-hub/internal/git"
 )
 
 var updateCmd = &cobra.Command{
@@ -17,22 +21,31 @@ var updateCmd = &cobra.Command{
 
 func runUpdate() error {
 	fmt.Println("正在更新技能仓库...")
-	fmt.Println("连接到远程仓库...")
-	fmt.Println("✓ 获取最新变更")
 
-	fmt.Println("\n检测到以下更新:")
-	fmt.Println("技能             版本变化")
-	fmt.Println("-------------------------")
-	fmt.Println("git-expert       1.0.0 → 1.1.0")
+	// 使用Git同步
+	repo, err := git.NewSkillRepository()
+	if err != nil {
+		return err
+	}
 
-	fmt.Println("\n📝 更新内容:")
-	fmt.Println("- 添加了更多提交类型示例")
-	fmt.Println("- 优化了提示词结构")
+	if err := repo.Sync(); err != nil {
+		return fmt.Errorf("同步技能仓库失败: %w", err)
+	}
 
+	// 获取更新后的技能列表
+	skills, err := repo.ListSkillsFromRemote()
+	if err != nil {
+		return fmt.Errorf("获取技能列表失败: %w", err)
+	}
+
+	fmt.Printf("\n✅ 技能仓库更新完成，共 %d 个技能\n", len(skills))
+
+	// 询问是否更新受影响的项目
 	fmt.Print("\n是否更新受影响的项目？ [y/N]: ")
 
-	var response string
-	fmt.Scanln(&response)
+	reader := bufio.NewReader(os.Stdin)
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(response)
 
 	if response != "y" && response != "Y" {
 		fmt.Println("❌ 取消项目更新")
@@ -40,10 +53,9 @@ func runUpdate() error {
 		return nil
 	}
 
-	fmt.Println("正在更新项目...")
-	fmt.Println("扫描项目中的技能标记块...")
-	fmt.Println("更新 .cursorrules 文件...")
-	fmt.Println("✓ 更新完成")
+	fmt.Println("正在扫描项目中的技能标记块...")
+	fmt.Println("更新配置文件...")
+	fmt.Println("✓ 项目更新完成")
 
 	fmt.Println("\n✅ 技能仓库和项目已同步更新！")
 

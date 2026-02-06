@@ -35,4 +35,5 @@ func init() {
 	rootCmd.AddCommand(feedbackCmd)
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(searchCmd)
+	rootCmd.AddCommand(gitCmd)
 }

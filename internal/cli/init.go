@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"skill-hub/internal/git"
 )
 
 var initCmd = &cobra.Command{
@@ -31,6 +32,13 @@ func runInit(args []string) error {
 
 	fmt.Printf("正在初始化Skill Hub工作区: %s\n", skillHubDir)
 
+	// 检查是否提供了Git URL
+	var gitURL string
+	if len(args) > 0 {
+		gitURL = args[0]
+		fmt.Printf("将克隆远程仓库: %s\n", gitURL)
+	}
+
 	// 创建目录结构
 	dirs := []string{
 		skillHubDir,
@@ -48,11 +56,14 @@ func runInit(args []string) error {
 
 	// 创建配置文件
 	configPath := filepath.Join(skillHubDir, "config.yaml")
-	configContent := `# Skill Hub 配置文件
+	configContent := fmt.Sprintf(`# Skill Hub 配置文件
 repo_path: "~/.skill-hub/repo"
 claude_config_path: "~/.claude/config.json"
 default_tool: "cursor"
-`
+git_remote_url: "%s"
+git_token: ""
+git_branch: "main"
+`, gitURL)
 
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		return fmt.Errorf("创建配置文件失败: %w", err)
@@ -210,11 +221,37 @@ claude:
 	}
 	fmt.Printf("✓ 创建技能索引: %s\n", registryPath)
 
+	// 如果提供了Git URL，克隆远程仓库
+	if gitURL != "" {
+		fmt.Println("\n正在克隆远程技能仓库...")
+		repo, err := git.NewSkillRepository()
+		if err != nil {
+			return fmt.Errorf("创建技能仓库失败: %w", err)
+		}
+
+		if err := repo.CloneRemote(gitURL); err != nil {
+			fmt.Printf("⚠️  克隆远程仓库失败: %v\n", err)
+			fmt.Println("将继续使用本地示例技能")
+		} else {
+			fmt.Println("✅ 远程技能仓库克隆完成")
+			// 覆盖本地示例技能
+			os.RemoveAll(filepath.Join(skillHubDir, "repo", "skills", "git-expert"))
+			os.RemoveAll(filepath.Join(skillHubDir, "repo", "skills", "claude-code-review"))
+		}
+	}
+
 	fmt.Println("\n✅ Skill Hub 初始化完成！")
 	fmt.Println("工作区位置:", skillHubDir)
-	fmt.Println("已创建示例技能:")
-	fmt.Println("  - git-expert (Cursor专用)")
-	fmt.Println("  - claude-code-review (Claude专用)")
+
+	if gitURL != "" {
+		fmt.Println("远程仓库:", gitURL)
+		fmt.Println("使用 'skill-hub git sync' 同步最新技能")
+	} else {
+		fmt.Println("已创建示例技能:")
+		fmt.Println("  - git-expert (Cursor专用)")
+		fmt.Println("  - claude-code-review (Claude专用)")
+	}
+
 	fmt.Println("\n使用 'skill-hub list' 查看可用技能")
 
 	return nil
