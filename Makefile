@@ -4,11 +4,11 @@
 
 # Build the binary
 build:
-	go build -o skill-hub ./cmd/skill-hub
+	go build -o bin/skill-hub ./cmd/skill-hub
 
 # Clean build artifacts
 clean:
-	rm -f skill-hub
+	rm -f bin/skill-hub
 	rm -rf dist/
 
 # Run tests
@@ -17,7 +17,7 @@ test:
 
 # Install to /usr/local/bin
 install: build
-	sudo cp skill-hub /usr/local/bin/
+	sudo cp bin/skill-hub /usr/local/bin/
 
 # Create release binaries
 release: clean
