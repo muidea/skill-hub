@@ -238,12 +238,32 @@ main() {
     # 下载文件
     if ! download_file "$DOWNLOAD_URL" "$ARCHIVE_NAME"; then
         echo -e "${RED}下载失败${NC}"
-        cd /
-        rm -rf "$TEMP_DIR"
-        exit 1
+        echo -e "${YELLOW}可能的原因:${NC}"
+        echo "1. Release $VERSION 可能没有包含 $ARCHIVE_NAME 文件"
+        echo "2. GitHub Releases 文件可能还未完全就绪"
+        echo "3. 网络连接问题"
+        echo ""
+        echo -e "${YELLOW}尝试备用方案: 使用上一个稳定版本 v0.1.3${NC}"
+        
+        # 尝试上一个版本
+        PREVIOUS_VERSION="v0.1.3"
+        DOWNLOAD_URL="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/$PREVIOUS_VERSION/$ARCHIVE_NAME"
+        CHECKSUM_URL="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/$PREVIOUS_VERSION/$CHECKSUM_NAME"
+        
+        echo "尝试下载: $PREVIOUS_VERSION"
+        if ! download_file "$DOWNLOAD_URL" "$ARCHIVE_NAME"; then
+            echo -e "${RED}备用版本下载也失败${NC}"
+            cd /
+            rm -rf "$TEMP_DIR"
+            exit 1
+        fi
+        
+        # 更新版本变量
+        VERSION="$PREVIOUS_VERSION"
+        echo "使用版本: $VERSION"
     fi
     
-    # 下载校验文件
+    # 下载校验文件（使用当前有效的版本）
     CHECKSUM_DOWNLOADED=true
     if ! download_file "$CHECKSUM_URL" "$CHECKSUM_NAME"; then
         echo -e "${YELLOW}警告: 校验和文件下载失败，跳过验证${NC}"

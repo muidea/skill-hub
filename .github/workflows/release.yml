@@ -32,62 +32,14 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "TAG_NAME=v$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build release binaries using Makefile
+      - name: Build release packages using Makefile
         run: |
-          # 使用Makefile构建所有平台的发布版本
+          # 使用Makefile构建所有平台的发布包（直接创建.tar.gz和.sha256文件）
           make release-all VERSION=${{ steps.get_version.outputs.VERSION }} COMMIT=${{ github.sha }}
-
-      - name: Create release archives from dist directory
-        run: |
-          # Makefile的release-all已经在dist目录中创建了二进制文件和校验文件
-          # 现在为每个平台创建压缩包（包含二进制文件、校验文件、README和LICENSE）
-          cd dist
           
-          # 为每个二进制文件创建压缩包
-          for binary_file in skill-hub-*; do
-            # 跳过已存在的.tar.gz和.sha256文件
-            if [[ "$binary_file" == *.tar.gz ]] || [[ "$binary_file" == *.sha256 ]] || [[ "$binary_file" == checksums.txt ]]; then
-              continue
-            fi
-            
-            # 提取平台信息
-            if [[ "$binary_file" == *.exe ]]; then
-              # Windows文件
-              platform_name="${binary_file%.exe}"
-              binary_name_in_pkg="skill-hub.exe"
-            else
-              # Linux/macOS文件
-              platform_name="$binary_file"
-              binary_name_in_pkg="skill-hub"
-            fi
-            
-            echo "创建压缩包: $platform_name.tar.gz"
-            
-            # 创建临时目录
-            mkdir -p "${platform_name}-pkg"
-            
-            # 复制文件
-            cp "$binary_file" "${platform_name}-pkg/$binary_name_in_pkg"
-            
-            # 复制校验文件（如果存在）
-            if [ -f "${binary_file}.sha256" ]; then
-              cp "${binary_file}.sha256" "${platform_name}-pkg/"
-            fi
-            
-            # 复制文档文件
-            cp ../README.md "${platform_name}-pkg/"
-            cp ../LICENSE "${platform_name}-pkg/"
-            
-            # 创建压缩包
-            tar -czf "${platform_name}.tar.gz" -C "${platform_name}-pkg" .
-            
-            # 清理临时目录
-            rm -rf "${platform_name}-pkg"
-          done
-          
-          # 清理原始二进制文件，只保留压缩包和校验文件
-          rm -f skill-hub-*
-          rm -f skill-hub-*.sha256
+          # 显示生成的文件（调试）
+          echo "Generated files in dist/:"
+          ls -la dist/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
