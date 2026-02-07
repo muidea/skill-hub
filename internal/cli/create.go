@@ -23,7 +23,9 @@ var createCmd = &cobra.Command{
 	Long: `创建一个新的技能模板文件。
 
 技能名称应该使用小写字母和连字符，例如：my-project-skill。
-如果没有指定输出目录，将在当前目录创建SKILL.md文件。`,
+技能文件将创建在 .agents/skills/[skill-name]/SKILL.md 目录中。
+
+注意：使用此命令前，请确保项目已初始化（已运行 'skill-hub init'）。`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runCreate(args[0])
@@ -61,8 +63,20 @@ func runCreate(skillName string) error {
 		return fmt.Errorf("输出目录不存在: %s", outputDir)
 	}
 
+	// 检查.agents目录是否存在（项目是否已初始化）
+	agentsDir := filepath.Join(outputDir, ".agents")
+	if _, err := os.Stat(agentsDir); os.IsNotExist(err) {
+		return fmt.Errorf("项目未初始化，请先运行 'skill-hub init' 命令")
+	}
+
+	// 创建技能目录结构
+	skillDir := filepath.Join(agentsDir, "skills", skillName)
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		return fmt.Errorf("创建技能目录失败: %w", err)
+	}
+
 	// 检查是否已存在同名技能文件
-	skillFilePath := filepath.Join(outputDir, "SKILL.md")
+	skillFilePath := filepath.Join(skillDir, "SKILL.md")
 	if _, err := os.Stat(skillFilePath); err == nil {
 		fmt.Printf("⚠️  文件已存在: %s\n", skillFilePath)
 		fmt.Print("是否覆盖？ [y/N]: ")

@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -158,16 +159,41 @@ func TestCreateCommandIntegration(t *testing.T) {
 	// 测试创建技能
 	skillName := "test-integration-skill"
 
-	// 模拟运行create命令
+	// 首先测试未初始化项目的情况
+	err = runCreate(skillName)
+	if err == nil {
+		t.Error("runCreate() should fail when project is not initialized")
+	} else if !strings.Contains(err.Error(), "项目未初始化") {
+		t.Errorf("Expected '项目未初始化' error, got: %v", err)
+	}
+
+	// 创建.agents目录（模拟项目初始化）
+	agentsDir := filepath.Join(tempDir, ".agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("Failed to create .agents directory: %v", err)
+	}
+
+	// 现在测试创建技能（项目已初始化）
+	// 由于runCreate需要用户输入，我们设置描述参数来避免交互
+	originalDescription := createDescription
+	createDescription = "Test skill description"
+	defer func() { createDescription = originalDescription }()
+
 	err = runCreate(skillName)
 	if err != nil {
 		t.Errorf("runCreate() failed: %v", err)
 	}
 
-	// 检查文件是否创建
-	skillFilePath := filepath.Join(tempDir, "SKILL.md")
+	// 检查文件是否创建在正确的目录
+	skillDir := filepath.Join(agentsDir, "skills", skillName)
+	skillFilePath := filepath.Join(skillDir, "SKILL.md")
 	if _, err := os.Stat(skillFilePath); os.IsNotExist(err) {
-		t.Error("SKILL.md file was not created")
+		t.Error("SKILL.md file was not created in .agents/skills/[skill-name]/ directory")
+	}
+
+	// 检查目录结构是否正确
+	if _, err := os.Stat(skillDir); os.IsNotExist(err) {
+		t.Error("Skill directory was not created")
 	}
 
 	// 读取文件内容
@@ -194,7 +220,7 @@ func TestCreateCommandIntegration(t *testing.T) {
 	}
 
 	// 清理
-	os.Remove(skillFilePath)
+	os.RemoveAll(filepath.Join(agentsDir, "skills"))
 }
 
 // Helper function to check if string contains substring
