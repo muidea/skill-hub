@@ -96,3 +96,26 @@ type SkillVars struct {
 	Version   string            `json:"version"`
 	Variables map[string]string `json:"variables"`
 }
+
+// CreateOptions 创建技能选项
+type CreateOptions struct {
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Compatibility string `json:"compatibility"` // cursor, claude, opencode, all
+	OutputDir     string `json:"output_dir"`
+}
+
+// ValidationResult 验证结果
+type ValidationResult struct {
+	SkillID  string   `json:"skill_id"`
+	IsValid  bool     `json:"is_valid"`
+	Errors   []string `json:"errors,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// ArchiveInfo 归档信息
+type ArchiveInfo struct {
+	SkillID    string `json:"skill_id"`
+	Version    string `json:"version"`
+	ArchivedAt string `json:"archived_at"`
+}

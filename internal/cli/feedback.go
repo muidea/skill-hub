@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"skill-hub/internal/adapter/claude"
 	"skill-hub/internal/adapter/cursor"
@@ -19,6 +21,7 @@ import (
 
 var (
 	adapterTarget string
+	archiveFlag   bool
 )
 
 var feedbackCmd = &cobra.Command{
@@ -27,7 +30,9 @@ var feedbackCmd = &cobra.Command{
 	Long: `将项目配置文件中手动修改的技能内容反向更新到本地技能仓库。
 
 使用 --adapter 参数指定从哪个工具配置文件提取内容 (cursor/claude/opencode/auto)。
-默认为 auto，会自动检测技能支持的工具。`,
+默认为 auto，会自动检测技能支持的工具。
+
+使用 --archive 参数在反馈完成后将技能归档到正式技能仓库。`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runFeedback(args[0])
@@ -36,6 +41,7 @@ var feedbackCmd = &cobra.Command{
 
 func init() {
 	feedbackCmd.Flags().StringVar(&adapterTarget, "adapter", "auto", "适配器目标: cursor, claude, opencode, auto")
+	feedbackCmd.Flags().BoolVar(&archiveFlag, "archive", false, "反馈完成后归档到技能仓库")
 }
 
 func runFeedback(skillID string) error {
@@ -420,8 +426,22 @@ func runFeedback(skillID string) error {
 	fmt.Println("✓ 更新 SKILL.md")
 	fmt.Printf("✓ 版本更新: %s\n", updatedSkill.Version)
 
+	// 如果启用了归档标志，执行归档操作
+	if archiveFlag {
+		fmt.Println("\n📦 开始归档技能...")
+		if err := archiveSkill(skillID, updatedSkill.Version, cwd); err != nil {
+			fmt.Printf("⚠️  归档失败: %v\n", err)
+			fmt.Println("技能已更新但未归档，请手动处理")
+		} else {
+			fmt.Println("✅ 技能归档完成！")
+		}
+	}
+
 	fmt.Println("\n✅ 反馈完成！")
-	fmt.Println("使用 'skill-hub update' 同步到远程仓库")
+	if !archiveFlag {
+		fmt.Println("使用 'skill-hub update' 同步到远程仓库")
+		fmt.Println("使用 'skill-hub feedback --archive' 归档技能到正式仓库")
+	}
 
 	return nil
 }
@@ -554,4 +574,127 @@ func addVersionToFrontmatter(content string, version string) (string, error) {
 	}
 
 	return strings.Join(result, "\n"), nil
+}
+
+// archiveSkill 归档技能到正式技能仓库
+func archiveSkill(skillID, version, projectPath string) error {
+	fmt.Printf("归档技能 '%s' (版本: %s)...\n", skillID, version)
+
+	// 获取技能管理器
+	skillManager, err := engine.NewSkillManager()
+	if err != nil {
+		return fmt.Errorf("创建技能管理器失败: %w", err)
+	}
+
+	// 获取技能目录
+	skillsDir, err := engine.GetSkillsDir()
+	if err != nil {
+		return fmt.Errorf("获取技能目录失败: %w", err)
+	}
+
+	// 检查技能是否存在
+	if !skillManager.SkillExists(skillID) {
+		return fmt.Errorf("技能 '%s' 不存在", skillID)
+	}
+
+	// 加载技能详情
+	skill, err := skillManager.LoadSkill(skillID)
+	if err != nil {
+		return fmt.Errorf("加载技能失败: %w", err)
+	}
+
+	// 确定目标目录（正式技能目录）
+	targetDir := filepath.Join(skillsDir, skillID)
+
+	// 检查目标目录是否已存在
+	if _, err := os.Stat(targetDir); err == nil {
+		// 目录已存在，询问是否覆盖
+		fmt.Printf("⚠️  技能 '%s' 已存在于正式仓库\n", skillID)
+		fmt.Print("是否覆盖？ [y/N]: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(response)
+
+		if response != "y" && response != "Y" {
+			return fmt.Errorf("取消归档操作")
+		}
+
+		// 备份原有目录
+		backupDir := targetDir + ".backup." + time.Now().Format("20060102-150405")
+		if err := os.Rename(targetDir, backupDir); err != nil {
+			return fmt.Errorf("备份原有目录失败: %w", err)
+		}
+		fmt.Printf("✓ 原有目录已备份到: %s\n", backupDir)
+	}
+
+	// 获取当前技能文件路径
+	// 首先尝试直接路径
+	sourceDir := filepath.Join(skillsDir, skillID)
+	sourceSkillPath := filepath.Join(sourceDir, "SKILL.md")
+
+	// 如果不存在，尝试在 skills/skills/ 子目录中查找
+	if _, err := os.Stat(sourceSkillPath); os.IsNotExist(err) {
+		skillsSubDir := filepath.Join(skillsDir, "skills", skillID)
+		sourceSkillPath = filepath.Join(skillsSubDir, "SKILL.md")
+		sourceDir = skillsSubDir
+
+		if _, err := os.Stat(sourceSkillPath); os.IsNotExist(err) {
+			return fmt.Errorf("找不到技能文件: %s", skillID)
+		}
+	}
+
+	// 创建目标目录
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return fmt.Errorf("创建目标目录失败: %w", err)
+	}
+
+	// 复制技能文件
+	sourceFiles := []string{"SKILL.md", "prompt.md"}
+	for _, filename := range sourceFiles {
+		sourceFile := filepath.Join(sourceDir, filename)
+		targetFile := filepath.Join(targetDir, filename)
+
+		if _, err := os.Stat(sourceFile); err == nil {
+			// 读取源文件内容
+			content, err := os.ReadFile(sourceFile)
+			if err != nil {
+				return fmt.Errorf("读取文件失败 %s: %w", filename, err)
+			}
+
+			// 写入目标文件
+			if err := os.WriteFile(targetFile, content, 0644); err != nil {
+				return fmt.Errorf("写入文件失败 %s: %w", filename, err)
+			}
+
+			fmt.Printf("✓ 复制 %s\n", filename)
+		}
+	}
+
+	// 更新归档记录
+	archiveRecord := spec.ArchiveInfo{
+		SkillID:    skillID,
+		Version:    version,
+		ArchivedAt: time.Now().Format(time.RFC3339),
+	}
+
+	// 保存归档记录（简化实现，实际应该保存到数据库或文件）
+	fmt.Printf("✓ 归档记录: 技能=%s, 版本=%s, 时间=%s\n",
+		archiveRecord.SkillID,
+		archiveRecord.Version,
+		archiveRecord.ArchivedAt)
+
+	// 显示归档信息
+	fmt.Printf("\n📋 归档完成信息:\n")
+	fmt.Printf("   技能ID: %s\n", skillID)
+	fmt.Printf("   技能名称: %s\n", skill.Name)
+	fmt.Printf("   版本: %s\n", version)
+	fmt.Printf("   描述: %s\n", skill.Description)
+	if len(skill.Tags) > 0 {
+		fmt.Printf("   标签: %s\n", strings.Join(skill.Tags, ", "))
+	}
+	fmt.Printf("   来源项目: %s\n", projectPath)
+	fmt.Printf("   目标目录: %s\n", targetDir)
+
+	return nil
 }

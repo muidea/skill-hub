@@ -1,0 +1,282 @@
+package cli
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+)
+
+var (
+	createDescription   string
+	createCompatibility string
+	createOutputDir     string
+)
+
+var createCmd = &cobra.Command{
+	Use:   "create [skill-name]",
+	Short: "创建新的技能模板",
+	Long: `创建一个新的技能模板文件。
+
+技能名称应该使用小写字母和连字符，例如：my-project-skill。
+如果没有指定输出目录，将在当前目录创建SKILL.md文件。`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runCreate(args[0])
+	},
+}
+
+func init() {
+	createCmd.Flags().StringVar(&createDescription, "description", "", "技能描述")
+	createCmd.Flags().StringVar(&createCompatibility, "compatibility", "all", "兼容工具: cursor, claude, opencode, all")
+	createCmd.Flags().StringVar(&createOutputDir, "output-dir", ".", "输出目录")
+}
+
+func runCreate(skillName string) error {
+	// 验证技能名称格式
+	if !isValidSkillName(skillName) {
+		return fmt.Errorf("技能名称 '%s' 格式无效。应使用小写字母、数字和连字符，例如：my-project-skill", skillName)
+	}
+
+	// 获取当前工作目录
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("获取当前目录失败: %w", err)
+	}
+
+	// 确定输出目录
+	outputDir := createOutputDir
+	if outputDir == "." {
+		outputDir = cwd
+	} else if !filepath.IsAbs(outputDir) {
+		outputDir = filepath.Join(cwd, outputDir)
+	}
+
+	// 检查输出目录是否存在
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		return fmt.Errorf("输出目录不存在: %s", outputDir)
+	}
+
+	// 检查是否已存在同名技能文件
+	skillFilePath := filepath.Join(outputDir, "SKILL.md")
+	if _, err := os.Stat(skillFilePath); err == nil {
+		fmt.Printf("⚠️  文件已存在: %s\n", skillFilePath)
+		fmt.Print("是否覆盖？ [y/N]: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(response)
+
+		if response != "y" && response != "Y" {
+			fmt.Println("❌ 取消创建")
+			return nil
+		}
+	}
+
+	// 收集技能描述（如果未提供）
+	description := createDescription
+	if description == "" {
+		fmt.Printf("请输入技能描述 (按Enter跳过): ")
+		reader := bufio.NewReader(os.Stdin)
+		input, _ := reader.ReadString('\n')
+		description = strings.TrimSpace(input)
+	}
+
+	// 使用默认描述如果用户未输入
+	if description == "" {
+		description = fmt.Sprintf("为项目定制的 %s 技能", skillName)
+	}
+
+	// 验证兼容性选项
+	compatibility := createCompatibility
+	if !isValidCompatibility(compatibility) {
+		return fmt.Errorf("无效的兼容性选项: %s。可用选项: cursor, claude, opencode, all", compatibility)
+	}
+
+	// 生成技能内容
+	content, err := generateSkillContent(skillName, description, compatibility)
+	if err != nil {
+		return fmt.Errorf("生成技能内容失败: %w", err)
+	}
+
+	// 写入文件
+	if err := os.WriteFile(skillFilePath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("写入文件失败: %w", err)
+	}
+
+	fmt.Printf("✅ 技能模板创建成功: %s\n", skillFilePath)
+	fmt.Println("下一步:")
+	fmt.Println("1. 编辑 SKILL.md 文件以完善技能内容")
+	fmt.Printf("2. 使用 'skill-hub use %s' 在项目中启用技能\n", skillName)
+	fmt.Println("3. 使用 'skill-hub apply' 将技能应用到工具")
+
+	return nil
+}
+
+// generateSkillContent 生成技能内容
+func generateSkillContent(name, description, compatibility string) (string, error) {
+	// 获取当前时间
+	timestamp := time.Now().Format(time.RFC3339)
+
+	// 获取当前用户（简化实现）
+	author := "unknown"
+	if user := os.Getenv("USER"); user != "" {
+		author = user
+	} else if user := os.Getenv("USERNAME"); user != "" {
+		author = user
+	}
+
+	// 生成兼容性描述
+	compatDesc := generateCompatibilityDescription(compatibility)
+
+	// 使用字符串构建器创建模板
+	var template strings.Builder
+
+	template.WriteString(fmt.Sprintf(`---
+name: %s
+description: %s
+compatibility: %s
+metadata:
+  version: "1.0.0"
+  author: "%s"
+  created_at: "%s"
+---
+# %s
+
+%s
+
+## 使用说明
+
+这是一个自定义技能模板，请根据您的项目需求进行修改。
+
+## 变量
+
+技能支持以下变量，可以在启用技能时配置：
+
+- `+"`PROJECT_NAME`"+`: 项目名称 {{.PROJECT_NAME}}
+- `+"`PROJECT_PATH`"+`: 项目路径 {{.PROJECT_PATH}}
+- `+"`LANGUAGE`"+`: 编程语言 {{.LANGUAGE}}
+- `+"`FRAMEWORK`"+`: 框架 {{.FRAMEWORK}}
+
+## 最佳实践
+
+### 1. 保持技能专注
+- 每个技能应该专注于一个特定的任务或领域
+- 避免创建过于通用的技能
+
+### 2. 清晰的变量命名
+- 使用有意义的变量名称
+- 为每个变量提供清晰的描述
+
+### 3. 结构化内容
+- 使用清晰的章节结构
+- 包含示例和代码片段
+- 提供故障排除指南
+
+### 4. 版本控制
+- 每次重要修改时更新版本号
+- 在metadata中记录修改历史
+
+## 示例
+
+### 添加新功能
+当需要添加新功能时，可以参考以下结构：
+
+`+"```markdown"+`
+## 功能名称
+
+### 用途
+描述功能的用途和适用场景。
+
+### 使用方法
+`+"```"+`
+具体的命令或代码示例
+`+"```"+`
+
+### 注意事项
+- 注意事项1
+- 注意事项2
+`+"```"+`
+
+### 配置说明
+对于需要配置的功能：
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `+"`CONFIG_1`"+` | 配置1说明 | 默认值1 |
+| `+"`CONFIG_2`"+` | 配置2说明 | 默认值2 |
+
+## 更新日志
+
+### v1.0.0 (%s)
+- 初始版本创建
+`,
+		name,
+		description,
+		compatDesc,
+		author,
+		timestamp,
+		name,
+		description,
+		time.Now().Format("2006-01-02")))
+
+	return template.String(), nil
+}
+
+// generateCompatibilityDescription 生成兼容性描述
+func generateCompatibilityDescription(compatibility string) string {
+	switch compatibility {
+	case "cursor":
+		return "Designed for Cursor (or similar AI coding assistants)"
+	case "claude":
+		return "Designed for Claude Code (or similar AI coding assistants)"
+	case "opencode":
+		return "Designed for OpenCode (or similar AI coding assistants)"
+	case "all":
+		return "Designed for Cursor, Claude Code, and OpenCode (or similar AI coding assistants)"
+	default:
+		return "Designed for AI coding assistants"
+	}
+}
+
+// isValidSkillName 验证技能名称格式
+func isValidSkillName(name string) bool {
+	if name == "" {
+		return false
+	}
+
+	// 检查是否只包含小写字母、数字和连字符
+	for _, ch := range name {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-') {
+			return false
+		}
+	}
+
+	// 不能以连字符开头或结尾
+	if strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") {
+		return false
+	}
+
+	// 不能包含连续连字符
+	if strings.Contains(name, "--") {
+		return false
+	}
+
+	return true
+}
+
+// isValidCompatibility 验证兼容性选项
+func isValidCompatibility(compatibility string) bool {
+	validOptions := map[string]bool{
+		"cursor":   true,
+		"claude":   true,
+		"opencode": true,
+		"all":      true,
+	}
+
+	return validOptions[compatibility]
+}
