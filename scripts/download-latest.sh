@@ -1,8 +1,15 @@
 #!/bin/bash
 # Skill Hub 自动下载脚本
-# 用法: curl -s https://raw.githubusercontent.com/muidea/skill-hub/main/scripts/download-latest.sh | bash
+# 用法: curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/download-latest.sh | bash
+# 备用用法: bash <(curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/download-latest.sh)
 
 set -e
+
+# 检查脚本是否被正确下载
+if [ "$1" = "--check" ]; then
+    echo "Script check passed"
+    exit 0
+fi
 
 # 颜色输出
 RED='\033[0;31m'

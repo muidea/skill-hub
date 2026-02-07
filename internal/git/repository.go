@@ -158,7 +158,7 @@ func (r *Repository) Clone(url string) error {
 			} else if strings.Contains(err.Error(), "authentication required") {
 				errMsg += "\n认证失败: 请检查Git token配置或使用SSH key"
 			}
-			return fmt.Errorf(errMsg)
+			return fmt.Errorf("%s", errMsg)
 		}
 	}
 
