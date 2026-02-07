@@ -254,10 +254,38 @@ main() {
         exit 1
     fi
     
+    # 查找解压出的二进制文件
+    # 实际压缩包包含的是 "skill-hub"，不是 "skill-hub-linux-amd64"
+    ACTUAL_BINARY=""
+    if [ -f "skill-hub" ]; then
+        ACTUAL_BINARY="skill-hub"
+    elif [ -f "$BINARY_NAME" ]; then
+        ACTUAL_BINARY="$BINARY_NAME"
+    else
+        # 尝试查找任何可执行文件
+        for file in *; do
+            if [ -f "$file" ] && [ -x "$file" ] && ! [[ "$file" =~ \.(tar\.gz|sha256|txt|md)$ ]]; then
+                ACTUAL_BINARY="$file"
+                break
+            fi
+        done
+    fi
+    
+    if [ -z "$ACTUAL_BINARY" ]; then
+        echo -e "${RED}错误: 未找到可执行文件${NC}"
+        echo "解压后的文件:"
+        ls -la
+        cd /
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+    
+    echo "找到可执行文件: $ACTUAL_BINARY"
+    
     # 验证文件（仅当校验文件下载成功时）
     # 注意：校验文件验证的是解压后的二进制文件，不是压缩包
     if [ "$CHECKSUM_DOWNLOADED" = "true" ]; then
-        if ! verify_file "$BINARY_NAME" "$CHECKSUM_NAME"; then
+        if ! verify_file "$ACTUAL_BINARY" "$CHECKSUM_NAME"; then
             echo -e "${RED}下载失败: 文件验证错误${NC}"
             cd /
             rm -rf "$TEMP_DIR"
@@ -276,19 +304,19 @@ main() {
     
     # 安装提示
     echo -e "\n${BLUE}安装选项:${NC}"
-    echo "1. 直接运行: ./skill-hub (或 ./skill-hub.exe)"
+    echo "1. 直接运行: ./$ACTUAL_BINARY"
     echo "2. 安装到系统:"
     
     if [ "$OS" = "linux" ] || [ "$OS" = "darwin" ]; then
-        echo "   sudo cp skill-hub /usr/local/bin/"
-        echo "   或 cp skill-hub ~/.local/bin/"
+        echo "   sudo cp $ACTUAL_BINARY /usr/local/bin/"
+        echo "   或 cp $ACTUAL_BINARY ~/.local/bin/"
     elif [ "$OS" = "windows" ]; then
-        echo "   将 skill-hub.exe 添加到系统 PATH"
+        echo "   将 $ACTUAL_BINARY 添加到系统 PATH"
     fi
     
     echo ""
     echo "3. 验证安装:"
-    echo "   skill-hub --version"
+    echo "   $ACTUAL_BINARY --version"
     
     # 询问是否自动安装
     echo -e "\n${YELLOW}是否要自动安装到系统？${NC}"
@@ -302,7 +330,7 @@ main() {
         [yY])
             echo "安装到 /usr/local/bin/..."
             if command -v sudo >/dev/null 2>&1; then
-                sudo cp skill-hub /usr/local/bin/
+                sudo cp "$ACTUAL_BINARY" /usr/local/bin/
                 if [ $? -eq 0 ]; then
                     echo -e "${GREEN}✓ 安装成功！${NC}"
                 else
@@ -315,7 +343,7 @@ main() {
         [uU])
             echo "安装到 ~/.local/bin/..."
             mkdir -p ~/.local/bin
-            cp skill-hub ~/.local/bin/
+            cp "$ACTUAL_BINARY" ~/.local/bin/
             if [ $? -eq 0 ]; then
                 echo -e "${GREEN}✓ 安装成功！${NC}"
                 echo "请确保 ~/.local/bin 在您的PATH中"
@@ -329,11 +357,11 @@ main() {
     esac
     
     # 验证安装
-    if command -v skill-hub >/dev/null 2>&1; then
+    if command -v "$ACTUAL_BINARY" >/dev/null 2>&1; then
         echo -e "\n${GREEN}验证安装:${NC}"
-        skill-hub --version
+        "$ACTUAL_BINARY" --version
     else
-        echo -e "\n${YELLOW}提示: skill-hub 不在PATH中${NC}"
+        echo -e "\n${YELLOW}提示: $ACTUAL_BINARY 不在PATH中${NC}"
         echo "请手动添加到PATH或使用临时目录中的可执行文件"
     fi
     
