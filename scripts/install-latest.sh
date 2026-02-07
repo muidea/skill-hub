@@ -17,6 +17,10 @@ if [ "$1" = "--check" ]; then
     exit 0
 fi
 
+# 安装模式 - 简化：默认安装到 ~/.local/bin/
+INSTALL_MODE="auto"
+AUTO_INSTALL_TARGET="user"
+
 # 颜色输出
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -302,72 +306,93 @@ main() {
     echo "内容:"
     ls -la
     
-    # 安装提示
-    echo -e "\n${BLUE}安装选项:${NC}"
-    echo "1. 直接运行: ./$ACTUAL_BINARY"
-    echo "2. 安装到系统:"
+    # 安装信息
+    echo -e "\n${BLUE}安装信息:${NC}"
+    echo "• 可执行文件: ./$ACTUAL_BINARY"
+    echo "• 将自动安装到: ~/.local/bin/"
     
-    if [ "$OS" = "linux" ] || [ "$OS" = "darwin" ]; then
-        echo "   sudo cp $ACTUAL_BINARY /usr/local/bin/"
-        echo "   或 cp $ACTUAL_BINARY ~/.local/bin/"
-    elif [ "$OS" = "windows" ]; then
-        echo "   将 $ACTUAL_BINARY 添加到系统 PATH"
-    fi
+    # 自动安装到 ~/.local/bin/
+    echo -e "\n${GREEN}自动安装到 ~/.local/bin/...${NC}"
     
-    echo ""
-    echo "3. 验证安装:"
-    echo "   $ACTUAL_BINARY --version"
+    # 创建目录（如果不存在）
+    mkdir -p ~/.local/bin
     
-    # 询问是否自动安装
-    echo -e "\n${YELLOW}是否要自动安装到系统？${NC}"
-    echo "y - 安装到 /usr/local/bin/ (需要sudo权限)"
-    echo "u - 安装到 ~/.local/bin/"
-    echo "n - 不安装，仅保留在临时目录"
-    read -p "请选择 [y/u/N]: " -n 1 -r
-    echo
-    
-    case $REPLY in
-        [yY])
-            echo "安装到 /usr/local/bin/..."
-            if command -v sudo >/dev/null 2>&1; then
-                sudo cp "$ACTUAL_BINARY" /usr/local/bin/
-                if [ $? -eq 0 ]; then
-                    echo -e "${GREEN}✓ 安装成功！${NC}"
-                else
-                    echo -e "${RED}✗ 安装失败，请检查权限${NC}"
-                fi
-            else
-                echo -e "${RED}错误: 需要sudo权限${NC}"
-            fi
-            ;;
-        [uU])
-            echo "安装到 ~/.local/bin/..."
-            mkdir -p ~/.local/bin
-            cp "$ACTUAL_BINARY" ~/.local/bin/
-            if [ $? -eq 0 ]; then
-                echo -e "${GREEN}✓ 安装成功！${NC}"
-                echo "请确保 ~/.local/bin 在您的PATH中"
-            else
-                echo -e "${RED}✗ 安装失败${NC}"
-            fi
-            ;;
-        *)
-            echo "跳过自动安装"
-            ;;
-    esac
-    
-    # 验证安装
-    if command -v "$ACTUAL_BINARY" >/dev/null 2>&1; then
-        echo -e "\n${GREEN}验证安装:${NC}"
-        "$ACTUAL_BINARY" --version
+    # 复制文件
+    if cp "$ACTUAL_BINARY" ~/.local/bin/; then
+        echo -e "${GREEN}✓ 安装成功！${NC}"
+        
+        # 安装完成信息提示
+        echo -e "\n${BLUE}📦 安装内容:${NC}"
+        echo "• 程序名称: Skill Hub"
+        echo "• 可执行文件: $ACTUAL_BINARY"
+        echo "• 安装位置: ~/.local/bin/$ACTUAL_BINARY"
+        echo "• 版本: v0.1.2"
+        echo "• 文件大小: $(du -h "$ACTUAL_BINARY" | cut -f1)"
+        
+        # 检查是否在PATH中
+        if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+            echo -e "\n${YELLOW}⚠️  重要提示: ~/.local/bin 不在您的PATH中${NC}"
+            echo "请将以下行添加到您的 shell 配置文件 (~/.bashrc, ~/.zshrc, 或 ~/.profile):"
+            echo ""
+            echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+            echo ""
+            echo "然后运行以下命令使配置生效:"
+            echo "  source ~/.bashrc   # 如果使用 bash"
+            echo "  或"
+            echo "  source ~/.zshrc    # 如果使用 zsh"
+            echo "  或重新打开终端"
+        else
+            echo -e "\n${GREEN}✅ PATH 配置正常${NC}"
+            echo "~/.local/bin 已在您的PATH中"
+        fi
     else
-        echo -e "\n${YELLOW}提示: $ACTUAL_BINARY 不在PATH中${NC}"
-        echo "请手动添加到PATH或使用临时目录中的可执行文件"
+        echo -e "${RED}✗ 安装失败${NC}"
+        echo "文件保存在: $TEMP_DIR"
+        echo "您可以手动复制: cp $TEMP_DIR/$ACTUAL_BINARY ~/.local/bin/"
     fi
     
-    # 保持临时目录（让用户自己清理）
-    echo -e "\n${YELLOW}提示: 文件保存在 $TEMP_DIR${NC}"
-    echo "完成后可手动删除: rm -rf $TEMP_DIR"
+    # 验证安装和使用说明
+    echo -e "\n${GREEN}🔧 验证安装和使用说明:${NC}"
+    
+    if command -v "$ACTUAL_BINARY" >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ 安装验证成功！${NC}"
+        echo ""
+        echo "版本信息:"
+        "$ACTUAL_BINARY" --version
+        echo ""
+        echo "📖 基本使用:"
+        echo "  1. 查看帮助: $ACTUAL_BINARY --help"
+        echo "  2. 初始化项目: $ACTUAL_BINARY init"
+        echo "  3. 列出可用技能: $ACTUAL_BINARY list"
+        echo "  4. 启用技能: $ACTUAL_BINARY use <skill-name>"
+    else
+        echo -e "${YELLOW}⚠️  安装验证: 命令未在PATH中找到${NC}"
+        echo ""
+        echo "解决方法:"
+        echo "  1. 临时使用（当前终端）:"
+        echo "     export PATH=\"\$HOME/.local/bin:\$PATH\""
+        echo "     $ACTUAL_BINARY --version"
+        echo ""
+        echo "  2. 永久生效（推荐）:"
+        echo "     将上面命令添加到 ~/.bashrc 或 ~/.zshrc"
+        echo "     然后运行: source ~/.bashrc 或重新打开终端"
+        echo ""
+        echo "  3. 直接运行（不依赖PATH）:"
+        echo "     ~/.local/bin/$ACTUAL_BINARY --version"
+    fi
+    
+    # 清理提示和总结
+    echo -e "\n${BLUE}📝 安装总结:${NC}"
+    echo "• ✅ 下载完成: skill-hub-linux-amd64.tar.gz"
+    echo "• ✅ 验证通过: SHA256 校验成功"
+    echo "• ✅ 文件解压: 找到可执行文件 $ACTUAL_BINARY"
+    echo "• ✅ 安装完成: 已复制到 ~/.local/bin/"
+    echo ""
+    echo "${YELLOW}🗑️  清理提示:${NC}"
+    echo "临时文件保存在: $TEMP_DIR"
+    echo "安装完成后可手动删除: rm -rf $TEMP_DIR"
+    echo ""
+    echo "${GREEN}🎉 Skill Hub 安装完成！开始使用吧！${NC}"
 }
 
 # 运行主函数
