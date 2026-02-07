@@ -104,11 +104,17 @@ verify_file() {
         return 0
     fi
     
+    if [ ! -f "$file" ]; then
+        echo -e "${RED}错误: 要验证的文件不存在 - $file${NC}"
+        return 1
+    fi
+    
     echo "验证文件完整性..."
     
     if command -v sha256sum >/dev/null 2>&1; then
         if sha256sum -c "$checksum_file" 2>/dev/null; then
             echo -e "${GREEN}✓ 文件验证成功${NC}"
+            return 0
         else
             echo -e "${RED}✗ 文件验证失败${NC}"
             return 1
@@ -117,12 +123,14 @@ verify_file() {
         # macOS
         if shasum -a 256 -c "$checksum_file" 2>/dev/null; then
             echo -e "${GREEN}✓ 文件验证成功${NC}"
+            return 0
         else
             echo -e "${RED}✗ 文件验证失败${NC}"
             return 1
         fi
     else
         echo -e "${YELLOW}警告: 无法验证文件完整性（缺少 sha256sum/shasum）${NC}"
+        return 0
     fi
 }
 
@@ -178,12 +186,12 @@ main() {
     if [ "$OS" = "windows" ]; then
         BINARY_NAME="skill-hub-$OS-$ARCH.exe"
         ARCHIVE_NAME="skill-hub-$OS-$ARCH.tar.gz"
+        CHECKSUM_NAME="skill-hub-$OS-$ARCH.sha256"
     else
         BINARY_NAME="skill-hub-$OS-$ARCH"
         ARCHIVE_NAME="skill-hub-$OS-$ARCH.tar.gz"
+        CHECKSUM_NAME="skill-hub-$OS-$ARCH.sha256"
     fi
-    
-    CHECKSUM_NAME="$ARCHIVE_NAME.sha256"
     
     # 下载URL
     DOWNLOAD_URL="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/$VERSION/$ARCHIVE_NAME"
@@ -203,17 +211,23 @@ main() {
         exit 1
     fi
     
+    # 下载校验文件
+    CHECKSUM_DOWNLOADED=true
     if ! download_file "$CHECKSUM_URL" "$CHECKSUM_NAME"; then
         echo -e "${YELLOW}警告: 校验和文件下载失败，跳过验证${NC}"
-        # 继续执行，不退出
+        CHECKSUM_DOWNLOADED=false
     fi
     
-    # 验证文件
-    if ! verify_file "$ARCHIVE_NAME" "$CHECKSUM_NAME"; then
-        echo -e "${RED}下载失败: 文件验证错误${NC}"
-        cd /
-        rm -rf "$TEMP_DIR"
-        exit 1
+    # 验证文件（仅当校验文件下载成功时）
+    if [ "$CHECKSUM_DOWNLOADED" = "true" ]; then
+        if ! verify_file "$ARCHIVE_NAME" "$CHECKSUM_NAME"; then
+            echo -e "${RED}下载失败: 文件验证错误${NC}"
+            cd /
+            rm -rf "$TEMP_DIR"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}跳过文件验证（校验文件缺失）${NC}"
     fi
     
     # 解压文件
