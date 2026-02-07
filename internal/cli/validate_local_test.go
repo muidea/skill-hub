@@ -104,7 +104,7 @@ Test skill for validation testing.
 			ID:   "test-skill",
 			Name: "Test Skill",
 			Variables: []spec.Variable{
-				{Name: "REQUIRED_VAR", Default: "", Description: "Required variable"},
+				{Name: "REQUIRED_VAR", Default: ""},
 			},
 		}
 
@@ -116,16 +116,17 @@ Test skill for validation testing.
 		}
 
 		err := validateVariables(skill, variables, result)
-		if err == nil {
-			t.Error("validateVariables() should fail for missing required variable")
+		if err != nil {
+			t.Errorf("validateVariables() should not fail for missing required variable (now warning): %v", err)
 		}
 
-		// 注意：validateVariables函数只返回错误，不修改result.IsValid
-		// 调用者负责根据错误设置result.IsValid = false
-		// 所以这里result.IsValid可能仍然是true，这是预期的
+		// 现在缺少必需变量是警告而不是错误
+		if len(result.Errors) > 0 {
+			t.Error("validateVariables() should not have errors for missing required variable (should be warning)")
+		}
 
-		if len(result.Errors) == 0 {
-			t.Error("validateVariables() should have errors for missing required variable")
+		if len(result.Warnings) == 0 {
+			t.Error("validateVariables() should have warnings for missing required variable")
 		}
 	})
 

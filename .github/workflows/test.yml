@@ -1,0 +1,117 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - '.github/workflows/**'
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go-version: ['1.24']
+      fail-fast: false
+    
+    name: Test on ${{ matrix.os }} (Go ${{ matrix.go-version }})
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Verify Go version
+        run: go version
+
+      - name: Install staticcheck (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Install staticcheck (macOS only)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install staticcheck || true
+          if ! command -v staticcheck >/dev/null 2>&1; then
+            go install honnef.co/go/tools/cmd/staticcheck@latest
+          fi
+
+      - name: Run tests using Makefile
+        run: make test
+
+      - name: Run tests with coverage using Makefile
+        run: make test-coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ matrix.os }}-go${{ matrix.go-version }}
+          path: coverage.out
+          retention-days: 7
+
+      - name: Run linting using Makefile
+        run: make lint
+
+      - name: Build binary using Makefile
+        run: make build
+
+      - name: Verify binary works
+        run: |
+          ./bin/skill-hub --version
+          ./bin/skill-hub --help | head -3
+
+  test-windows:
+    name: Test on Windows (Go 1.24)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Verify Go version
+        run: go version
+
+      - name: Run tests using Makefile
+        shell: bash
+        run: make test
+
+      - name: Run linting using Makefile
+        shell: bash
+        run: make lint
+
+      - name: Build binary using Makefile
+        shell: bash
+        run: make build
+
+      - name: Verify binary works
+        shell: bash
+        run: |
+          ./bin/skill-hub --version
+          ./bin/skill-hub --help | head -3

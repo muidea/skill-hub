@@ -190,22 +190,10 @@ func (sr *SkillRepository) ListSkillsFromRemote() ([]*spec.Skill, error) {
 		return nil, err
 	}
 
-	var skills []*spec.Skill
-
-	// 首先检查是否有 skills/skills/ 子目录（新格式）
-	skillsSubDir := filepath.Join(skillsDir, "skills")
-	if _, err := os.Stat(skillsSubDir); err == nil {
-		// 使用新格式：递归查找 skills/skills/ 目录下的技能
-		skills, err = sr.loadSkillsFromDirectory(skillsSubDir, true)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// 使用旧格式：直接在 skillsDir 中查找
-		skills, err = sr.loadSkillsFromDirectory(skillsDir, false)
-		if err != nil {
-			return nil, err
-		}
+	// 只使用标准结构：直接从skills目录加载
+	skills, err := sr.loadSkillsFromDirectory(skillsDir, false)
+	if err != nil {
+		return nil, err
 	}
 
 	return skills, nil

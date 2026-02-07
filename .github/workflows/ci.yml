@@ -7,9 +7,10 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  quick-test:
+    name: Quick Test
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,11 +20,12 @@ jobs:
         with:
           go-version: "1.24"
           cache: true
+          cache-dependency-path: go.sum
 
-      - name: Run tests
-        run: go test ./...
+      - name: Run quick tests
+        run: make test
 
-      - name: Run linting
+      - name: Run basic linting
         run: |
           gofmt -d .
           go vet ./...
@@ -31,7 +33,7 @@ jobs:
       - name: Build binary
         run: make build
 
-      - name: Verify version
+      - name: Verify binary
         run: |
           ./bin/skill-hub --version
-          ./bin/skill-hub --help | head -5
+          ./bin/skill-hub --help | head -3

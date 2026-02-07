@@ -45,13 +45,13 @@ func runList() error {
 			tools = append(tools, "cursor")
 		}
 		if strings.Contains(compatLower, "claude code") || strings.Contains(compatLower, "claude_code") {
-			tools = append(tools, "claude")
+			tools = append(tools, "claude_code")
 		}
 		if strings.Contains(compatLower, "shell") {
 			tools = append(tools, "shell")
 		}
-		if strings.Contains(compatLower, "opencode") {
-			tools = append(tools, "opencode")
+		if strings.Contains(compatLower, "opencode") || strings.Contains(compatLower, "open_code") {
+			tools = append(tools, "open_code")
 		}
 
 		toolsStr := ""

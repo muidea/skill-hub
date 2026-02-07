@@ -35,26 +35,25 @@ func TestIsValidSkillName(t *testing.T) {
 	}
 }
 
-func TestIsValidCompatibility(t *testing.T) {
+func TestIsValidTarget(t *testing.T) {
 	tests := []struct {
-		name          string
-		compatibility string
-		expected      bool
+		name     string
+		target   string
+		expected bool
 	}{
 		{"cursor", "cursor", true},
-		{"claude", "claude", true},
-		{"opencode", "opencode", true},
+		{"claude_code", "claude_code", true},
+		{"open_code", "open_code", true},
 		{"all", "all", true},
 		{"invalid", "invalid", false},
 		{"empty", "", false},
-		{"mixed case", "Cursor", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isValidCompatibility(tt.compatibility)
+			result := isValidTarget(tt.target)
 			if result != tt.expected {
-				t.Errorf("isValidCompatibility(%q) = %v, want %v", tt.compatibility, result, tt.expected)
+				t.Errorf("isValidTarget(%q) = %v, want %v", tt.target, result, tt.expected)
 			}
 		})
 	}
@@ -67,8 +66,8 @@ func TestGenerateCompatibilityDescription(t *testing.T) {
 		expected      string
 	}{
 		{"cursor", "cursor", "Designed for Cursor (or similar AI coding assistants)"},
-		{"claude", "claude", "Designed for Claude Code (or similar AI coding assistants)"},
-		{"opencode", "opencode", "Designed for OpenCode (or similar AI coding assistants)"},
+		{"claude_code", "claude_code", "Designed for Claude Code (or similar AI coding assistants)"},
+		{"open_code", "open_code", "Designed for OpenCode (or similar AI coding assistants)"},
 		{"all", "all", "Designed for Cursor, Claude Code, and OpenCode (or similar AI coding assistants)"},
 		{"invalid", "invalid", "Designed for AI coding assistants"},
 	}

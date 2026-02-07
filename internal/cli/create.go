@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	createDescription   string
-	createCompatibility string
-	createOutputDir     string
+	createDescription string
+	createTarget      string
+	createOutputDir   string
 )
 
 var createCmd = &cobra.Command{
@@ -34,7 +34,7 @@ var createCmd = &cobra.Command{
 
 func init() {
 	createCmd.Flags().StringVar(&createDescription, "description", "", "技能描述")
-	createCmd.Flags().StringVar(&createCompatibility, "compatibility", "all", "兼容工具: cursor, claude, opencode, all")
+	createCmd.Flags().StringVar(&createTarget, "target", "all", "目标工具: cursor, claude_code, open_code, all")
 	createCmd.Flags().StringVar(&createOutputDir, "output-dir", ".", "输出目录")
 }
 
@@ -105,14 +105,14 @@ func runCreate(skillName string) error {
 		description = fmt.Sprintf("为项目定制的 %s 技能", skillName)
 	}
 
-	// 验证兼容性选项
-	compatibility := createCompatibility
-	if !isValidCompatibility(compatibility) {
-		return fmt.Errorf("无效的兼容性选项: %s。可用选项: cursor, claude, opencode, all", compatibility)
+	// 验证目标选项
+	target := createTarget
+	if !isValidTarget(target) {
+		return fmt.Errorf("无效的目标选项: %s。可用选项: cursor, claude_code, open_code, all", target)
 	}
 
 	// 生成技能内容
-	content, err := generateSkillContent(skillName, description, compatibility)
+	content, err := generateSkillContent(skillName, description, target)
 	if err != nil {
 		return fmt.Errorf("生成技能内容失败: %w", err)
 	}
@@ -125,14 +125,14 @@ func runCreate(skillName string) error {
 	fmt.Printf("✅ 技能模板创建成功: %s\n", skillFilePath)
 	fmt.Println("下一步:")
 	fmt.Println("1. 编辑 SKILL.md 文件以完善技能内容")
-	fmt.Printf("2. 使用 'skill-hub use %s' 在项目中启用技能\n", skillName)
-	fmt.Println("3. 使用 'skill-hub apply' 将技能应用到工具")
+	fmt.Printf("2. 使用 'skill-hub validate-local %s' 验证技能在本地项目中的有效性\n", skillName)
+	fmt.Printf("3. 使用 'skill-hub feedback %s' 将验证通过的技能反馈到技能仓库\n", skillName)
 
 	return nil
 }
 
 // generateSkillContent 生成技能内容
-func generateSkillContent(name, description, compatibility string) (string, error) {
+func generateSkillContent(name, description, target string) (string, error) {
 	// 获取当前时间
 	timestamp := time.Now().Format(time.RFC3339)
 
@@ -145,7 +145,7 @@ func generateSkillContent(name, description, compatibility string) (string, erro
 	}
 
 	// 生成兼容性描述
-	compatDesc := generateCompatibilityDescription(compatibility)
+	compatDesc := generateCompatibilityDescription(target)
 
 	// 使用字符串构建器创建模板
 	var template strings.Builder
@@ -242,13 +242,16 @@ metadata:
 }
 
 // generateCompatibilityDescription 生成兼容性描述
-func generateCompatibilityDescription(compatibility string) string {
-	switch compatibility {
+func generateCompatibilityDescription(target string) string {
+	// 规范化目标值
+	normalized := strings.ToLower(target)
+
+	switch normalized {
 	case "cursor":
 		return "Designed for Cursor (or similar AI coding assistants)"
-	case "claude":
+	case "claude_code":
 		return "Designed for Claude Code (or similar AI coding assistants)"
-	case "opencode":
+	case "open_code":
 		return "Designed for OpenCode (or similar AI coding assistants)"
 	case "all":
 		return "Designed for Cursor, Claude Code, and OpenCode (or similar AI coding assistants)"
@@ -283,14 +286,14 @@ func isValidSkillName(name string) bool {
 	return true
 }
 
-// isValidCompatibility 验证兼容性选项
-func isValidCompatibility(compatibility string) bool {
+// isValidTarget 验证目标选项
+func isValidTarget(target string) bool {
 	validOptions := map[string]bool{
-		"cursor":   true,
-		"claude":   true,
-		"opencode": true,
-		"all":      true,
+		"cursor":      true,
+		"claude_code": true,
+		"open_code":   true,
+		"all":         true,
 	}
 
-	return validOptions[compatibility]
+	return validOptions[target]
 }

@@ -29,7 +29,7 @@ var useCmd = &cobra.Command{
 }
 
 func init() {
-	useCmd.Flags().StringVar(&useTarget, "target", "", "首选目标工具: cursor, claude_code, open_code")
+	useCmd.Flags().StringVar(&useTarget, "target", "", "首选目标工具: cursor, claude_code, open_code (为空时使用项目状态绑定的目标)")
 }
 
 func runUse(skillID string) error {

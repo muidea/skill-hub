@@ -27,16 +27,9 @@ func NewSkillManager() (*SkillManager, error) {
 
 // LoadSkill 加载指定ID的技能
 func (m *SkillManager) LoadSkill(skillID string) (*spec.Skill, error) {
-	// 首先尝试直接路径
+	// 只使用标准结构：skills/skillID
 	skillDir := filepath.Join(m.skillsDir, skillID)
 	skill, err := m.loadSkillFromDirectory(skillDir, skillID)
-	if err == nil {
-		return skill, nil
-	}
-
-	// 如果失败，尝试在 skills/skills/ 子目录中查找
-	skillsSubDir := filepath.Join(m.skillsDir, "skills", skillID)
-	skill, err = m.loadSkillFromDirectory(skillsSubDir, skillID)
 	if err == nil {
 		return skill, nil
 	}
@@ -159,27 +152,15 @@ func (m *SkillManager) loadSkillFromMarkdown(mdPath, skillID string) (*spec.Skil
 
 // LoadAllSkills 加载所有技能
 func (m *SkillManager) LoadAllSkills() ([]*spec.Skill, error) {
-	var skills []*spec.Skill
-
-	// 首先检查是否有 skills/skills/ 子目录（新格式）
-	skillsSubDir := filepath.Join(m.skillsDir, "skills")
-	if _, err := os.Stat(skillsSubDir); err == nil {
-		// 加载 skills/skills/ 目录下的技能
-		subSkills, err := m.loadSkillsFromDirectory(skillsSubDir)
-		if err != nil {
-			return nil, err
-		}
-		skills = append(skills, subSkills...)
-	}
-
-	// 然后加载根目录下的技能（旧格式）
-	rootSkills, err := m.loadSkillsFromDirectory(m.skillsDir)
+	// 只使用标准结构：直接从skills目录加载
+	skills, err := m.loadSkillsFromDirectory(m.skillsDir)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, err
 		}
+		// 目录不存在，返回空列表
+		return []*spec.Skill{}, nil
 	}
-	skills = append(skills, rootSkills...)
 
 	return skills, nil
 }
@@ -241,17 +222,9 @@ func (m *SkillManager) GetSkillPrompt(skillID string) (string, error) {
 
 // SkillExists 检查技能是否存在
 func (m *SkillManager) SkillExists(skillID string) bool {
-	// 首先尝试直接路径
+	// 只使用标准结构：skills/skillID
 	skillDir := filepath.Join(m.skillsDir, skillID)
-
-	// 检查旧格式
-	if m.checkSkillExistsInDirectory(skillDir) {
-		return true
-	}
-
-	// 尝试在 skills/skills/ 子目录中查找
-	skillsSubDir := filepath.Join(m.skillsDir, "skills", skillID)
-	return m.checkSkillExistsInDirectory(skillsSubDir)
+	return m.checkSkillExistsInDirectory(skillDir)
 }
 
 // checkSkillExistsInDirectory 检查目录中是否存在技能

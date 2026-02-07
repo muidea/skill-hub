@@ -15,6 +15,11 @@ type StateManager struct {
 	statePath string
 }
 
+// GetStatePath 获取状态文件路径
+func (m *StateManager) GetStatePath() string {
+	return m.statePath
+}
+
 // StateFile 表示状态文件的完整结构
 type StateFile struct {
 	Projects map[string]spec.ProjectConfig `json:"projects"`
@@ -42,10 +47,11 @@ func (m *StateManager) LoadProjectState(projectPath string) (*spec.ProjectState,
 	data, err := os.ReadFile(m.statePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// 文件不存在，返回空状态
+			// 文件不存在，返回空状态，默认目标为 open_code
 			return &spec.ProjectState{
-				ProjectPath: absPath,
-				Skills:      make(map[string]spec.SkillVars),
+				ProjectPath:     absPath,
+				PreferredTarget: spec.TargetOpenCode,
+				Skills:          make(map[string]spec.SkillVars),
 			}, nil
 		}
 		return nil, fmt.Errorf("读取状态文件失败: %w", err)
@@ -62,10 +68,11 @@ func (m *StateManager) LoadProjectState(projectPath string) (*spec.ProjectState,
 		return &state, nil
 	}
 
-	// 项目状态不存在，创建新状态
+	// 项目状态不存在，创建新状态，默认目标为 open_code
 	return &spec.ProjectState{
-		ProjectPath: absPath,
-		Skills:      make(map[string]spec.SkillVars),
+		ProjectPath:     absPath,
+		PreferredTarget: spec.TargetOpenCode,
+		Skills:          make(map[string]spec.SkillVars),
 	}, nil
 }
 

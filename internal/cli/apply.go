@@ -83,7 +83,19 @@ func runApply() error {
 			return fmt.Errorf("查找项目状态失败: %w", err)
 		}
 
-		if projectState == nil || projectState.PreferredTarget == "" {
+		if projectState == nil {
+			// 项目状态不存在，使用LoadProjectState创建默认状态
+			projectState, err = stateMgr.LoadProjectState(cwd)
+			if err != nil {
+				return fmt.Errorf("加载项目状态失败: %w", err)
+			}
+			// 保存新创建的状态
+			if err := stateMgr.SaveProjectState(projectState); err != nil {
+				return fmt.Errorf("保存项目状态失败: %w", err)
+			}
+		}
+
+		if projectState.PreferredTarget == "" {
 			// 未绑定项目
 			fmt.Println("❌ 当前目录未关联目标")
 			fmt.Println("请先执行以下操作之一:")
@@ -449,16 +461,9 @@ func getSkillFilePath(skillManager *engine.SkillManager, skillID string) (string
 		return "", fmt.Errorf("获取技能目录失败: %w", err)
 	}
 
-	// Try direct path first
+	// Only use standard structure: skills/skillID
 	skillDir := fmt.Sprintf("%s/%s", skillsDir, skillID)
 	skillPath := fmt.Sprintf("%s/SKILL.md", skillDir)
-	if _, err := os.Stat(skillPath); err == nil {
-		return skillPath, nil
-	}
-
-	// Try skills/skills/ subdirectory
-	skillDir = fmt.Sprintf("%s/skills/%s", skillsDir, skillID)
-	skillPath = fmt.Sprintf("%s/SKILL.md", skillDir)
 	if _, err := os.Stat(skillPath); err == nil {
 		return skillPath, nil
 	}

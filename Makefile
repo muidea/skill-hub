@@ -25,6 +25,31 @@ clean:
 test:
 	go test ./...
 
+# Run tests with coverage
+test-coverage:
+	go test ./... -coverprofile=coverage.out
+	go tool cover -func=coverage.out
+	@echo ""
+	@echo "Coverage report generated: coverage.out"
+	@echo "View HTML report with: make coverage-html"
+
+# Generate HTML coverage report
+coverage-html: test-coverage
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "HTML coverage report generated: coverage.html"
+
+# Run tests with verbose output
+test-verbose:
+	go test ./... -v
+
+# Run tests for specific package
+test-pkg:
+ifndef PKG
+	@echo "Usage: make test-pkg PKG=./internal/cli"
+	@exit 1
+endif
+	go test $(PKG) -v
+
 # Install to /usr/local/bin
 install: build
 	sudo cp bin/skill-hub /usr/local/bin/
@@ -111,8 +136,17 @@ release: release-all
 
 # Run linting
 lint:
-	gofmt -d .
-	go vet ./...
+	@echo "Running gofmt check..."
+	@gofmt -d . || (echo "gofmt found formatting issues"; exit 1)
+	@echo "Running go vet..."
+	@go vet ./... || (echo "go vet found issues"; exit 1)
+	@echo "Running staticcheck..."
+	@if command -v staticcheck >/dev/null 2>&1; then \
+		staticcheck ./... || (echo "staticcheck found issues"; exit 1); \
+	else \
+		echo "staticcheck not installed, skipping..."; \
+	fi
+	@echo "All linting checks passed!"
 
 # Update dependencies
 deps:
@@ -122,15 +156,20 @@ deps:
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  build       - Build binary for current platform"
-	@echo "  release-all - Build release binaries for all platforms"
-	@echo "  test        - Run tests"
-	@echo "  lint        - Run linting checks"
-	@echo "  install     - Install to /usr/local/bin"
-	@echo "  clean       - Clean build artifacts"
-	@echo "  deps        - Update dependencies"
+	@echo "  build           - Build binary for current platform"
+	@echo "  release-all     - Build release binaries for all platforms"
+	@echo "  test            - Run all tests"
+	@echo "  test-coverage   - Run tests with coverage report"
+	@echo "  coverage-html   - Generate HTML coverage report"
+	@echo "  test-verbose    - Run tests with verbose output"
+	@echo "  test-pkg        - Run tests for specific package (PKG=./path)"
+	@echo "  lint            - Run linting checks"
+	@echo "  install         - Install to /usr/local/bin"
+	@echo "  clean           - Clean build artifacts"
+	@echo "  deps            - Update dependencies"
 	@echo ""
 	@echo "Variables:"
 	@echo "  VERSION    - Version string (default: dev)"
 	@echo "  COMMIT     - Git commit hash (default: auto-detected)"
 	@echo "  DATE       - Build date (default: current UTC time)"
+	@echo "  PKG        - Package path for test-pkg target"
