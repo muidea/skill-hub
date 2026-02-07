@@ -15,7 +15,6 @@ import (
 	"skill-hub/pkg/spec"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -197,10 +196,7 @@ func runFeedback(skillID string) error {
 	}
 
 	// 渲染原始内容（使用项目变量）
-	renderedOriginal, err := renderTemplate(originalPrompt, skillVars.Variables)
-	if err != nil {
-		return fmt.Errorf("渲染原始内容失败: %w", err)
-	}
+	renderedOriginal := template.Render(originalPrompt, skillVars.Variables)
 
 	// 比较内容
 	if strings.TrimSpace(fileContent) == strings.TrimSpace(renderedOriginal) {
@@ -383,7 +379,7 @@ func runFeedback(skillID string) error {
 		fmt.Println("✓ 更新 prompt.md (无变量)")
 	}
 
-	// 更新skill.yaml版本（重新加载技能以获取最新信息）
+	// 更新SKILL.md版本（重新加载技能以获取最新信息）
 	updatedSkill, err := skillManager.LoadSkill(skillID)
 	if err != nil {
 		return fmt.Errorf("加载技能失败: %w", err)
@@ -400,18 +396,25 @@ func runFeedback(skillID string) error {
 			parseInt(versionParts[2])+1)
 	}
 
-	// 保存更新后的skill.yaml
-	yamlPath := fmt.Sprintf("%s/skill.yaml", skillDir)
-	yamlData, err := yaml.Marshal(updatedSkill)
+	// 读取当前的SKILL.md文件
+	skillMdPath := fmt.Sprintf("%s/SKILL.md", skillDir)
+	skillMdContent, err := os.ReadFile(skillMdPath)
 	if err != nil {
-		return fmt.Errorf("序列化skill.yaml失败: %w", err)
+		return fmt.Errorf("读取SKILL.md失败: %w", err)
 	}
 
-	if err := os.WriteFile(yamlPath, yamlData, 0644); err != nil {
-		return fmt.Errorf("更新skill.yaml失败: %w", err)
+	// 解析并更新frontmatter中的版本号
+	updatedContent, err := updateVersionInFrontmatter(string(skillMdContent), updatedSkill.Version)
+	if err != nil {
+		return fmt.Errorf("更新frontmatter版本号失败: %w", err)
 	}
 
-	fmt.Println("✓ 更新 skill.yaml")
+	// 保存更新后的SKILL.md
+	if err := os.WriteFile(skillMdPath, []byte(updatedContent), 0644); err != nil {
+		return fmt.Errorf("更新SKILL.md失败: %w", err)
+	}
+
+	fmt.Println("✓ 更新 SKILL.md")
 	fmt.Printf("✓ 版本更新: %s\n", updatedSkill.Version)
 
 	fmt.Println("\n✅ 反馈完成！")
@@ -433,4 +436,119 @@ func parseInt(s string) int {
 	var result int
 	fmt.Sscanf(s, "%d", &result)
 	return result
+}
+
+// updateVersionInFrontmatter 更新SKILL.md frontmatter中的版本号
+func updateVersionInFrontmatter(content string, newVersion string) (string, error) {
+	lines := strings.Split(content, "\n")
+	if len(lines) < 2 || lines[0] != "---" {
+		return "", fmt.Errorf("无效的SKILL.md格式: 缺少frontmatter")
+	}
+
+	var result []string
+	result = append(result, lines[0]) // 添加开头的 ---
+
+	inMetadata := false
+	versionUpdated := false
+
+	for i := 1; i < len(lines); i++ {
+		line := lines[i]
+
+		if line == "---" {
+			// frontmatter结束
+			result = append(result, line)
+			// 添加剩余的内容
+			result = append(result, lines[i+1:]...)
+			break
+		}
+
+		// 检查是否进入metadata部分
+		if strings.HasPrefix(strings.TrimSpace(line), "metadata:") {
+			inMetadata = true
+			result = append(result, line)
+			continue
+		}
+
+		// 在metadata中查找version字段
+		if inMetadata && strings.HasPrefix(strings.TrimSpace(line), "version:") {
+			// 更新版本号
+			result = append(result, fmt.Sprintf("  version: %s", newVersion))
+			versionUpdated = true
+			continue
+		}
+
+		// 如果不在metadata中，但找到version字段（直接位于根级别）
+		if !inMetadata && strings.HasPrefix(strings.TrimSpace(line), "version:") {
+			result = append(result, fmt.Sprintf("version: %s", newVersion))
+			versionUpdated = true
+			continue
+		}
+
+		result = append(result, line)
+	}
+
+	// 如果没有找到version字段，在metadata中添加
+	if !versionUpdated {
+		// 重新构建内容，在metadata中添加version
+		return addVersionToFrontmatter(content, newVersion)
+	}
+
+	return strings.Join(result, "\n"), nil
+}
+
+// addVersionToFrontmatter 在frontmatter中添加版本号
+func addVersionToFrontmatter(content string, version string) (string, error) {
+	lines := strings.Split(content, "\n")
+	if len(lines) < 2 || lines[0] != "---" {
+		return "", fmt.Errorf("无效的SKILL.md格式: 缺少frontmatter")
+	}
+
+	var result []string
+	result = append(result, lines[0]) // 添加开头的 ---
+
+	frontmatterEnd := -1
+	metadataFound := false
+
+	// 查找frontmatter结束位置和metadata
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" {
+			frontmatterEnd = i
+			break
+		}
+
+		if strings.TrimSpace(lines[i]) == "metadata:" {
+			metadataFound = true
+		}
+
+		result = append(result, lines[i])
+	}
+
+	if frontmatterEnd == -1 {
+		return "", fmt.Errorf("无效的SKILL.md格式: frontmatter没有正确结束")
+	}
+
+	// 如果找到metadata，在metadata中添加version
+	if metadataFound {
+		// 在metadata:后添加version
+		var updatedResult []string
+		for _, line := range result {
+			updatedResult = append(updatedResult, line)
+			if strings.TrimSpace(line) == "metadata:" {
+				updatedResult = append(updatedResult, fmt.Sprintf("  version: %s", version))
+			}
+		}
+		result = updatedResult
+	} else {
+		// 在frontmatter末尾添加metadata
+		result = append(result, "metadata:")
+		result = append(result, fmt.Sprintf("  version: %s", version))
+	}
+
+	// 添加结束的 --- 和剩余内容
+	result = append(result, "---")
+	for i := frontmatterEnd + 1; i < len(lines); i++ {
+		result = append(result, lines[i])
+	}
+
+	return strings.Join(result, "\n"), nil
 }

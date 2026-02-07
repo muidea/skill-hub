@@ -78,27 +78,43 @@ git_branch: "main"
 		return fmt.Errorf("创建示例技能目录失败: %w", err)
 	}
 
-	// 创建git-expert skill.yaml
-	gitExpertYaml := `id: "git-expert"
-name: "Git 提交专家"
-version: "1.0.0"
-author: "skill-hub"
-description: "根据变更自动生成符合 Conventional Commits 规范的提交说明"
-tags: ["git", "workflow"]
+	// 创建git-expert SKILL.md
+	gitExpertMD := `---
+name: git-expert
+description: 根据变更自动生成符合 Conventional Commits 规范的提交说明
 compatibility:
   cursor: true
   claude_code: false
   open_code: false
-variables:
-  - name: "LANGUAGE"
-    default: "zh-CN"
-    description: "输出语言"
-dependencies: []
+metadata:
+  version: 1.0.0
+  author: skill-hub
+  tags: git,workflow
+---
+# Git 提交专家
+
+根据代码变更自动生成符合 Conventional Commits 规范的提交说明。
+
+## 使用说明
+1. 分析代码变更
+2. 识别变更类型（feat, fix, docs, style, refactor, test, chore）
+3. 生成简洁明了的提交说明
+
+## 变量
+- LANGUAGE: {{.LANGUAGE}} - 输出语言
+
+## 示例
+当检测到新功能时，生成：
+feat: 添加用户登录功能
+
+当修复bug时，生成：
+fix: 修复登录页面样式错位问题
 `
 
-	if err := os.WriteFile(filepath.Join(exampleSkillDir, "skill.yaml"), []byte(gitExpertYaml), 0644); err != nil {
-		return fmt.Errorf("创建skill.yaml失败: %w", err)
+	if err := os.WriteFile(filepath.Join(exampleSkillDir, "SKILL.md"), []byte(gitExpertMD), 0644); err != nil {
+		return fmt.Errorf("创建SKILL.md失败: %w", err)
 	}
+	fmt.Println("✓ 创建示例技能: git-expert (SKILL.md)")
 
 	// 创建prompt.md
 	promptMd := `# Git 提交专家
@@ -131,28 +147,48 @@ fix: 修复登录页面样式错位问题
 		return fmt.Errorf("创建Claude技能目录失败: %w", err)
 	}
 
-	// 创建Claude skill.yaml
-	claudeYaml := `id: "claude-code-review"
-name: "Claude 代码审查助手"
-version: "1.0.0"
-author: "skill-hub"
-description: "专业的代码审查助手，帮助发现代码中的问题和改进点"
-tags: ["claude", "code-review", "quality"]
+	// 创建Claude SKILL.md
+	claudeMD := `---
+name: claude-code-review
+description: 专业的代码审查助手，帮助发现代码中的问题和改进点
 compatibility:
   cursor: false
   claude_code: true
   open_code: false
-variables:
-  - name: "REVIEW_STYLE"
-    default: "detailed"
-    description: "审查风格 (detailed/quick/strict)"
-claude:
-  mode: "instruction"
+metadata:
+  version: 1.0.0
+  author: skill-hub
+  tags: claude,code-review,quality
+---
+# Claude 代码审查助手
+
+专业的代码审查助手，帮助发现代码中的问题和改进点。
+
+## 审查流程
+1. 代码结构分析
+2. 潜在问题识别
+3. 改进建议提供
+4. 最佳实践指导
+
+## 审查风格
+- detailed: 详细审查，包含所有细节
+- quick: 快速审查，只关注关键问题
+- strict: 严格审查，遵循最佳实践
+
+## 变量
+- REVIEW_STYLE: {{.REVIEW_STYLE}} - 审查风格
+
+## 示例输出
+当使用detailed风格时：
+1. 代码结构问题：函数过长，建议拆分
+2. 性能问题：循环内重复计算，建议缓存结果
+3. 可读性问题：变量命名不清晰，建议使用描述性名称
 `
 
-	if err := os.WriteFile(filepath.Join(claudeSkillDir, "skill.yaml"), []byte(claudeYaml), 0644); err != nil {
-		return fmt.Errorf("创建Claude skill.yaml失败: %w", err)
+	if err := os.WriteFile(filepath.Join(claudeSkillDir, "SKILL.md"), []byte(claudeMD), 0644); err != nil {
+		return fmt.Errorf("创建Claude SKILL.md失败: %w", err)
 	}
+	fmt.Println("✓ 创建Claude示例技能: claude-code-review (SKILL.md)")
 
 	// 创建Claude prompt.md
 	claudePrompt := `# Claude 代码审查助手

@@ -247,19 +247,13 @@ func (sr *SkillRepository) loadSkillsFromDirectory(dir string, recursive bool) (
 
 // loadSkill 加载单个技能
 func (sr *SkillRepository) loadSkill(skillDir, skillID string) (*spec.Skill, error) {
-	// 首先尝试新格式：SKILL.md 文件
+	// 只支持SKILL.md格式
 	skillMdPath := filepath.Join(skillDir, "SKILL.md")
 	if _, err := os.Stat(skillMdPath); err == nil {
 		return sr.loadSkillFromMarkdown(skillMdPath, skillID)
 	}
 
-	// 然后尝试旧格式：skill.yaml 文件
-	yamlPath := filepath.Join(skillDir, "skill.yaml")
-	if _, err := os.Stat(yamlPath); err == nil {
-		return sr.loadSkillFromYAML(yamlPath, skillID)
-	}
-
-	return nil, fmt.Errorf("未找到技能文件")
+	return nil, fmt.Errorf("未找到SKILL.md文件")
 }
 
 // loadSkillFromMarkdown 从SKILL.md文件加载技能
@@ -338,32 +332,6 @@ func (sr *SkillRepository) loadSkillFromMarkdown(mdPath, skillID string) (*spec.
 	return skill, nil
 }
 
-// loadSkillFromYAML 从skill.yaml文件加载技能
-func (sr *SkillRepository) loadSkillFromYAML(yamlPath, skillID string) (*spec.Skill, error) {
-	yamlData, err := os.ReadFile(yamlPath)
-	if err != nil {
-		return nil, fmt.Errorf("读取skill.yaml失败: %w", err)
-	}
-
-	var skill spec.Skill
-	if err := yaml.Unmarshal(yamlData, &skill); err != nil {
-		return nil, fmt.Errorf("解析skill.yaml失败: %w", err)
-	}
-
-	// 验证必需字段
-	if skill.ID == "" {
-		skill.ID = skillID
-	}
-	if skill.Name == "" {
-		skill.Name = skillID
-	}
-	if skill.Version == "" {
-		skill.Version = "1.0.0"
-	}
-
-	return &skill, nil
-}
-
 // ImportSkill 从远程仓库导入单个技能
 func (sr *SkillRepository) ImportSkill(skillID string) error {
 	// 先同步到最新
@@ -383,14 +351,10 @@ func (sr *SkillRepository) ImportSkill(skillID string) error {
 	}
 
 	// 检查技能文件
-	yamlPath := filepath.Join(skillDir, "skill.yaml")
-	promptPath := filepath.Join(skillDir, "prompt.md")
+	skillMdPath := filepath.Join(skillDir, "SKILL.md")
 
-	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
-		return fmt.Errorf("技能 '%s' 缺少skill.yaml文件", skillID)
-	}
-	if _, err := os.Stat(promptPath); os.IsNotExist(err) {
-		return fmt.Errorf("技能 '%s' 缺少prompt.md文件", skillID)
+	if _, err := os.Stat(skillMdPath); os.IsNotExist(err) {
+		return fmt.Errorf("技能 '%s' 缺少SKILL.md文件", skillID)
 	}
 
 	fmt.Printf("✅ 技能 '%s' 已从远程仓库导入\n", skillID)
@@ -421,21 +385,37 @@ func (sr *SkillRepository) CreateSkill(skill *spec.Skill, promptContent string) 
 		return fmt.Errorf("创建技能目录失败: %w", err)
 	}
 
-	// 保存skill.yaml
-	yamlPath := filepath.Join(skillDir, "skill.yaml")
-	yamlData, err := yaml.Marshal(skill)
-	if err != nil {
-		return fmt.Errorf("序列化skill.yaml失败: %w", err)
-	}
+	// 保存SKILL.md（包含frontmatter和内容）
+	skillMdPath := filepath.Join(skillDir, "SKILL.md")
 
-	if err := os.WriteFile(yamlPath, yamlData, 0644); err != nil {
-		return fmt.Errorf("保存skill.yaml失败: %w", err)
-	}
+	// 构建frontmatter
+	frontmatter := fmt.Sprintf(`---
+name: %s
+description: %s
+compatibility:
+  opencode: %v
+  cursor: %v
+  claude_code: %v
+metadata:
+  version: %s
+  author: %s
+  tags: %s
+---
+`,
+		skill.Name,
+		skill.Description,
+		skill.Compatibility.OpenCode,
+		skill.Compatibility.Cursor,
+		skill.Compatibility.ClaudeCode,
+		skill.Version,
+		skill.Author,
+		strings.Join(skill.Tags, ","))
 
-	// 保存prompt.md
-	promptPath := filepath.Join(skillDir, "prompt.md")
-	if err := os.WriteFile(promptPath, []byte(promptContent), 0644); err != nil {
-		return fmt.Errorf("保存prompt.md失败: %w", err)
+	// 组合frontmatter和内容
+	skillContent := frontmatter + promptContent
+
+	if err := os.WriteFile(skillMdPath, []byte(skillContent), 0644); err != nil {
+		return fmt.Errorf("保存SKILL.md失败: %w", err)
 	}
 
 	fmt.Printf("✅ 技能 '%s' 创建成功\n", skill.ID)

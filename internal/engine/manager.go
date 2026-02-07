@@ -51,19 +51,13 @@ func (m *SkillManager) loadSkillFromDirectory(skillDir, skillID string) (*spec.S
 		return nil, fmt.Errorf("目录不存在")
 	}
 
-	// 首先尝试新格式：SKILL.md
+	// 只支持SKILL.md格式
 	skillMdPath := filepath.Join(skillDir, "SKILL.md")
 	if _, err := os.Stat(skillMdPath); err == nil {
 		return m.loadSkillFromMarkdown(skillMdPath, skillID)
 	}
 
-	// 然后尝试旧格式：skill.yaml
-	yamlPath := filepath.Join(skillDir, "skill.yaml")
-	if _, err := os.Stat(yamlPath); err == nil {
-		return m.loadSkillFromYAML(yamlPath, skillID)
-	}
-
-	return nil, fmt.Errorf("未找到技能文件")
+	return nil, fmt.Errorf("未找到SKILL.md文件")
 }
 
 // loadSkillFromMarkdown 从SKILL.md文件加载技能
@@ -160,37 +154,6 @@ func (m *SkillManager) loadSkillFromMarkdown(mdPath, skillID string) (*spec.Skil
 	return skill, nil
 }
 
-// loadSkillFromYAML 从skill.yaml文件加载技能
-func (m *SkillManager) loadSkillFromYAML(yamlPath, skillID string) (*spec.Skill, error) {
-	yamlData, err := os.ReadFile(yamlPath)
-	if err != nil {
-		return nil, fmt.Errorf("读取skill.yaml失败: %w", err)
-	}
-
-	var skill spec.Skill
-	if err := yaml.Unmarshal(yamlData, &skill); err != nil {
-		return nil, fmt.Errorf("解析skill.yaml失败: %w", err)
-	}
-
-	// 验证必需字段
-	if skill.ID == "" {
-		skill.ID = skillID
-	}
-	if skill.Name == "" {
-		skill.Name = skillID
-	}
-	if skill.Version == "" {
-		skill.Version = "1.0.0"
-	}
-
-	// 确保ID与目录名一致
-	if skill.ID != skillID {
-		return nil, fmt.Errorf("技能ID不匹配: 目录名为%s, skill.yaml中为%s", skillID, skill.ID)
-	}
-
-	return &skill, nil
-}
-
 // LoadAllSkills 加载所有技能
 func (m *SkillManager) LoadAllSkills() ([]*spec.Skill, error) {
 	var skills []*spec.Skill
@@ -251,32 +214,23 @@ func (m *SkillManager) loadSkillsFromDirectory(dir string) ([]*spec.Skill, error
 func (m *SkillManager) GetSkillPrompt(skillID string) (string, error) {
 	// 首先尝试直接路径
 	skillDir := filepath.Join(m.skillsDir, skillID)
-	promptPath := filepath.Join(skillDir, "prompt.md")
+	skillMdPath := filepath.Join(skillDir, "SKILL.md")
 
-	// 检查prompt.md文件是否存在
-	if _, err := os.Stat(promptPath); os.IsNotExist(err) {
+	// 检查SKILL.md文件是否存在
+	if _, err := os.Stat(skillMdPath); os.IsNotExist(err) {
 		// 尝试在 skills/skills/ 子目录中查找
 		skillsSubDir := filepath.Join(m.skillsDir, "skills", skillID)
-		promptPath = filepath.Join(skillsSubDir, "prompt.md")
+		skillMdPath = filepath.Join(skillsSubDir, "SKILL.md")
 
-		if _, err := os.Stat(promptPath); os.IsNotExist(err) {
-			// 对于SKILL.md格式，使用SKILL.md文件本身作为提示词
-			skillMdPath := filepath.Join(skillsSubDir, "SKILL.md")
-			if _, err := os.Stat(skillMdPath); err == nil {
-				promptData, err := os.ReadFile(skillMdPath)
-				if err != nil {
-					return "", fmt.Errorf("读取SKILL.md失败: %w", err)
-				}
-				return string(promptData), nil
-			}
-
-			return "", fmt.Errorf("技能 '%s' 缺少提示词文件", skillID)
+		if _, err := os.Stat(skillMdPath); os.IsNotExist(err) {
+			return "", fmt.Errorf("技能 '%s' 缺少SKILL.md文件", skillID)
 		}
 	}
 
-	promptData, err := os.ReadFile(promptPath)
+	// 读取SKILL.md文件内容作为提示词
+	promptData, err := os.ReadFile(skillMdPath)
 	if err != nil {
-		return "", fmt.Errorf("读取提示词文件失败: %w", err)
+		return "", fmt.Errorf("读取SKILL.md失败: %w", err)
 	}
 
 	return string(promptData), nil
@@ -304,25 +258,13 @@ func (m *SkillManager) checkSkillExistsInDirectory(skillDir string) bool {
 		return false
 	}
 
-	// 检查新格式：SKILL.md
+	// 只检查SKILL.md格式
 	skillMdPath := filepath.Join(skillDir, "SKILL.md")
 	if _, err := os.Stat(skillMdPath); err == nil {
 		return true
 	}
 
-	// 检查旧格式：skill.yaml
-	yamlPath := filepath.Join(skillDir, "skill.yaml")
-	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
-		return false
-	}
-
-	// 检查prompt.md是否存在
-	promptPath := filepath.Join(skillDir, "prompt.md")
-	if _, err := os.Stat(promptPath); os.IsNotExist(err) {
-		return false
-	}
-
-	return true
+	return false
 }
 
 // GetSkillsDir 获取技能目录路径（包级函数）
