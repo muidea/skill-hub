@@ -329,22 +329,82 @@ main() {
         echo "• 版本: v0.1.2"
         echo "• 文件大小: $(du -h "$ACTUAL_BINARY" | cut -f1)"
         
-        # 检查是否在PATH中
-        if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-            echo -e "\n${YELLOW}⚠️  重要提示: ~/.local/bin 不在您的PATH中${NC}"
-            echo "请将以下行添加到您的 shell 配置文件 (~/.bashrc, ~/.zshrc, 或 ~/.profile):"
-            echo ""
-            echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-            echo ""
-            echo "然后运行以下命令使配置生效:"
-            echo "  source ~/.bashrc   # 如果使用 bash"
-            echo "  或"
-            echo "  source ~/.zshrc    # 如果使用 zsh"
-            echo "  或重新打开终端"
+        # 检查并自动配置PATH
+        echo -e "\n${GREEN}🔧 检查并配置PATH...${NC}"
+        
+        # 首先检查是否已经在PATH中
+        local user_local_bin="$HOME/.local/bin"
+        local already_in_path=false
+        
+        # 检查当前PATH
+        if [[ ":$PATH:" == *":$user_local_bin:"* ]]; then
+            echo "  ✅ ~/.local/bin 已在当前PATH中"
+            already_in_path=true
         else
-            echo -e "\n${GREEN}✅ PATH 配置正常${NC}"
-            echo "~/.local/bin 已在您的PATH中"
+            echo "  ⚠️  ~/.local/bin 不在当前PATH中"
         fi
+        
+        # 检测用户的shell类型并添加到配置文件
+        detect_shell_and_add_to_path() {
+            local shell_rc=""
+            local path_line='export PATH="$HOME/.local/bin:$PATH"'
+            
+            # 检测当前shell
+            case "$SHELL" in
+                */bash)
+                    shell_rc="$HOME/.bashrc"
+                    ;;
+                */zsh)
+                    shell_rc="$HOME/.zshrc"
+                    ;;
+                *)
+                    # 尝试检测常见的shell配置文件
+                    if [ -f "$HOME/.bashrc" ]; then
+                        shell_rc="$HOME/.bashrc"
+                    elif [ -f "$HOME/.zshrc" ]; then
+                        shell_rc="$HOME/.zshrc"
+                    elif [ -f "$HOME/.profile" ]; then
+                        shell_rc="$HOME/.profile"
+                    elif [ -f "$HOME/.bash_profile" ]; then
+                        shell_rc="$HOME/.bash_profile"
+                    fi
+                    ;;
+            esac
+            
+            if [ -n "$shell_rc" ]; then
+            # 检查是否已经添加（避免重复）
+            # 只匹配实际的PATH设置，忽略注释
+            if grep -E '^(export\s+PATH=.*\.local/bin|PATH=.*\.local/bin)' "$shell_rc" 2>/dev/null; then
+                echo "  ✅ $shell_rc 中已包含 ~/.local/bin"
+                return 0
+            fi
+                
+                # 添加到配置文件
+                echo "  添加到 $shell_rc"
+                echo "" >> "$shell_rc"
+                echo "# Added by Skill Hub installer - $(date)" >> "$shell_rc"
+                echo "$path_line" >> "$shell_rc"
+                echo "  ✅ 已添加到 $shell_rc"
+                return 0
+            else
+                echo "  ⚠️  未找到shell配置文件"
+                return 1
+            fi
+        }
+        
+        # 执行PATH配置
+        if ! $already_in_path; then
+            if detect_shell_and_add_to_path; then
+                # 立即生效（当前shell）
+                export PATH="$HOME/.local/bin:$PATH"
+                echo "  ✅ 已更新当前shell的PATH"
+                already_in_path=true
+            else
+                echo "  ⚠️  无法自动配置PATH，请手动添加:"
+                echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+            fi
+        fi
+        
     else
         echo -e "${RED}✗ 安装失败${NC}"
         echo "文件保存在: $TEMP_DIR"
@@ -354,8 +414,40 @@ main() {
     # 验证安装和使用说明
     echo -e "\n${GREEN}🔧 验证安装和使用说明:${NC}"
     
+    # 检查PATH配置状态
+    local user_local_bin="$HOME/.local/bin"
+    local in_current_path=false
+    local in_config_file=false
+    
+    if [[ ":$PATH:" == *":$user_local_bin:"* ]]; then
+        in_current_path=true
+    fi
+    
+    # 检查常见的配置文件
+    for config_file in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile" "$HOME/.bash_profile"; do
+        if [ -f "$config_file" ] && grep -E '^(export\s+PATH=.*\.local/bin|PATH=.*\.local/bin)' "$config_file" 2>/dev/null; then
+            in_config_file=true
+            break
+        fi
+    done
+    
     if command -v "$ACTUAL_BINARY" >/dev/null 2>&1; then
         echo -e "${GREEN}✅ 安装验证成功！${NC}"
+        echo ""
+        
+        # 显示PATH配置状态
+        if $in_current_path; then
+            echo "📋 PATH状态: ✅ 当前shell已包含 ~/.local/bin"
+        else
+            echo "📋 PATH状态: ⚠️  当前shell未包含 ~/.local/bin"
+        fi
+        
+        if $in_config_file; then
+            echo "📋 配置文件: ✅ 已添加到shell配置文件"
+        else
+            echo "📋 配置文件: ⚠️  未添加到shell配置文件"
+        fi
+        
         echo ""
         echo "版本信息:"
         "$ACTUAL_BINARY" --version
@@ -368,17 +460,25 @@ main() {
     else
         echo -e "${YELLOW}⚠️  安装验证: 命令未在PATH中找到${NC}"
         echo ""
-        echo "解决方法:"
-        echo "  1. 临时使用（当前终端）:"
-        echo "     export PATH=\"\$HOME/.local/bin:\$PATH\""
-        echo "     $ACTUAL_BINARY --version"
+        
+        # 显示PATH配置状态
+        if $in_current_path; then
+            echo "📋 PATH状态: ✅ 当前shell已包含 ~/.local/bin"
+            echo "   但命令未找到，可能需要重新打开终端"
+        else
+            echo "📋 PATH状态: ⚠️  当前shell未包含 ~/.local/bin"
+        fi
+        
+        if $in_config_file; then
+            echo "📋 配置文件: ✅ 已添加到shell配置文件"
+            echo "   请重新打开终端或运行: source ~/.bashrc (或对应配置文件)"
+        else
+            echo "📋 配置文件: ⚠️  未添加到shell配置文件"
+        fi
+        
         echo ""
-        echo "  2. 永久生效（推荐）:"
-        echo "     将上面命令添加到 ~/.bashrc 或 ~/.zshrc"
-        echo "     然后运行: source ~/.bashrc 或重新打开终端"
-        echo ""
-        echo "  3. 直接运行（不依赖PATH）:"
-        echo "     ~/.local/bin/$ACTUAL_BINARY --version"
+        echo "💡 立即使用:"
+        echo "  直接运行: ~/.local/bin/$ACTUAL_BINARY --version"
     fi
     
     # 清理提示和总结
