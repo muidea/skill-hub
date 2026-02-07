@@ -8,33 +8,33 @@ Skill Hub 提供多种安装方式，您可以根据自己的需求选择最适�
 
 ### 1. 一键安装脚本（最常用）
 
-使用安全下载脚本自动下载并安装最新版本，这是最简单快捷的安装方式。
+使用自动安装脚本下载并安装最新版本，这是最简单快捷的安装方式。
 
-#### 使用安全下载脚本（推荐）
+#### 使用自动安装脚本（推荐）
 
 ```bash
-curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/safe-download.sh | bash
+curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
 ```
 
-**安全下载脚本特点**：
+**安装脚本特点**：
 - 自动检测系统架构（Linux/macOS/Windows）
 - 自动下载对应的预编译二进制文件
 - 验证文件完整性（SHA256校验）
-- 提供安装后的使用提示
-- 处理GitHub 404错误，提供备用方案
-
-#### 直接下载脚本
-
-```bash
-curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/download-latest.sh | bash
-```
+- 提供交互式安装选项
+- 支持自动安装到系统路径
+- 处理下载错误和网络问题
 
 **脚本工作流程**：
 1. 检测系统信息（操作系统和架构）
 2. 获取最新版本号
 3. 下载对应平台的压缩包和校验文件
 4. 验证文件完整性
-5. 解压文件并显示安装选项
+5. 解压文件
+6. 提供交互式安装选项：
+   - 安装到 `/usr/local/bin/`（需要sudo权限）
+   - 安装到 `~/.local/bin/`（用户目录）
+   - 跳过安装，仅保留在临时目录
+7. 验证安装结果
 
 ### 2. 使用预编译二进制
 
@@ -395,8 +395,11 @@ skill-hub status
 #### 1. 安装脚本返回404错误
 ```bash
 # 错误信息: bash: line 1: 404:: command not found
-# 解决方案: 使用安全下载脚本
-curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/safe-download.sh | bash
+# 可能原因: GitHub API限制或网络问题
+# 解决方案:
+# 1. 等待几分钟后重试
+# 2. 检查网络连接
+# 3. 手动从GitHub Releases页面下载
 ```
 
 #### 2. 权限不足无法安装

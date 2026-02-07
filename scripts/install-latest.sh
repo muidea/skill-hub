@@ -1,9 +1,15 @@
 #!/bin/bash
-# Skill Hub 自动下载脚本
-# 用法: curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/download-latest.sh | bash
-# 备用用法: bash <(curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/download-latest.sh)
+# Skill Hub 自动安装脚本
+# 用法: curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
+# 备用用法: bash <(curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh)
 
 set -e
+
+# 调试模式
+DEBUG="${DEBUG:-false}"
+if [ "$DEBUG" = "true" ]; then
+    set -x
+fi
 
 # 检查脚本是否被正确下载
 if [ "$1" = "--check" ]; then
@@ -26,8 +32,8 @@ GITHUB_API="https://api.github.com/repos/$REPO_OWNER/$REPO_NAME"
 # 默认版本（最新）
 VERSION="${1:-latest}"
 
-echo -e "${GREEN}Skill Hub 下载助手${NC}"
-echo "====================="
+    echo -e "${GREEN}Skill Hub 安装助手${NC}"
+    echo "====================="
 
 # 检测系统信息
 detect_system() {
@@ -73,9 +79,15 @@ download_file() {
     echo "下载: $output"
     
     if command -v wget >/dev/null 2>&1; then
-        wget -q --show-progress -O "$output" "$url"
+        if ! wget -q --show-progress -O "$output" "$url"; then
+            echo -e "${RED}错误: 下载失败 - $url${NC}"
+            return 1
+        fi
     elif command -v curl >/dev/null 2>&1; then
-        curl -L --progress-bar -o "$output" "$url"
+        if ! curl -L --progress-bar -o "$output" "$url"; then
+            echo -e "${RED}错误: 下载失败 - $url${NC}"
+            return 1
+        fi
     else
         echo -e "${RED}错误: 需要 wget 或 curl${NC}"
         exit 1
@@ -122,11 +134,17 @@ extract_file() {
     
     case "$file" in
         *.tar.gz|*.tgz)
-            tar -xzf "$file"
+            if ! tar -xzf "$file"; then
+                echo -e "${RED}错误: 解压失败 - $file${NC}"
+                return 1
+            fi
             ;;
         *.zip)
             if command -v unzip >/dev/null 2>&1; then
-                unzip -q "$file"
+                if ! unzip -q "$file"; then
+                    echo -e "${RED}错误: 解压失败 - $file${NC}"
+                    return 1
+                fi
             else
                 echo -e "${RED}错误: 需要 unzip 解压 .zip 文件${NC}"
                 return 1
@@ -178,8 +196,17 @@ main() {
     echo -e "\n${GREEN}开始下载...${NC}"
     
     # 下载文件
-    download_file "$DOWNLOAD_URL" "$ARCHIVE_NAME"
-    download_file "$CHECKSUM_URL" "$CHECKSUM_NAME"
+    if ! download_file "$DOWNLOAD_URL" "$ARCHIVE_NAME"; then
+        echo -e "${RED}下载失败${NC}"
+        cd /
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+    
+    if ! download_file "$CHECKSUM_URL" "$CHECKSUM_NAME"; then
+        echo -e "${YELLOW}警告: 校验和文件下载失败，跳过验证${NC}"
+        # 继续执行，不退出
+    fi
     
     # 验证文件
     if ! verify_file "$ARCHIVE_NAME" "$CHECKSUM_NAME"; then
@@ -198,7 +225,7 @@ main() {
     fi
     
     # 显示内容
-    echo -e "\n${GREEN}下载完成！${NC}"
+    echo -e "\n${GREEN}下载完成！准备安装...${NC}"
     echo "文件保存在: $TEMP_DIR"
     echo ""
     echo "内容:"
@@ -219,6 +246,53 @@ main() {
     echo ""
     echo "3. 验证安装:"
     echo "   skill-hub --version"
+    
+    # 询问是否自动安装
+    echo -e "\n${YELLOW}是否要自动安装到系统？${NC}"
+    echo "y - 安装到 /usr/local/bin/ (需要sudo权限)"
+    echo "u - 安装到 ~/.local/bin/"
+    echo "n - 不安装，仅保留在临时目录"
+    read -p "请选择 [y/u/N]: " -n 1 -r
+    echo
+    
+    case $REPLY in
+        [yY])
+            echo "安装到 /usr/local/bin/..."
+            if command -v sudo >/dev/null 2>&1; then
+                sudo cp skill-hub /usr/local/bin/
+                if [ $? -eq 0 ]; then
+                    echo -e "${GREEN}✓ 安装成功！${NC}"
+                else
+                    echo -e "${RED}✗ 安装失败，请检查权限${NC}"
+                fi
+            else
+                echo -e "${RED}错误: 需要sudo权限${NC}"
+            fi
+            ;;
+        [uU])
+            echo "安装到 ~/.local/bin/..."
+            mkdir -p ~/.local/bin
+            cp skill-hub ~/.local/bin/
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✓ 安装成功！${NC}"
+                echo "请确保 ~/.local/bin 在您的PATH中"
+            else
+                echo -e "${RED}✗ 安装失败${NC}"
+            fi
+            ;;
+        *)
+            echo "跳过自动安装"
+            ;;
+    esac
+    
+    # 验证安装
+    if command -v skill-hub >/dev/null 2>&1; then
+        echo -e "\n${GREEN}验证安装:${NC}"
+        skill-hub --version
+    else
+        echo -e "\n${YELLOW}提示: skill-hub 不在PATH中${NC}"
+        echo "请手动添加到PATH或使用临时目录中的可执行文件"
+    fi
     
     # 保持临时目录（让用户自己清理）
     echo -e "\n${YELLOW}提示: 文件保存在 $TEMP_DIR${NC}"

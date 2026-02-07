@@ -26,7 +26,7 @@
 使用一键安装脚本（最简单的方式）：
 
 ```bash
-curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/safe-download.sh | bash
+curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
 ```
 
 ### 基本使用
