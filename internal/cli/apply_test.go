@@ -145,6 +145,150 @@ func TestAttemptRecovery(t *testing.T) {
 	})
 }
 
+func TestCleanupFunctionality(t *testing.T) {
+	// 创建临时目录用于测试
+	tmpDir := t.TempDir()
+
+	// 测试Cursor适配器清理
+	t.Run("Cursor adapter cleanup", func(t *testing.T) {
+		// 创建测试文件
+		testFile := filepath.Join(tmpDir, ".cursorrules")
+		backupFile := testFile + ".bak"
+		tmpFile := testFile + ".tmp"
+
+		// 创建备份文件和临时文件
+		if err := os.WriteFile(backupFile, []byte("backup content"), 0644); err != nil {
+			t.Fatalf("Failed to create backup file: %v", err)
+		}
+		if err := os.WriteFile(tmpFile, []byte("temp content"), 0644); err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+
+		// 测试统一的清理函数
+		if err := adapter.CleanupTempFiles(testFile); err != nil {
+			t.Errorf("CleanupTempFiles() error = %v", err)
+		}
+
+		// 验证文件已被清理
+		if _, err := os.Stat(backupFile); !os.IsNotExist(err) {
+			t.Error("Backup file should have been cleaned up")
+		}
+		if _, err := os.Stat(tmpFile); !os.IsNotExist(err) {
+			t.Error("Temp file should have been cleaned up")
+		}
+	})
+
+	// 测试Claude适配器清理
+	t.Run("Claude adapter cleanup", func(t *testing.T) {
+		// 创建测试文件
+		testFile := filepath.Join(tmpDir, ".clauderc")
+		backupFile := testFile + ".bak"
+		tmpFile := testFile + ".tmp"
+
+		// 创建备份文件和临时文件
+		if err := os.WriteFile(backupFile, []byte("backup content"), 0644); err != nil {
+			t.Fatalf("Failed to create backup file: %v", err)
+		}
+		if err := os.WriteFile(tmpFile, []byte("temp content"), 0644); err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+
+		// 测试统一的清理函数
+		if err := adapter.CleanupTempFiles(testFile); err != nil {
+			t.Errorf("CleanupTempFiles() error = %v", err)
+		}
+
+		// 验证文件已被清理
+		if _, err := os.Stat(backupFile); !os.IsNotExist(err) {
+			t.Error("Backup file should have been cleaned up")
+		}
+		if _, err := os.Stat(tmpFile); !os.IsNotExist(err) {
+			t.Error("Temp file should have been cleaned up")
+		}
+	})
+
+	// 测试OpenCode适配器清理
+	t.Run("OpenCode adapter cleanup", func(t *testing.T) {
+		// 创建测试目录结构
+		baseDir := filepath.Join(tmpDir, ".opencode")
+		skillsDir := filepath.Join(baseDir, "skills")
+		skillDir := filepath.Join(skillsDir, "test-skill")
+		backupDir := skillDir + ".bak"
+
+		// 创建目录结构
+		if err := os.MkdirAll(skillDir, 0755); err != nil {
+			t.Fatalf("Failed to create skill directory: %v", err)
+		}
+		if err := os.MkdirAll(backupDir, 0755); err != nil {
+			t.Fatalf("Failed to create backup directory: %v", err)
+		}
+
+		// 在备份目录中创建测试文件
+		testFile := filepath.Join(backupDir, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+
+		// 测试统一的清理函数
+		if err := adapter.CleanupBackupDir(skillDir); err != nil {
+			t.Errorf("CleanupBackupDir() error = %v", err)
+		}
+
+		// 验证备份目录已被清理
+		if _, err := os.Stat(backupDir); !os.IsNotExist(err) {
+			t.Error("Backup directory should have been cleaned up")
+		}
+	})
+
+	// 测试统一的清理函数
+	t.Run("Unified cleanup functions", func(t *testing.T) {
+		// 测试CleanupTempFiles
+		testFile := filepath.Join(tmpDir, "test.txt")
+		backupFile := testFile + ".bak"
+		tmpFile := testFile + ".tmp"
+
+		// 创建测试文件
+		if err := os.WriteFile(backupFile, []byte("backup"), 0644); err != nil {
+			t.Fatalf("Failed to create backup file: %v", err)
+		}
+		if err := os.WriteFile(tmpFile, []byte("temp"), 0644); err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+
+		// 执行清理
+		if err := adapter.CleanupTempFiles(testFile); err != nil {
+			t.Errorf("CleanupTempFiles() error = %v", err)
+		}
+
+		// 验证文件已被清理
+		if _, err := os.Stat(backupFile); !os.IsNotExist(err) {
+			t.Error("Backup file should have been cleaned up")
+		}
+		if _, err := os.Stat(tmpFile); !os.IsNotExist(err) {
+			t.Error("Temp file should have been cleaned up")
+		}
+
+		// 测试CleanupBackupDir
+		testDir := filepath.Join(tmpDir, "test-dir")
+		backupDir := testDir + ".bak"
+
+		// 创建测试目录
+		if err := os.MkdirAll(backupDir, 0755); err != nil {
+			t.Fatalf("Failed to create backup directory: %v", err)
+		}
+
+		// 执行清理
+		if err := adapter.CleanupBackupDir(testDir); err != nil {
+			t.Errorf("CleanupBackupDir() error = %v", err)
+		}
+
+		// 验证目录已被清理
+		if _, err := os.Stat(backupDir); !os.IsNotExist(err) {
+			t.Error("Backup directory should have been cleaned up")
+		}
+	})
+}
+
 func TestSelectAdapters(t *testing.T) {
 	tests := []struct {
 		name   string

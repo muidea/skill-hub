@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"skill-hub/internal/adapter"
 	"skill-hub/internal/config"
 )
 
@@ -221,4 +222,58 @@ func isDirectoryEmpty(dir string) (bool, error) {
 		return false, err
 	}
 	return len(entries) == 0, nil
+}
+
+// Cleanup 清理临时文件（备份文件、临时文件等）
+func (a *OpenCodeAdapter) Cleanup() error {
+	if a.basePath == "" {
+		// 如果没有设置基础路径，尝试获取
+		basePath, err := a.getBasePath()
+		if err != nil {
+			return err
+		}
+		a.basePath = basePath
+	}
+
+	// 获取技能目录路径
+	skillsDir := filepath.Join(a.basePath, "skills")
+
+	// 读取技能目录中的所有子目录
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // 技能目录不存在，无需清理
+		}
+		return fmt.Errorf("读取技能目录失败: %w", err)
+	}
+
+	// 清理每个技能目录的备份
+	for _, entry := range entries {
+		if entry.IsDir() {
+			skillDir := filepath.Join(skillsDir, entry.Name())
+
+			// 使用统一的清理函数
+			if err := adapter.CleanupBackupDir(skillDir); err != nil {
+				return fmt.Errorf("清理技能目录备份失败 %s: %w", skillDir, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetBackupPath 获取备份文件路径
+func (a *OpenCodeAdapter) GetBackupPath() string {
+	// OpenCode适配器使用目录备份，没有单一的备份文件路径
+	// 返回空字符串，让恢复逻辑使用特定的技能目录
+	return ""
+}
+
+// GetSkillDir 获取技能目录路径
+func (a *OpenCodeAdapter) GetSkillDir(skillID string) (string, error) {
+	basePath, err := a.getBasePath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(basePath, "skills", skillID), nil
 }

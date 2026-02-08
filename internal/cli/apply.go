@@ -294,6 +294,11 @@ func runApply() error {
 				continue
 			}
 
+			// 应用成功后清理临时文件
+			if cleanupErr := adapter.Cleanup(); cleanupErr != nil {
+				fmt.Printf("⚠️  清理临时文件失败: %v\n", cleanupErr)
+			}
+
 			fmt.Printf("✓ 成功应用技能 %s 到 %s\n", skillID, adapterName)
 			adapterApplied++
 		}
@@ -432,25 +437,38 @@ func attemptRecovery(adpt adapter.Adapter, skillID string) error {
 		return fmt.Errorf("移除残留内容失败: %w", err)
 	}
 
-	// 检查适配器是否支持备份恢复
-	if cursorAdapter, ok := adpt.(*cursor.CursorAdapter); ok {
+	// 根据适配器类型执行恢复
+	switch a := adpt.(type) {
+	case *cursor.CursorAdapter:
 		// 对于Cursor适配器，检查备份文件
-		filePath, err := cursorAdapter.GetFilePath()
+		filePath, err := a.GetFilePath()
 		if err != nil {
 			return err
 		}
-
 		backupPath := filePath + ".bak"
-		if _, err := os.Stat(backupPath); err == nil {
-			// 备份文件存在，尝试恢复
-			if err := os.Rename(backupPath, filePath); err != nil {
-				return fmt.Errorf("恢复备份失败: %w", err)
-			}
-			return nil
+		return adapter.RestoreFileBackup(filePath, backupPath)
+
+	case *claude.ClaudeAdapter:
+		// 对于Claude适配器，检查备份文件
+		configPath, err := a.GetConfigPath()
+		if err != nil {
+			return err
 		}
+		backupPath := configPath + ".bak"
+		return adapter.RestoreFileBackup(configPath, backupPath)
+
+	case *opencode.OpenCodeAdapter:
+		// 对于OpenCode适配器，检查备份目录
+		skillDir, err := a.GetSkillDir(skillID)
+		if err != nil {
+			return err
+		}
+		backupDir := skillDir + ".bak"
+		return adapter.RestoreDirBackup(skillDir, backupDir)
 	}
 
-	return nil
+	// 最后清理临时文件
+	return adpt.Cleanup()
 }
 
 // getSkillFilePath 获取技能文件路径

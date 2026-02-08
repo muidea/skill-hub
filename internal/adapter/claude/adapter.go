@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"skill-hub/internal/adapter"
 	"skill-hub/internal/config"
 )
 
@@ -432,4 +433,28 @@ func extractMarkedContent(content, skillID string) (string, error) {
 	extracted := strings.TrimSpace(content[start:endIdx])
 
 	return extracted, nil
+}
+
+// Cleanup 清理临时文件（备份文件、临时文件等）
+func (a *ClaudeAdapter) Cleanup() error {
+	if a.configPath == "" {
+		// 如果没有设置配置文件路径，尝试获取
+		configPath, err := a.getConfigPath()
+		if err != nil {
+			return err
+		}
+		a.configPath = configPath
+	}
+
+	// 使用统一的清理函数
+	return adapter.CleanupTempFiles(a.configPath)
+}
+
+// GetBackupPath 获取备份文件路径
+func (a *ClaudeAdapter) GetBackupPath() string {
+	if a.configPath == "" {
+		// 如果没有设置配置文件路径，返回空
+		return ""
+	}
+	return a.configPath + ".bak"
 }

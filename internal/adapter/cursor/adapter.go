@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"skill-hub/internal/adapter"
 	"skill-hub/internal/config"
 )
 
@@ -311,4 +312,28 @@ func expandPath(path string) string {
 		return filepath.Join(homeDir, path[2:])
 	}
 	return path
+}
+
+// Cleanup 清理临时文件（备份文件、临时文件等）
+func (a *CursorAdapter) Cleanup() error {
+	if a.filePath == "" {
+		// 如果没有设置文件路径，尝试获取
+		filePath, err := a.getFilePath()
+		if err != nil {
+			return err
+		}
+		a.filePath = filePath
+	}
+
+	// 使用统一的清理函数
+	return adapter.CleanupTempFiles(a.filePath)
+}
+
+// GetBackupPath 获取备份文件路径
+func (a *CursorAdapter) GetBackupPath() string {
+	if a.filePath == "" {
+		// 如果没有设置文件路径，返回空
+		return ""
+	}
+	return a.filePath + ".bak"
 }

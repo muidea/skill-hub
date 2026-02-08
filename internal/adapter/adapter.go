@@ -16,4 +16,10 @@ type Adapter interface {
 
 	// Supports 检查是否支持当前环境
 	Supports() bool
+
+	// Cleanup 清理临时文件（备份文件、临时文件等）
+	Cleanup() error
+
+	// GetBackupPath 获取备份文件路径
+	GetBackupPath() string
 }
