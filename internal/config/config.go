@@ -104,11 +104,29 @@ func GetSkillsDir() (string, error) {
 	return filepath.Join(repoPath, "skills"), nil
 }
 
+// GetRootDir 获取Skill Hub根目录
+func GetRootDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("获取用户主目录失败: %w", err)
+	}
+	return filepath.Join(homeDir, ".skill-hub"), nil
+}
+
 // GetRegistryPath 获取索引文件路径
 func GetRegistryPath() (string, error) {
-	repoPath, err := GetRepoPath()
+	rootDir, err := GetRootDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(repoPath, "registry.json"), nil
+	return filepath.Join(rootDir, "registry.json"), nil
+}
+
+// GetStatePath 获取状态文件路径
+func GetStatePath() (string, error) {
+	rootDir, err := GetRootDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(rootDir, "state.json"), nil
 }

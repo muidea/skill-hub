@@ -27,12 +27,11 @@ type StateFile struct {
 
 // NewStateManager 创建新的状态管理器
 func NewStateManager() (*StateManager, error) {
-	repoPath, err := config.GetRepoPath()
+	statePath, err := config.GetStatePath()
 	if err != nil {
 		return nil, err
 	}
 
-	statePath := filepath.Join(repoPath, "state.json")
 	return &StateManager{statePath: statePath}, nil
 }
 

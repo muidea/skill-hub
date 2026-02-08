@@ -78,6 +78,14 @@ git_branch: "main"
 	}
 	fmt.Printf("✓ 创建配置文件: %s\n", configPath)
 
+	// 创建状态文件（在根目录）
+	statePath := filepath.Join(skillHubDir, "state.json")
+	initialState := `{}`
+	if err := os.WriteFile(statePath, []byte(initialState), 0644); err != nil {
+		return fmt.Errorf("创建状态文件失败: %w", err)
+	}
+	fmt.Printf("✓ 创建状态文件: %s\n", statePath)
+
 	// 根据是否提供git_url执行不同的初始化逻辑
 	repoAlreadyValid := false
 
@@ -122,12 +130,6 @@ git_branch: "main"
 		}
 
 		fmt.Println("✅ 远程技能仓库克隆完成")
-
-		// 修复克隆后的目录结构（如果远程仓库包含嵌套的skills目录）
-		skillsDir := filepath.Join(repoDir, "skills")
-		if err := fixClonedRepositoryStructure(skillsDir); err != nil {
-			fmt.Printf("⚠️  调整目录结构失败: %v\n", err)
-		}
 
 		// 刷新技能索引
 		fmt.Println("\n正在刷新技能索引...")
@@ -215,7 +217,7 @@ func initLocalEmptyRepository(repoDir, skillHubDir string) error {
 	// 创建必要的子目录
 	dirs := []string{
 		filepath.Join(repoDir, "skills"),
-		filepath.Join(repoDir, "templates"),
+		filepath.Join(repoDir, "template"),
 	}
 
 	for _, dir := range dirs {
@@ -232,13 +234,8 @@ func initLocalEmptyRepository(repoDir, skillHubDir string) error {
 	}
 	fmt.Println("✓ 初始化git仓库")
 
-	// 创建初始技能示例
-	if err := createExampleSkills(repoDir); err != nil {
-		return fmt.Errorf("创建示例技能失败: %w", err)
-	}
-
-	// 创建初始registry.json
-	registryPath := filepath.Join(repoDir, "registry.json")
+	// 创建初始registry.json（空的技能索引）- 在根目录
+	registryPath := filepath.Join(skillHubDir, "registry.json")
 	if err := createInitialRegistry(registryPath); err != nil {
 		return fmt.Errorf("创建技能索引失败: %w", err)
 	}
@@ -247,130 +244,11 @@ func initLocalEmptyRepository(repoDir, skillHubDir string) error {
 	return nil
 }
 
-// createExampleSkills 创建示例技能
-func createExampleSkills(repoDir string) error {
-	skillsDir := filepath.Join(repoDir, "skills")
-
-	// 创建git-expert技能
-	gitExpertDir := filepath.Join(skillsDir, "git-expert")
-	if err := os.MkdirAll(gitExpertDir, 0755); err != nil {
-		return fmt.Errorf("创建git-expert目录失败: %w", err)
-	}
-
-	gitExpertMD := `---
-name: git-expert
-description: 根据变更自动生成符合 Conventional Commits 规范的提交说明
-compatibility: Designed for Cursor (or similar AI coding assistants)
-metadata:
-  version: 1.0.0
-  author: skill-hub
-  tags: git,workflow
----
-# Git 提交专家
-
-根据代码变更自动生成符合 Conventional Commits 规范的提交说明。
-
-## 使用说明
-1. 分析代码变更
-2. 识别变更类型（feat, fix, docs, style, refactor, test, chore）
-3. 生成简洁明了的提交说明
-
-## 变量
-- LANGUAGE: {{.LANGUAGE}} - 输出语言
-
-## 示例
-当检测到新功能时，生成：
-feat: 添加用户登录功能
-
-当修复bug时，生成：
-fix: 修复登录页面样式错位问题
-`
-
-	if err := os.WriteFile(filepath.Join(gitExpertDir, "SKILL.md"), []byte(gitExpertMD), 0644); err != nil {
-		return fmt.Errorf("创建git-expert SKILL.md失败: %w", err)
-	}
-	fmt.Println("✓ 创建示例技能: git-expert (SKILL.md)")
-
-	// 创建Claude示例技能
-	claudeSkillDir := filepath.Join(skillsDir, "claude-code-review")
-	if err := os.MkdirAll(claudeSkillDir, 0755); err != nil {
-		return fmt.Errorf("创建claude-code-review目录失败: %w", err)
-	}
-
-	claudeMD := `---
-name: claude-code-review
-description: 专业的代码审查助手，帮助发现代码中的问题和改进点
-compatibility: Designed for Claude Code (or similar AI coding assistants)
-metadata:
-  version: 1.0.0
-  author: skill-hub
-  tags: claude,code-review,quality
----
-# Claude 代码审查助手
-
-专业的代码审查助手，帮助发现代码中的问题和改进点。
-
-## 审查流程
-1. 代码结构分析
-2. 潜在问题识别
-3. 改进建议提供
-4. 最佳实践指导
-
-## 审查风格
-- detailed: 详细审查，包含所有细节
-- quick: 快速审查，只关注关键问题
-- strict: 严格审查，遵循最佳实践
-
-## 变量
-- REVIEW_STYLE: {{.REVIEW_STYLE}} - 审查风格
-
-## 示例输出
-当使用detailed风格时：
-1. 代码结构问题：函数过长，建议拆分
-2. 性能问题：循环内重复计算，建议缓存结果
-3. 可读性问题：变量命名不清晰，建议使用描述性名称
-`
-
-	if err := os.WriteFile(filepath.Join(claudeSkillDir, "SKILL.md"), []byte(claudeMD), 0644); err != nil {
-		return fmt.Errorf("创建claude-code-review SKILL.md失败: %w", err)
-	}
-	fmt.Println("✓ 创建Claude示例技能: claude-code-review (SKILL.md)")
-
-	return nil
-}
-
 // createInitialRegistry 创建初始技能索引
 func createInitialRegistry(registryPath string) error {
 	registryContent := `{
   "version": "1.0.0",
-  "skills": [
-    {
-      "id": "git-expert",
-      "name": "Git 提交专家",
-      "version": "1.0.0",
-      "author": "skill-hub",
-      "description": "根据变更自动生成符合 Conventional Commits 规范的说明",
-      "tags": ["git", "workflow"],
-      "compatibility": {
-        "cursor": true,
-        "claude_code": false,
-        "open_code": false
-      }
-    },
-    {
-      "id": "claude-code-review",
-      "name": "Claude 代码审查助手",
-      "version": "1.0.0",
-      "author": "skill-hub",
-      "description": "专业的代码审查助手，帮助发现代码中的问题和改进点",
-      "tags": ["claude", "code-review", "quality"],
-      "compatibility": {
-        "cursor": false,
-        "claude_code": true,
-        "open_code": false
-      }
-    }
-  ]
+  "skills": []
 }
 `
 
@@ -503,7 +381,9 @@ func setDefaultTargetIfEmpty() error {
 
 // refreshSkillRegistry 刷新技能索引
 func refreshSkillRegistry(repoDir string) error {
-	registryPath := filepath.Join(repoDir, "registry.json")
+	// registry.json现在在根目录
+	skillHubDir := filepath.Dir(repoDir)
+	registryPath := filepath.Join(skillHubDir, "registry.json")
 	skillsDir := filepath.Join(repoDir, "skills")
 
 	// 检查skills目录是否存在
@@ -565,106 +445,5 @@ func refreshSkillRegistry(repoDir string) error {
 	}
 
 	fmt.Printf("✓ 已索引 %d 个技能\n", len(skills))
-	return nil
-}
-
-// fixClonedRepositoryStructure 修复克隆后的仓库目录结构
-// 处理远程仓库克隆到 ~/.skill-hub/repo/skills/ 后产生的问题：
-// 1. 嵌套的 skills/skills/ 目录
-// 2. 仓库根目录在错误的层级
-func fixClonedRepositoryStructure(skillsDir string) error {
-	repoDir := filepath.Dir(skillsDir) // ~/.skill-hub/repo
-
-	// 情况1：检查是否包含嵌套的 skills/skills/ 目录
-	nestedSkillsDir := filepath.Join(skillsDir, "skills")
-	if _, err := os.Stat(nestedSkillsDir); err == nil {
-		fmt.Println("检测到嵌套的skills目录，正在调整目录结构...")
-
-		// 创建临时目录存放嵌套的skills内容
-		tempDir := skillsDir + ".temp"
-		if err := os.MkdirAll(tempDir, 0755); err != nil {
-			return fmt.Errorf("创建临时目录失败: %w", err)
-		}
-
-		// 移动嵌套的skills目录中的所有内容到临时目录
-		entries, err := os.ReadDir(nestedSkillsDir)
-		if err != nil {
-			return fmt.Errorf("读取嵌套skills目录失败: %w", err)
-		}
-
-		for _, entry := range entries {
-			src := filepath.Join(nestedSkillsDir, entry.Name())
-			dst := filepath.Join(tempDir, entry.Name())
-			if err := os.Rename(src, dst); err != nil {
-				return fmt.Errorf("移动 %s 失败: %w", entry.Name(), err)
-			}
-		}
-
-		// 删除空的嵌套skills目录
-		if err := os.RemoveAll(nestedSkillsDir); err != nil {
-			return fmt.Errorf("删除嵌套目录失败: %w", err)
-		}
-
-		// 将临时目录中的内容移回skills目录
-		tempEntries, err := os.ReadDir(tempDir)
-		if err != nil {
-			return fmt.Errorf("读取临时目录失败: %w", err)
-		}
-
-		for _, entry := range tempEntries {
-			src := filepath.Join(tempDir, entry.Name())
-			dst := filepath.Join(skillsDir, entry.Name())
-
-			// 如果目标已存在，先删除
-			if _, err := os.Stat(dst); err == nil {
-				if err := os.RemoveAll(dst); err != nil {
-					return fmt.Errorf("删除现有 %s 失败: %w", entry.Name(), err)
-				}
-			}
-
-			if err := os.Rename(src, dst); err != nil {
-				return fmt.Errorf("移动 %s 回skills目录失败: %w", entry.Name(), err)
-			}
-		}
-
-		// 删除临时目录
-		if err := os.RemoveAll(tempDir); err != nil {
-			return fmt.Errorf("删除临时目录失败: %w", err)
-		}
-
-		fmt.Println("✓ 嵌套目录结构调整完成")
-	}
-
-	// 情况2：检查是否需要将仓库根目录上移一层
-	// 如果skills目录包含.git目录，但repo目录不包含.git目录
-	skillsGitDir := filepath.Join(skillsDir, ".git")
-	repoGitDir := filepath.Join(repoDir, ".git")
-
-	if _, err := os.Stat(skillsGitDir); err == nil {
-		if _, err := os.Stat(repoGitDir); os.IsNotExist(err) {
-			fmt.Println("检测到.git目录在错误的层级，正在调整...")
-
-			// 移动.git目录到repo目录
-			if err := os.Rename(skillsGitDir, repoGitDir); err != nil {
-				return fmt.Errorf("移动.git目录失败: %w", err)
-			}
-
-			// 移动其他可能应该在上层的文件
-			filesToMove := []string{"README.md", "LICENSE", ".gitignore", "CHANGELOG.md", "CONTRIBUTING.md"}
-			for _, filename := range filesToMove {
-				src := filepath.Join(skillsDir, filename)
-				dst := filepath.Join(repoDir, filename)
-				if _, err := os.Stat(src); err == nil {
-					if err := os.Rename(src, dst); err != nil {
-						// 如果移动失败，可能是文件已存在，忽略错误
-						fmt.Printf("⚠️  移动 %s 失败: %v\n", filename, err)
-					}
-				}
-			}
-
-			fmt.Println("✓ 仓库根目录调整完成")
-		}
-	}
-
 	return nil
 }

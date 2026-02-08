@@ -70,7 +70,7 @@ class TestScenario5UpdateValidation:
         
         return skill_name
     
-    @pytest.mark.skipif(NetworkChecker.is_network_unavailable(), reason="Network required for update tests")
+    @pytest.mark.skipif(not NetworkChecker.is_network_available(), reason="Network required for update tests")
     def test_01_repository_update(self):
         """Test 5.1: Update repository from remote"""
         print("\n=== Test 5.1: Repository Update ===")

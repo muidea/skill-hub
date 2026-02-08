@@ -130,9 +130,37 @@ func TestAttemptRecovery(t *testing.T) {
 			t.Skip("Skipping Claude adapter recovery test in CI environment")
 		}
 
+		// 创建必要的配置文件目录
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			t.Skipf("无法获取用户主目录: %v", err)
+		}
+
+		configDir := filepath.Join(homeDir, ".skill-hub")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			t.Skipf("无法创建配置目录: %v", err)
+		}
+
+		configFile := filepath.Join(configDir, "config.yaml")
+		configContent := `repo_path: "~/.skill-hub/repo"
+claude_config_path: "~/.claude/config.json"
+cursor_config_path: "~/.cursor/rules"
+default_tool: "cursor"
+git_remote_url: ""
+git_token: ""
+git_branch: "main"`
+
+		if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+			t.Skipf("无法创建配置文件: %v", err)
+		}
+
 		if err := attemptRecovery(claudeAdapter, "test-skill"); err != nil {
 			t.Errorf("attemptRecovery() error = %v", err)
 		}
+
+		// 清理测试文件
+		os.Remove(configFile)
+		os.RemoveAll(configDir)
 	})
 
 	// 测试OpenCode适配器恢复

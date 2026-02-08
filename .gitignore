@@ -17,6 +17,8 @@ coverage.*
 *.coverprofile
 profile.cov
 
+__pycache__
+
 .agents
 
 bin

@@ -952,7 +952,9 @@ func refreshSkillRegistryAfterArchive() error {
 	// 我们需要复制其逻辑或重构代码
 	// 这里我们简单实现刷新逻辑
 
-	registryPath := filepath.Join(repoPath, "registry.json")
+	// registry.json现在在根目录
+	skillHubDir := filepath.Dir(repoPath)
+	registryPath := filepath.Join(skillHubDir, "registry.json")
 	skillsDir := filepath.Join(repoPath, "skills")
 
 	// 检查skills目录是否存在
