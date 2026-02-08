@@ -159,26 +159,3 @@ func createBasicOpenCodeFormat(content string, skillID string) (string, error) {
 
 	return fmt.Sprintf("---\n%s---\n%s", string(yamlData), content), nil
 }
-
-// validateSkillMD 验证SKILL.md格式
-func validateSkillMD(content string) error {
-	lines := strings.Split(content, "\n")
-	if len(lines) < 2 || lines[0] != "---" {
-		return fmt.Errorf("SKILL.md必须以frontmatter开头（---）")
-	}
-
-	// 查找frontmatter结束
-	foundEnd := false
-	for i := 1; i < len(lines); i++ {
-		if lines[i] == "---" {
-			foundEnd = true
-			break
-		}
-	}
-
-	if !foundEnd {
-		return fmt.Errorf("SKILL.md frontmatter没有正确结束（---）")
-	}
-
-	return nil
-}

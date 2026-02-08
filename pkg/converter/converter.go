@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 	"skill-hub/pkg/validator"
@@ -314,7 +315,7 @@ func (c *Converter) fixNameFormat(content string) (string, error) {
 			if len(parts) == 2 {
 				currentName := strings.TrimSpace(parts[1])
 				// Simple title case conversion
-				fixedName := strings.Title(strings.ToLower(currentName))
+				fixedName := toTitleCase(strings.ToLower(currentName))
 				lines[i] = "name: " + fixedName
 				break
 			}
@@ -322,6 +323,24 @@ func (c *Converter) fixNameFormat(content string) (string, error) {
 	}
 
 	return strings.Join(lines, "\n"), nil
+}
+
+// toTitleCase converts a string to title case
+func toTitleCase(s string) string {
+	if s == "" {
+		return s
+	}
+
+	// Convert first character to uppercase
+	result := []rune(s)
+	result[0] = unicode.ToUpper(result[0])
+
+	// Convert the rest to lowercase
+	for i := 1; i < len(result); i++ {
+		result[i] = unicode.ToLower(result[i])
+	}
+
+	return string(result)
 }
 
 // fixMissingDescription adds a placeholder description

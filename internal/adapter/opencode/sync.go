@@ -119,20 +119,3 @@ func restoreBackup(skillDir string) error {
 
 	return nil
 }
-
-// cleanupBackup 清理备份
-func cleanupBackup(skillDir string) error {
-	backupDir := skillDir + ".bak"
-
-	// 检查备份是否存在
-	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
-		return nil // 备份不存在，无需清理
-	}
-
-	// 删除备份
-	if err := os.RemoveAll(backupDir); err != nil {
-		return fmt.Errorf("清理备份失败: %w", err)
-	}
-
-	return nil
-}

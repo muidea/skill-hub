@@ -432,7 +432,7 @@ metadata:
 				fmt.Printf("警告: 智能提取失败: %v\n", err)
 				fmt.Println("将保存修改后的内容...")
 				newTemplate = fileContent
-				updatedVariables = skillVariables
+				// 使用原始变量，不更新
 			} else {
 				// 显示变量更新
 				fmt.Println("变量更新:")
@@ -499,7 +499,7 @@ metadata:
 			// 选项1或默认：保存修改后的内容
 			fmt.Println("将保存修改后的内容（包含具体值）")
 			newTemplate = fileContent
-			updatedVariables = skillVariables
+			// 使用原始变量，不更新
 		}
 
 		// 写入更新后的模板

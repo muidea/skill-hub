@@ -23,10 +23,6 @@ func TestStateManager(t *testing.T) {
 	t.Run("Create state manager", func(t *testing.T) {
 		manager := &StateManager{statePath: statePath}
 
-		if manager == nil {
-			t.Error("StateManager creation returned nil")
-		}
-
 		// 验证状态文件路径
 		if manager.statePath != statePath {
 			t.Errorf("State path = %v, want %v", manager.statePath, statePath)
@@ -46,6 +42,7 @@ func TestStateManager(t *testing.T) {
 
 		if state == nil {
 			t.Error("LoadProjectState() returned nil")
+			return
 		}
 
 		if state.ProjectPath != projectPath {

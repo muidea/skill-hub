@@ -2,7 +2,7 @@ package validator
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -33,7 +33,7 @@ func (v *Validator) ValidateFile(skillPath string) (*ValidationResult, error) {
 	result := NewValidationResult(skillPath)
 
 	// 读取文件内容
-	content, err := ioutil.ReadFile(skillPath)
+	content, err := os.ReadFile(skillPath)
 	if err != nil {
 		return nil, fmt.Errorf("读取文件失败: %w", err)
 	}

@@ -18,10 +18,6 @@ func TestSkillManager(t *testing.T) {
 	t.Run("Create skill manager", func(t *testing.T) {
 		manager := &SkillManager{skillsDir: skillsDir}
 
-		if manager == nil {
-			t.Error("SkillManager creation returned nil")
-		}
-
 		if manager.skillsDir != skillsDir {
 			t.Errorf("Skills directory = %v, want %v", manager.skillsDir, skillsDir)
 		}
