@@ -1,0 +1,15 @@
+{
+  "name": "Logic Skill",
+  "description": "A skill that demonstrates logical operations and decision making.",
+  "version": "1.0.0",
+  "author": "Test Author",
+  "license": "MIT",
+  "capabilities": [
+    "Boolean Operations",
+    "Condition Evaluation", 
+    "Decision Making"
+  ],
+  "dependencies": [],
+  "test_command": "python -m pytest tests/test_logic_skill.py",
+  "status": "valid"
+}

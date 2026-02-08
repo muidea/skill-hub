@@ -50,6 +50,36 @@ ifndef PKG
 endif
 	go test $(PKG) -v
 
+# Run Python end-to-end tests
+test-e2e:
+	@echo "Running Python end-to-end tests..."
+	cd tests/e2e && ~/codespace/venv/bin/python3 run_tests.py
+
+# Run specific Python test scenario
+test-e2e-scenario:
+ifndef SCENARIO
+	@echo "Usage: make test-e2e-scenario SCENARIO=1"
+	@echo "Available scenarios: 1, 2, 3, 4, 5"
+	@exit 1
+endif
+	@echo "Running Python end-to-end test scenario $(SCENARIO)..."
+	cd tests/e2e && ~/codespace/venv/bin/python3 run_tests.py -s $(SCENARIO)
+
+# Check Python test environment
+test-e2e-check:
+	@echo "Checking Python test environment..."
+	cd tests/e2e && ~/codespace/venv/bin/python3 environment_check.py
+
+# Install Python test dependencies
+test-e2e-deps:
+	@echo "Installing Python test dependencies..."
+	~/codespace/venv/bin/pip install -r tests/e2e/requirements.txt
+
+# Clean Python test temporary files
+test-e2e-clean:
+	@echo "Cleaning Python test temporary files..."
+	cd tests/e2e && ~/codespace/venv/bin/python3 run_tests.py --cleanup
+
 # Install to /usr/local/bin
 install: build
 	sudo cp bin/skill-hub /usr/local/bin/
@@ -156,20 +186,26 @@ deps:
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  build           - Build binary for current platform"
-	@echo "  release-all     - Build release binaries for all platforms"
-	@echo "  test            - Run all tests"
-	@echo "  test-coverage   - Run tests with coverage report"
-	@echo "  coverage-html   - Generate HTML coverage report"
-	@echo "  test-verbose    - Run tests with verbose output"
-	@echo "  test-pkg        - Run tests for specific package (PKG=./path)"
-	@echo "  lint            - Run linting checks"
-	@echo "  install         - Install to /usr/local/bin"
-	@echo "  clean           - Clean build artifacts"
-	@echo "  deps            - Update dependencies"
+	@echo "  build              - Build binary for current platform"
+	@echo "  release-all        - Build release binaries for all platforms"
+	@echo "  test               - Run all Go tests"
+	@echo "  test-coverage      - Run Go tests with coverage report"
+	@echo "  coverage-html      - Generate HTML coverage report"
+	@echo "  test-verbose       - Run Go tests with verbose output"
+	@echo "  test-pkg           - Run Go tests for specific package (PKG=./path)"
+	@echo "  test-e2e           - Run Python end-to-end tests"
+	@echo "  test-e2e-scenario  - Run specific Python test scenario (SCENARIO=1-5)"
+	@echo "  test-e2e-check     - Check Python test environment"
+	@echo "  test-e2e-deps      - Install Python test dependencies"
+	@echo "  test-e2e-clean     - Clean Python test temporary files"
+	@echo "  lint               - Run linting checks"
+	@echo "  install            - Install to /usr/local/bin"
+	@echo "  clean              - Clean build artifacts"
+	@echo "  deps               - Update dependencies"
 	@echo ""
 	@echo "Variables:"
 	@echo "  VERSION    - Version string (default: dev)"
 	@echo "  COMMIT     - Git commit hash (default: auto-detected)"
 	@echo "  DATE       - Build date (default: current UTC time)"
 	@echo "  PKG        - Package path for test-pkg target"
+	@echo "  SCENARIO   - Test scenario number for test-e2e-scenario (1-5)"
