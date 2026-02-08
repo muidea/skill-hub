@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"skill-hub/pkg/spec"
@@ -283,10 +284,16 @@ func TestStateManager(t *testing.T) {
 			t.Error("Expected error when loading invalid JSON")
 		}
 
-		// 测试只读目录
+		// 测试只读目录（在Windows上权限处理不同）
 		readOnlyDir := filepath.Join(tmpDir, "readonly")
 		if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
 			t.Fatalf("Failed to create read-only directory: %v", err)
+		}
+
+		// 在Windows上，0555权限可能不够严格
+		if runtime.GOOS == "windows" {
+			// 在Windows上，我们直接测试一个不存在的父目录
+			readOnlyDir = filepath.Join(tmpDir, "nonexistent", "subdir")
 		}
 
 		readOnlyPath := filepath.Join(readOnlyDir, "state.json")

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -466,10 +467,19 @@ func TestOpenCodeAdapter(t *testing.T) {
 			t.Error("Expected error for invalid skill ID")
 		}
 
-		// 测试只读目录
+		// 测试只读目录（在Windows上权限处理不同）
 		readOnlyDir := filepath.Join(tmpDir, "readonly")
 		if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
 			t.Fatalf("Failed to create read-only directory: %v", err)
+		}
+
+		// 在Windows上，0555权限可能不够严格，我们尝试设置只读属性
+		if runtime.GOOS == "windows" {
+			// 在Windows上，我们创建一个文件并设置为只读来模拟错误
+			testFile := filepath.Join(readOnlyDir, "test.txt")
+			if err := os.WriteFile(testFile, []byte("test"), 0444); err != nil {
+				t.Fatalf("Failed to create test file: %v", err)
+			}
 		}
 
 		// 模拟当前目录

@@ -2,6 +2,7 @@ package validator
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -47,10 +48,10 @@ func TestValidator_ValidateFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			absPath, err := filepath.Abs(tt.skillPath)
-			if err != nil {
-				t.Fatalf("获取绝对路径失败: %v", err)
-			}
+			// 获取测试文件的绝对路径
+			_, filename, _, _ := runtime.Caller(0)
+			testDir := filepath.Dir(filename)
+			absPath := filepath.Join(testDir, tt.skillPath)
 
 			result, err := v.ValidateFile(absPath)
 			if err != nil {
@@ -199,16 +200,15 @@ func TestValidationResult_Methods(t *testing.T) {
 }
 
 func TestValidator_ValidateWithOptions(t *testing.T) {
-	skillPath := filepath.Join("testdata", "object-compatibility", "SKILL.md")
-	absPath, err := filepath.Abs(skillPath)
-	if err != nil {
-		t.Fatalf("获取绝对路径失败: %v", err)
-	}
+	// 获取测试文件的绝对路径
+	_, filename, _, _ := runtime.Caller(0)
+	testDir := filepath.Dir(filename)
+	skillPath := filepath.Join(testDir, "testdata", "object-compatibility", "SKILL.md")
 
 	v := NewValidator()
 
 	t.Run("default options", func(t *testing.T) {
-		result, err := v.ValidateWithOptions(absPath, ValidationOptions{})
+		result, err := v.ValidateWithOptions(skillPath, ValidationOptions{})
 		if err != nil {
 			t.Fatalf("ValidateWithOptions() 错误 = %v", err)
 		}
@@ -222,7 +222,7 @@ func TestValidator_ValidateWithOptions(t *testing.T) {
 	})
 
 	t.Run("strict mode", func(t *testing.T) {
-		result, err := v.ValidateWithOptions(absPath, ValidationOptions{StrictMode: true})
+		result, err := v.ValidateWithOptions(skillPath, ValidationOptions{StrictMode: true})
 		if err != nil {
 			t.Fatalf("ValidateWithOptions() 错误 = %v", err)
 		}
@@ -233,7 +233,7 @@ func TestValidator_ValidateWithOptions(t *testing.T) {
 	})
 
 	t.Run("ignore warnings", func(t *testing.T) {
-		result, err := v.ValidateWithOptions(absPath, ValidationOptions{IgnoreWarnings: true})
+		result, err := v.ValidateWithOptions(skillPath, ValidationOptions{IgnoreWarnings: true})
 		if err != nil {
 			t.Fatalf("ValidateWithOptions() 错误 = %v", err)
 		}
