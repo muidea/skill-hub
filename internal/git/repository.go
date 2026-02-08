@@ -164,6 +164,15 @@ func (r *Repository) Clone(url string) error {
 
 	r.repo = repo
 	r.remoteURL = url
+
+	// 清理可能创建的备份目录
+	backupDir := r.path + ".bak"
+	if _, err := os.Stat(backupDir); err == nil {
+		if err := os.RemoveAll(backupDir); err != nil {
+			fmt.Printf("⚠️  清理备份目录失败: %v\n", err)
+		}
+	}
+
 	return nil
 }
 

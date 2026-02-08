@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
@@ -467,35 +466,24 @@ func TestOpenCodeAdapter(t *testing.T) {
 			t.Error("Expected error for invalid skill ID")
 		}
 
-		// 测试只读目录（在Windows上权限处理不同）
-		readOnlyDir := filepath.Join(tmpDir, "readonly")
-		if err := os.MkdirAll(readOnlyDir, 0555); err != nil {
-			t.Fatalf("Failed to create read-only directory: %v", err)
+		// 测试在无效路径中创建技能（应该失败）
+		// 设置适配器的基础路径为一个文件而不是目录
+		invalidBasePath := filepath.Join(tmpDir, "invalid-base")
+
+		// 创建一个文件而不是目录
+		if err := os.WriteFile(invalidBasePath, []byte("this is a file, not a directory"), 0444); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
 		}
 
-		// 在Windows上，0555权限可能不够严格，我们尝试设置只读属性
-		if runtime.GOOS == "windows" {
-			// 在Windows上，我们创建一个文件并设置为只读来模拟错误
-			testFile := filepath.Join(readOnlyDir, "test.txt")
-			if err := os.WriteFile(testFile, []byte("test"), 0444); err != nil {
-				t.Fatalf("Failed to create test file: %v", err)
-			}
-		}
+		// 设置适配器的基础路径
+		adapter.basePath = invalidBasePath
 
-		// 模拟当前目录
-		oldDir, err := os.Getwd()
-		if err != nil {
-			t.Fatalf("Failed to get current directory: %v", err)
-		}
-		defer os.Chdir(oldDir)
-
-		if err := os.Chdir(readOnlyDir); err != nil {
-			t.Fatalf("Failed to change directory: %v", err)
-		}
-
-		// 尝试在只读目录中创建技能（应该失败）
-		if err := adapter.Apply("test-skill", "content", map[string]string{}); err == nil {
-			t.Error("Expected error when creating skill in read-only directory")
+		// 尝试创建技能（应该失败，因为basePath是文件不是目录）
+		applyErr := adapter.Apply("test-skill", "content", map[string]string{})
+		if applyErr == nil {
+			t.Error("Expected error when creating skill with invalid base path")
+		} else {
+			t.Logf("Got expected error: %v", applyErr)
 		}
 	})
 }

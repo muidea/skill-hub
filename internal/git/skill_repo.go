@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+	"skill-hub/internal/adapter"
 	"skill-hub/internal/config"
 	"skill-hub/pkg/spec"
 )
@@ -149,6 +150,12 @@ func (sr *SkillRepository) CloneRemote(url string) error {
 	}
 
 	fmt.Println("✅ 远程技能仓库克隆完成")
+
+	// 清理可能创建的备份目录
+	if err := adapter.CleanupTimestampedBackupDirs(skillsDir); err != nil {
+		fmt.Printf("⚠️  清理备份目录失败: %v\n", err)
+	}
+
 	return nil
 }
 

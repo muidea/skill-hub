@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -49,13 +50,18 @@ func TestValidator_ValidateFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// 获取测试文件的绝对路径
-			_, filename, _, _ := runtime.Caller(0)
-			testDir := filepath.Dir(filename)
-			absPath := filepath.Join(testDir, tt.skillPath)
+			// 首先尝试使用相对路径
+			absPath := tt.skillPath
+			if _, err := os.Stat(absPath); os.IsNotExist(err) {
+				// 如果相对路径不存在，尝试从测试文件所在目录查找
+				_, filename, _, _ := runtime.Caller(0)
+				testDir := filepath.Dir(filename)
+				absPath = filepath.Join(testDir, tt.skillPath)
+			}
 
 			result, err := v.ValidateFile(absPath)
 			if err != nil {
-				t.Fatalf("ValidateFile() 错误 = %v", err)
+				t.Fatalf("ValidateFile() 错误 = %v, 文件路径: %s", err, absPath)
 			}
 
 			if len(result.Errors) != tt.wantErrors {

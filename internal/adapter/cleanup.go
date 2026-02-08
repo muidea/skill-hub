@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 )
 
 // CleanupTempFiles 清理临时文件（备份文件、临时文件等）
@@ -94,6 +95,38 @@ func CleanupAllTempFiles(dirPath string) error {
 				if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
 					return fmt.Errorf("清理临时文件失败 %s: %w", filePath, err)
 				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// CleanupTimestampedBackupDirs 清理带时间戳的备份目录
+func CleanupTimestampedBackupDirs(basePath string) error {
+	// 获取basePath的父目录
+	parentDir := filepath.Dir(basePath)
+	baseName := filepath.Base(basePath)
+
+	// 读取父目录中的所有条目
+	entries, err := os.ReadDir(parentDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // 父目录不存在，无需清理
+		}
+		return fmt.Errorf("读取目录失败: %w", err)
+	}
+
+	// 正则表达式匹配带时间戳的备份目录
+	// 格式: baseName.bak.YYYYMMDD-HHMMSS
+	backupPattern := regexp.MustCompile(`^` + regexp.QuoteMeta(baseName) + `\.bak\.\d{8}-\d{6}$`)
+
+	// 清理匹配的备份目录
+	for _, entry := range entries {
+		if entry.IsDir() && backupPattern.MatchString(entry.Name()) {
+			backupDir := filepath.Join(parentDir, entry.Name())
+			if err := os.RemoveAll(backupDir); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("清理备份目录失败 %s: %w", backupDir, err)
 			}
 		}
 	}

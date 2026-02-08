@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+	"skill-hub/internal/adapter"
 	"skill-hub/internal/git"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/spec"
@@ -169,6 +170,13 @@ git_branch: "main"
 	// 检查当前目录的项目状态，如果为空则默认设置目标为 open_code
 	if err := setDefaultTargetIfEmpty(); err != nil {
 		fmt.Printf("⚠️  设置默认目标失败: %v\n", err)
+	}
+
+	// 清理可能创建的备份目录
+	if gitURL != "" {
+		if err := adapter.CleanupTimestampedBackupDirs(repoDir); err != nil {
+			fmt.Printf("⚠️  清理备份目录失败: %v\n", err)
+		}
 	}
 
 	return nil
