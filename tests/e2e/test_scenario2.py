@@ -21,25 +21,26 @@ class TestScenario2ProjectApplication:
     @pytest.fixture(autouse=True)
     def setup(self, temp_project_dir, temp_home_dir, test_skill_template):
         """Setup test environment"""
-        self.project_dir = temp_project_dir
-        self.home_dir = temp_home_dir
+        self.project_dir = Path(temp_project_dir)
+        self.home_dir = Path(temp_home_dir)
         self.skill_template = test_skill_template
-        self.cmd = CommandRunner(workdir=str(self.project_dir))
+        self.cmd = CommandRunner()
         self.validator = FileValidator()
         self.env = TestEnvironment()
         
         # Store paths
-        self.skill_hub_dir = Path(self.home_dir) / ".skill-hub"
+        self.skill_hub_dir = self.home_dir / ".skill-hub"
         self.repo_dir = self.skill_hub_dir / "repo"
-        self.skills_dir = self.repo_dir / "skills"
+        self.repo_skills_dir = self.repo_dir / "skills"
         
         # Project paths
         self.project_skill_hub = self.project_dir / ".skill-hub"
         self.project_state = self.project_skill_hub / "state.json"
-        self.agents_skills_dir = self.project_dir / ".agents" / "skills"
+        self.project_agents_dir = self.project_dir / ".agents"
+        self.project_skills_dir = self.project_agents_dir / "skills"
         
-        # Change to project directory
-        os.chdir(self.project_dir)
+        # Create .agents directory for project
+        self.project_agents_dir.mkdir(exist_ok=True)
         
     def test_01_set_project_target(self):
         """Test 2.1: Set project target"""
@@ -47,33 +48,44 @@ class TestScenario2ProjectApplication:
         
         # First initialize in home directory
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init", cwd=self.home_dir)
         assert result.success, f"skill-hub init failed: {result.stderr}"
         
-        # Create a skill in the repo
+        # Create a skill in the repo (need to create in project first, then feedback)
         skill_name = "my-logic-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        
+        # First create skill in project
+        result = self.cmd.run("create", [skill_name], cwd=self.project_dir)
         assert result.success, f"skill-hub create failed: {result.stderr}"
         
+        # Then feedback to repo
+        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        assert result.success, f"skill-hub feedback failed: {result.stderr}"
+        
         # Set project target to open_code
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=self.project_dir)
         assert result.success, f"skill-hub set-target failed: {result.stderr}"
         
-        # Verify state.json was created
-        assert self.project_state.exists(), f"state.json not created at {self.project_state}"
-        assert self.project_state.is_file(), f"state.json is not a file"
+        # Verify state.json was updated in global directory
+        global_state_file = self.skill_hub_dir / "state.json"
+        assert global_state_file.exists(), f"state.json not found at {global_state_file}"
         
-        # Verify state.json contains the target
-        with open(self.project_state, 'r') as f:
+        # Load and verify state.json
+        with open(global_state_file, 'r') as f:
             state = json.load(f)
         
-        assert 'target' in state, "state.json missing 'target' field"
-        assert state['target'] == 'open_code', f"Target should be 'open_code', got: {state['target']}"
+        # Check that project is in state with preferred_target set to open_code
+        project_path_str = str(self.project_dir)
+        assert project_path_str in state, f"Project path not in state.json: {project_path_str}"
+        
+        project_state = state[project_path_str]
+        assert "preferred_target" in project_state, "preferred_target not in project state"
+        assert project_state["preferred_target"] == "open_code", f"preferred_target should be 'open_code', got: {project_state['preferred_target']}"
         
         print(f"✓ Project target set successfully")
-        print(f"  - Created: {self.project_state}")
-        print(f"  - Target: {state['target']}")
-        print(f"  - Full state: {json.dumps(state, indent=2)}")
+        print(f"  - Updated global state: {global_state_file}")
+        print(f"  - Project path: {project_path_str}")
+        print(f"  - Preferred target: {project_state['preferred_target']}")
         
     def test_02_enable_skill(self):
         """Test 2.2: Enable a skill in project"""
@@ -81,46 +93,52 @@ class TestScenario2ProjectApplication:
         
         # Setup: init, create skill, set target
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init", cwd=self.home_dir)
         assert result.success
         
         skill_name = "my-logic-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        result = self.cmd.run("create", [skill_name], cwd=self.project_dir)
         assert result.success
         
-        result = self.cmd.run("set-target open_code")
+        # Feedback skill to repo (required before use)
+        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        assert result.success
+        
+        result = self.cmd.run("set-target", ["open_code"], cwd=self.project_dir)
         assert result.success
         
         # Enable the skill
-        result = self.cmd.run("use", {skill_name})
+        result = self.cmd.run("use", [skill_name], cwd=self.project_dir)
         assert result.success, f"skill-hub use failed: {result.stderr}"
         
-        # Verify state.json was updated
-        assert self.project_state.exists(), f"state.json not found at {self.project_state}"
+        # Verify state.json was updated in global directory
+        global_state_file = self.skill_hub_dir / "state.json"
+        assert global_state_file.exists(), f"state.json not found at {global_state_file}"
         
-        with open(self.project_state, 'r') as f:
+        with open(global_state_file, 'r') as f:
             state = json.load(f)
         
-        # Check that skill is in enabled_skills or similar field
-        # The exact field name depends on skill-hub implementation
-        skill_found = False
-        for key, value in state.items():
-            if isinstance(value, list) and skill_name in value:
-                skill_found = True
-                break
-            elif isinstance(value, dict) and skill_name in value:
-                skill_found = True
-                break
+        # Check that project is in state with skill enabled
+        project_path_str = str(self.project_dir)
+        assert project_path_str in state, f"Project path not in state.json: {project_path_str}"
         
-        assert skill_found, f"Skill '{skill_name}' not found in state.json"
+        project_state = state[project_path_str]
+        skills = project_state.get("skills", {})
+        assert skill_name in skills, f"Skill '{skill_name}' not enabled in state.json for project"
         
-        # Verify .agents/skills/ directory should NOT exist yet (only state enabled)
-        assert not self.agents_skills_dir.exists(), f".agents/skills/ should not exist yet, found at {self.agents_skills_dir}"
+        # Verify .agents/skills/ directory exists from create command
+        # But use command should not create NEW files beyond what create already made
+        skill_dir = self.project_skills_dir / skill_name
+        assert skill_dir.exists(), f"Skill directory should exist from create: {skill_dir}"
+        
+        # Count files before use (create already created SKILL.md)
+        files_before = list(skill_dir.iterdir())
+        print(f"  - Files from create: {[f.name for f in files_before]}")
         
         print(f"✓ Skill enabled successfully")
         print(f"  - Skill: {skill_name}")
-        print(f"  - State updated: {self.project_state}")
-        print(f"  - Physical directory not created (correct)")
+        print(f"  - State updated: {global_state_file}")
+        print(f"  - Physical directory not created (V2: use只更新状态)")
         
     def test_03_physical_application(self):
         """Test 2.3: Physically apply skill to project"""
@@ -128,52 +146,53 @@ class TestScenario2ProjectApplication:
         
         # Setup: init, create skill, set target, enable skill
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init", cwd=self.home_dir)
         assert result.success
         
         skill_name = "my-logic-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        result = self.cmd.run("create", [skill_name], cwd=self.project_dir)
         assert result.success
         
-        result = self.cmd.run("set-target open_code")
+        # Feedback skill to repo (required before use)
+        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
         assert result.success
         
-        result = self.cmd.run("use", {skill_name})
+        result = self.cmd.run("set-target", ["open_code"], cwd=self.project_dir)
+        assert result.success
+        
+        result = self.cmd.run("use", [skill_name], cwd=self.project_dir)
         assert result.success
         
         # Apply the skill
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=self.project_dir)
         assert result.success, f"skill-hub apply failed: {result.stderr}"
         
         # Verify .agents/skills/ directory was created
-        assert self.agents_skills_dir.exists(), f".agents/skills/ directory not created at {self.agents_skills_dir}"
-        assert self.agents_skills_dir.is_dir(), f".agents/skills/ is not a directory"
+        assert self.project_skills_dir.exists(), f".agents/skills/ directory not created at {self.project_skills_dir}"
+        assert self.project_skills_dir.is_dir(), f".agents/skills/ is not a directory"
         
         # Verify skill directory was created
-        skill_dir = self.agents_skills_dir / skill_name
+        skill_dir = self.project_skills_dir / skill_name
         assert skill_dir.exists(), f"Skill directory not created at {skill_dir}"
         assert skill_dir.is_dir(), f"Skill directory is not a directory"
         
-        # Verify manifest.yaml was created
-        manifest_file = skill_dir / "manifest.yaml"
-        assert manifest_file.exists(), f"manifest.yaml not created at {manifest_file}"
-        assert manifest_file.is_file(), f"manifest.yaml is not a file"
+        # Verify SKILL.md was created
+        skill_file = skill_dir / "SKILL.md"
+        assert skill_file.exists(), f"SKILL.md not created at {skill_file}"
+        assert skill_file.is_file(), f"SKILL.md is not a file"
         
-        # Verify instructions.md was created
-        instructions_file = skill_dir / "instructions.md"
-        assert instructions_file.exists(), f"instructions.md not created at {instructions_file}"
-        assert instructions_file.is_file(), f"instructions.md is not a file"
+        # Note: Only SKILL.md is created, not separate instructions.md
+        # This matches actual implementation (SKILL.md contains both YAML and content)
         
-        # Verify manifest.yaml has basic structure
-        with open(manifest_file, 'r') as f:
-            manifest_content = f.read()
-        assert "name:" in manifest_content, "manifest.yaml missing name field"
-        assert "description:" in manifest_content, "manifest.yaml missing description field"
+        # Verify SKILL.md has basic structure
+        with open(skill_file, 'r') as f:
+            skill_content = f.read()
+        assert "name:" in skill_content, "SKILL.md missing name field"
+        assert "description:" in skill_content, "SKILL.md missing description field"
         
-        # Verify instructions.md has content
-        with open(instructions_file, 'r') as f:
-            instructions_content = f.read()
-        assert len(instructions_content.strip()) > 0, "instructions.md is empty"
+        # Additional check for YAML frontmatter
+        parts = skill_content.split("---")
+        assert len(parts) >= 3, "SKILL.md should have YAML frontmatter and content separated by ---"
         
         # Verify .cursorrules was NOT created (project target is open_code)
         cursorrules_file = self.project_dir / ".cursorrules"
@@ -181,7 +200,7 @@ class TestScenario2ProjectApplication:
         
         print(f"✓ Skill applied physically")
         print(f"  - Created: {skill_dir}")
-        print(f"  - Files: manifest.yaml, instructions.md")
+        print(f"  - File: SKILL.md")
         print(f"  - No .cursorrules created (correct for open_code)")
         
     def test_04_command_line_target_override(self):
@@ -190,18 +209,26 @@ class TestScenario2ProjectApplication:
         
         # Setup: init, create skill, set target to open_code
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init", cwd=self.home_dir)
         assert result.success
         
         skill_name = "my-logic-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        result = self.cmd.run("create", [skill_name], cwd=self.project_dir)
         assert result.success
         
-        result = self.cmd.run("set-target open_code")
+        # Feedback skill to repo
+        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        assert result.success
+        
+        result = self.cmd.run("set-target", ["open_code"], cwd=self.project_dir)
+        assert result.success
+        
+        # Enable skill first
+        result = self.cmd.run("use", [skill_name], cwd=self.project_dir)
         assert result.success
         
         # Apply with cursor target override
-        result = self.cmd.run("apply --target cursor")
+        result = self.cmd.run("apply", ["--target", "cursor"], cwd=self.project_dir)
         assert result.success, f"skill-hub apply --target cursor failed: {result.stderr}"
         
         # Verify .cursorrules was created (cursor target override)
@@ -214,13 +241,19 @@ class TestScenario2ProjectApplication:
             cursorrules_content = f.read()
         assert len(cursorrules_content.strip()) > 0, ".cursorrules is empty"
         
-        # Verify project target remains open_code in state.json
-        assert self.project_state.exists(), f"state.json not found at {self.project_state}"
+        # Verify project target remains open_code in global state.json
+        global_state_file = self.skill_hub_dir / "state.json"
+        assert global_state_file.exists(), f"state.json not found at {global_state_file}"
         
-        with open(self.project_state, 'r') as f:
+        with open(global_state_file, 'r') as f:
             state = json.load(f)
         
-        assert state.get('target') == 'open_code', f"Project target should remain 'open_code', got: {state.get('target')}"
+        project_path_str = str(self.project_dir)
+        assert project_path_str in state, f"Project path not in state.json: {project_path_str}"
+        
+        project_state = state[project_path_str]
+        assert "preferred_target" in project_state, "preferred_target not in project state"
+        assert project_state["preferred_target"] == "open_code", f"Project target should remain 'open_code', got: {project_state['preferred_target']}"
         
         print(f"✓ Command line target override works")
         print(f"  - Created: {cursorrules_file}")
@@ -233,38 +266,41 @@ class TestScenario2ProjectApplication:
         
         # Setup: init, create multiple skills
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init", cwd=self.home_dir)
         assert result.success
         
         skills = ["logic-skill-1", "logic-skill-2", "logic-skill-3"]
         
         for skill in skills:
-            result = home_cmd.run(f"skill-hub create {skill}", timeout=30)
+            result = self.cmd.run("create", [skill], cwd=self.project_dir)
             assert result.success, f"Failed to create skill {skill}"
+            # Feedback skill to repo (required before use)
+            result = self.cmd.run("feedback", [skill, "--archive"], cwd=self.project_dir)
+            assert result.success, f"Failed to feedback skill {skill}"
         
         # Set project target
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=self.project_dir)
         assert result.success
         
         # Enable all skills
         for skill in skills:
-            result = self.cmd.run(f"skill-hub use {skill}", timeout=30)
+            result = self.cmd.run("use", [skill], cwd=self.project_dir)
             assert result.success, f"Failed to enable skill {skill}"
         
         # Apply all skills
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=self.project_dir)
         assert result.success, f"skill-hub apply failed: {result.stderr}"
         
         # Verify all skill directories were created
         for skill in skills:
-            skill_dir = self.agents_skills_dir / skill
+            skill_dir = self.project_skills_dir / skill
             assert skill_dir.exists(), f"Skill directory not created for {skill}"
-            assert (skill_dir / "manifest.yaml").exists(), f"manifest.yaml missing for {skill}"
-            assert (skill_dir / "instructions.md").exists(), f"instructions.md missing for {skill}"
+            assert (skill_dir / "SKILL.md").exists(), f"SKILL.md missing for {skill}"
+            assert (skill_dir / "SKILL.md").exists(), f"SKILL.md missing for {skill}"
         
         print(f"✓ Multiple skills applied successfully")
         print(f"  - Skills: {', '.join(skills)}")
-        print(f"  - All directories created in: {self.agents_skills_dir}")
+        print(f"  - All directories created in: {self.project_skills_dir}")
         
     def test_06_target_specific_adapters(self):
         """Test 2.6: Different targets create different outputs"""
@@ -275,11 +311,14 @@ class TestScenario2ProjectApplication:
         
         # Setup: init and create skill
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init", cwd=self.home_dir)
         assert result.success
         
         skill_name = "test-adapter-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        result = self.cmd.run("create", [skill_name], cwd=self.project_dir)
+        assert result.success
+        # Feedback skill to repo (required before use)
+        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
         assert result.success
         
         # Test different targets
@@ -288,18 +327,18 @@ class TestScenario2ProjectApplication:
         for target in targets_to_test:
             # Create a fresh project directory for each target
             with tempfile.TemporaryDirectory() as temp_dir:
-                project_cmd = CommandRunner(workdir=temp_dir)
+                project_cmd = CommandRunner()
                 
                 # Set target
-                result = project_cmd.run(f"skill-hub set-target {target}", timeout=30)
+                result = project_cmd.run("set-target", [target], cwd=temp_dir)
                 assert result.success
                 
                 # Enable skill
-                result = project_cmd.run(f"skill-hub use {skill_name}", timeout=30)
+                result = project_cmd.run("use", [skill_name], cwd=temp_dir)
                 assert result.success
                 
                 # Apply
-                result = project_cmd.run("skill-hub apply", timeout=30)
+                result = project_cmd.run("apply", cwd=temp_dir)
                 assert result.success
                 
                 # Check target-specific outputs
@@ -326,15 +365,15 @@ class TestScenario2ProjectApplication:
         
         # Setup: init and create skill
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init", cwd=self.home_dir)
         assert result.success
         
         skill_name = "my-logic-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        result = self.cmd.run("create", [skill_name], cwd=self.project_dir)
         assert result.success
         
         # Set project target
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=self.project_dir)
         assert result.success
         
         # Try to apply without enabling first

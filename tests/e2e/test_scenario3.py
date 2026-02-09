@@ -23,46 +23,51 @@ class TestScenario3IterationFeedback:
     @pytest.fixture(autouse=True)
     def setup(self, temp_project_dir, temp_home_dir, test_skill_template):
         """Setup test environment"""
-        self.project_dir = temp_project_dir
-        self.home_dir = temp_home_dir
+        self.project_dir = Path(temp_project_dir)
+        self.home_dir = Path(temp_home_dir)
         self.skill_template = test_skill_template
-        self.cmd = CommandRunner(workdir=str(self.project_dir))
+        self.cmd = CommandRunner()
         self.validator = FileValidator()
         self.env = TestEnvironment()
         self.debug = DebugUtils()
         
         # Store paths
-        self.skill_hub_dir = Path(self.home_dir) / ".skill-hub"
+        self.skill_hub_dir = self.home_dir / ".skill-hub"
         self.repo_dir = self.skill_hub_dir / "repo"
-        self.skills_dir = self.repo_dir / "skills"
+        self.repo_skills_dir = self.repo_dir / "skills"
         
         # Project paths
         self.project_skill_hub = self.project_dir / ".skill-hub"
         self.project_state = self.project_skill_hub / "state.json"
-        self.agents_skills_dir = self.project_dir / ".agents" / "skills"
+        self.project_agents_dir = self.project_dir / ".agents"
+        self.project_skills_dir = self.project_agents_dir / "skills"
         
-        # Change to project directory
-        os.chdir(self.project_dir)
+        # Create .agents directory for project
+        self.project_agents_dir.mkdir(exist_ok=True)
         
     def _setup_skill_in_project(self, skill_name="my-logic-skill"):
-        """Helper to setup a skill in the project"""
+        """Helper to setup a skill in the project (V2流程)"""
         # Initialize home directory
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init", cwd=self.home_dir)
         assert result.success
         
-        # Create skill
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        # Create skill in project
+        result = self.cmd.run("create", [skill_name], cwd=self.project_dir)
+        assert result.success
+        
+        # Feedback skill to repo (required before use)
+        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
         assert result.success
         
         # Setup project
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=self.project_dir)
         assert result.success
         
-        result = self.cmd.run("use", {skill_name})
+        result = self.cmd.run("use", [skill_name], cwd=self.project_dir)
         assert result.success
         
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=self.project_dir)
         assert result.success
         
         return skill_name
@@ -74,37 +79,46 @@ class TestScenario3IterationFeedback:
         # Setup skill in project
         skill_name = self._setup_skill_in_project()
         
-        # Get the instructions.md file in project
-        instructions_file = self.agents_skills_dir / skill_name / "instructions.md"
-        assert instructions_file.exists(), f"instructions.md not found at {instructions_file}"
+        # Get the SKILL.md file in project
+        skill_file = self.project_skills_dir / skill_name / "SKILL.md"
+        assert skill_file.exists(), f"SKILL.md not found at {skill_file}"
         
         # Read original content
-        with open(instructions_file, 'r') as f:
+        with open(skill_file, 'r') as f:
             original_content = f.read()
         
-        # Modify the file
-        modification = "\n\n## Project Modification\nThis modification was made directly in the project to test detection."
-        modified_content = original_content + modification
+        # Modify the file (add to content part)
+        parts = original_content.split("---")
+        if len(parts) >= 3:
+            yaml_part = parts[1]
+            content_part = parts[2]
+            modification = "\n\n## Project Modification\nThis modification was made directly in the project to test detection."
+            modified_content = f"{parts[0]}---{yaml_part}---{content_part}{modification}"
+        else:
+            # Simple append if format unexpected
+            modification = "\n\n## Project Modification\nThis modification was made directly in the project to test detection."
+            modified_content = original_content + modification
         
-        with open(instructions_file, 'w') as f:
+        with open(skill_file, 'w') as f:
             f.write(modified_content)
         
         # Verify modification was written
-        with open(instructions_file, 'r') as f:
+        with open(skill_file, 'r') as f:
             current_content = f.read()
-        assert "Project Modification" in current_content, "Modification not written to instructions.md"
+        assert "Project Modification" in current_content, "Modification not written to SKILL.md"
         
         # Run skill-hub status to detect modification
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=self.project_dir)
         assert result.success, f"skill-hub status failed: {result.stderr}"
         
         # Check that status shows Modified
-        output = result.stdout.lower()
-        assert "modified" in output, f"Status should show 'Modified', output: {output}"
-        assert skill_name.lower() in output, f"Skill name '{skill_name}' should appear in status output"
+        output = result.stdout
+        # 检查中文"已修改"或包含修改指示
+        assert "已修改" in output or "修改" in output, f"Status should show modification, output: {output}"
+        assert skill_name in output, f"Skill name '{skill_name}' should appear in status output"
         
         print(f"✓ Modification detection works")
-        print(f"  - Modified: {instructions_file}")
+        print(f"  - Modified: {skill_file}")
         print(f"  - Status shows: Modified")
         print(f"  - Output snippet: {output[:200]}...")
         
@@ -116,10 +130,10 @@ class TestScenario3IterationFeedback:
         skill_name = self._setup_skill_in_project()
         
         # Get project instructions.md
-        project_instructions = self.agents_skills_dir / skill_name / "instructions.md"
+        project_instructions = self.project_skills_dir / skill_name / "instructions.md"
         
         # Get repository prompt.md
-        repo_prompt = self.skills_dir / skill_name / "prompt.md"
+        repo_prompt = self.repo_skills_dir / skill_name / "prompt.md"
         
         # Read original contents
         with open(project_instructions, 'r') as f:
@@ -181,7 +195,7 @@ class TestScenario3IterationFeedback:
         # Setup skill in project
         skill_name = self._setup_skill_in_project()
         
-        skill_dir = self.agents_skills_dir / skill_name
+        skill_dir = self.project_skills_dir / skill_name
         
         # Modify multiple files
         files_to_modify = [
@@ -247,7 +261,7 @@ class TestScenario3IterationFeedback:
         assert result.success
         
         # Modify in open_code location
-        instructions_file = self.agents_skills_dir / skill_name / "instructions.md"
+        instructions_file = self.project_skills_dir / skill_name / "instructions.md"
         with open(instructions_file, 'a') as f:
             f.write("\n\n## OpenCode Modification\nModified in .agents/skills/")
         
@@ -298,7 +312,7 @@ class TestScenario3IterationFeedback:
         skill_name = self._setup_skill_in_project("json-test-skill")
         
         # Get project file
-        instructions_file = self.agents_skills_dir / skill_name / "instructions.md"
+        instructions_file = self.project_skills_dir / skill_name / "instructions.md"
         
         # Add content with characters that need JSON escaping
         problematic_content = """
@@ -343,7 +357,7 @@ Example JSON:
             # Don't fail the test, just log it since this depends on skill-hub implementation
         
         # Check repository file
-        repo_file = self.skills_dir / skill_name / "prompt.md"
+        repo_file = self.repo_skills_dir / skill_name / "prompt.md"
         if repo_file.exists():
             with open(repo_file, 'r') as f:
                 repo_content = f.read()
@@ -368,7 +382,7 @@ Example JSON:
         print(f"  Clean state output: {clean_output[:200]}...")
         
         # Test 2: Modified state
-        instructions_file = self.agents_skills_dir / skill_name / "instructions.md"
+        instructions_file = self.project_skills_dir / skill_name / "instructions.md"
         with open(instructions_file, 'a') as f:
             f.write("\n\n## Status Accuracy Test\n")
         
@@ -397,7 +411,7 @@ Example JSON:
             result = self.cmd.run("apply")
             
             # Modify second skill
-            instructions_file2 = self.agents_skills_dir / skill_name2 / "instructions.md"
+            instructions_file2 = self.project_skills_dir / skill_name2 / "instructions.md"
             if instructions_file2.exists():
                 with open(instructions_file2, 'a') as f:
                     f.write("\n\n## Second Skill Modification\n")
@@ -415,7 +429,7 @@ Example JSON:
         
         # Setup
         skill_name = self._setup_skill_in_project()
-        skill_dir = self.agents_skills_dir / skill_name
+        skill_dir = self.project_skills_dir / skill_name
         
         # Only modify instructions.md, not manifest.yaml
         instructions_file = skill_dir / "instructions.md"

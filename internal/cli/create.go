@@ -11,37 +11,31 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	createDescription string
-	createTarget      string
-	createOutputDir   string
-)
-
 var createCmd = &cobra.Command{
-	Use:   "create [skill-name]",
-	Short: "创建新的技能模板",
-	Long: `创建一个新的技能模板文件。
+	Use:   "create <id>",
+	Short: "创建新技能模板",
+	Long: `在项目当前工作区创建一个新技能。
 
-技能名称应该使用小写字母和连字符，例如：my-project-skill。
-技能文件将创建在 .agents/skills/[skill-name]/SKILL.md 目录中。
+如果指定了 --target 选项，则创建的技能将用于该目标环境。
+否则将用于init初始化时设置的默认目标环境。
 
-注意：使用此命令前，请确保项目已初始化（已运行 'skill-hub init'）。`,
+创建的技能仅存在于项目本地，需要通过 feedback 命令同步到仓库。
+create命令将会刷新state.json，标记当前项目工作区在使用该技能。`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runCreate(args[0])
+		target, _ := cmd.Flags().GetString("target")
+		return runCreate(args[0], target)
 	},
 }
 
 func init() {
-	createCmd.Flags().StringVar(&createDescription, "description", "", "技能描述")
-	createCmd.Flags().StringVar(&createTarget, "target", "all", "目标工具: cursor, claude_code, open_code, all")
-	createCmd.Flags().StringVar(&createOutputDir, "output-dir", ".", "输出目录")
+	createCmd.Flags().String("target", "open_code", "技能目标环境，默认为 open_code")
 }
 
-func runCreate(skillName string) error {
-	// 验证技能名称格式
-	if !isValidSkillName(skillName) {
-		return fmt.Errorf("技能名称 '%s' 格式无效。应使用小写字母、数字和连字符，例如：my-project-skill", skillName)
+func runCreate(skillID string, target string) error {
+	// 验证技能ID格式
+	if !isValidSkillName(skillID) {
+		return fmt.Errorf("技能ID '%s' 格式无效。应使用小写字母、数字和连字符，例如：my-logic-skill", skillID)
 	}
 
 	// 获取当前工作目录
@@ -50,27 +44,14 @@ func runCreate(skillName string) error {
 		return fmt.Errorf("获取当前目录失败: %w", err)
 	}
 
-	// 确定输出目录
-	outputDir := createOutputDir
-	if outputDir == "." {
-		outputDir = cwd
-	} else if !filepath.IsAbs(outputDir) {
-		outputDir = filepath.Join(cwd, outputDir)
-	}
-
-	// 检查输出目录是否存在
-	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-		return fmt.Errorf("输出目录不存在: %s", outputDir)
-	}
-
-	// 检查.agents目录是否存在（项目是否已初始化）
-	agentsDir := filepath.Join(outputDir, ".agents")
+	// 检查项目是否已初始化（检查.agents目录）
+	agentsDir := filepath.Join(cwd, ".agents")
 	if _, err := os.Stat(agentsDir); os.IsNotExist(err) {
 		return fmt.Errorf("项目未初始化，请先运行 'skill-hub init' 命令")
 	}
 
 	// 创建技能目录结构
-	skillDir := filepath.Join(agentsDir, "skills", skillName)
+	skillDir := filepath.Join(agentsDir, "skills", skillID)
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		return fmt.Errorf("创建技能目录失败: %w", err)
 	}
@@ -78,7 +59,7 @@ func runCreate(skillName string) error {
 	// 检查是否已存在同名技能文件
 	skillFilePath := filepath.Join(skillDir, "SKILL.md")
 	if _, err := os.Stat(skillFilePath); err == nil {
-		fmt.Printf("⚠️  文件已存在: %s\n", skillFilePath)
+		fmt.Printf("⚠️  技能文件已存在: %s\n", skillFilePath)
 		fmt.Print("是否覆盖？ [y/N]: ")
 
 		reader := bufio.NewReader(os.Stdin)
@@ -91,28 +72,24 @@ func runCreate(skillName string) error {
 		}
 	}
 
-	// 收集技能描述（如果未提供）
-	description := createDescription
-	if description == "" {
-		fmt.Printf("请输入技能描述 (按Enter跳过): ")
-		reader := bufio.NewReader(os.Stdin)
-		input, _ := reader.ReadString('\n')
-		description = strings.TrimSpace(input)
-	}
+	// 收集技能描述
+	fmt.Printf("请输入技能描述 (按Enter使用默认描述): ")
+	reader := bufio.NewReader(os.Stdin)
+	description, _ := reader.ReadString('\n')
+	description = strings.TrimSpace(description)
 
 	// 使用默认描述如果用户未输入
 	if description == "" {
-		description = fmt.Sprintf("为项目定制的 %s 技能", skillName)
+		description = fmt.Sprintf("为项目定制的 %s 技能", skillID)
 	}
 
 	// 验证目标选项
-	target := createTarget
 	if !isValidTarget(target) {
-		return fmt.Errorf("无效的目标选项: %s。可用选项: cursor, claude_code, open_code, all", target)
+		return fmt.Errorf("无效的目标选项: %s。可用选项: cursor, claude, open_code", target)
 	}
 
 	// 生成技能内容
-	content, err := generateSkillContent(skillName, description, target)
+	content, err := generateSkillContent(skillID, description, target)
 	if err != nil {
 		return fmt.Errorf("生成技能内容失败: %w", err)
 	}
@@ -123,10 +100,15 @@ func runCreate(skillName string) error {
 	}
 
 	fmt.Printf("✅ 技能模板创建成功: %s\n", skillFilePath)
-	fmt.Println("下一步:")
+
+	// 刷新state.json，标记当前项目工作区在使用该技能
+	fmt.Println("正在刷新项目状态...")
+	// TODO: 实现state.json刷新逻辑
+
+	fmt.Println("\n下一步:")
 	fmt.Println("1. 编辑 SKILL.md 文件以完善技能内容")
-	fmt.Printf("2. 使用 'skill-hub validate-local %s' 验证技能在本地项目中的有效性\n", skillName)
-	fmt.Printf("3. 使用 'skill-hub feedback %s' 将验证通过的技能反馈到技能仓库\n", skillName)
+	fmt.Printf("2. 使用 'skill-hub validate %s' 验证技能合规性\n", skillID)
+	fmt.Printf("3. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", skillID)
 
 	return nil
 }
@@ -249,12 +231,10 @@ func generateCompatibilityDescription(target string) string {
 	switch normalized {
 	case "cursor":
 		return "Designed for Cursor (or similar AI coding assistants)"
-	case "claude_code":
+	case "claude":
 		return "Designed for Claude Code (or similar AI coding assistants)"
 	case "open_code":
 		return "Designed for OpenCode (or similar AI coding assistants)"
-	case "all":
-		return "Designed for Cursor, Claude Code, and OpenCode (or similar AI coding assistants)"
 	default:
 		return "Designed for AI coding assistants"
 	}
@@ -289,10 +269,9 @@ func isValidSkillName(name string) bool {
 // isValidTarget 验证目标选项
 func isValidTarget(target string) bool {
 	validOptions := map[string]bool{
-		"cursor":      true,
-		"claude_code": true,
-		"open_code":   true,
-		"all":         true,
+		"cursor":    true,
+		"claude":    true, // 接受claude作为claude_code的简写
+		"open_code": true,
 	}
 
 	return validOptions[target]

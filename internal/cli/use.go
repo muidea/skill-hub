@@ -11,28 +11,25 @@ import (
 	"skill-hub/internal/state"
 )
 
-var (
-	useTarget string
-)
-
 var useCmd = &cobra.Command{
-	Use:   "use [skill-id]",
-	Short: "在当前项目启用技能",
-	Long: `在当前项目启用指定技能，并提示输入变量值。
+	Use:   "use <id>",
+	Short: "使用技能",
+	Long: `将技能标记为在当前项目中使用。此命令仅更新 state.json 中的状态记录，不生成物理文件。
+需要通过 apply 命令进行物理分发。
 
-使用 --target 参数指定首选目标工具 (cursor/claude_code/open_code)。
-如果项目尚未绑定目标，此参数将设置项目的首选目标。`,
+如果项目工作区里首次使用技能，也会同步在state.json里完成项目工作区信息刷新`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runUse(args[0])
+		target, _ := cmd.Flags().GetString("target")
+		return runUse(args[0], target)
 	},
 }
 
 func init() {
-	useCmd.Flags().StringVar(&useTarget, "target", "", "首选目标工具: cursor, claude_code, open_code (为空时使用项目状态绑定的目标)")
+	useCmd.Flags().String("target", "open_code", "技能目标环境，默认为 open_code")
 }
 
-func runUse(skillID string) error {
+func runUse(skillID string, target string) error {
 	// 检查技能是否存在
 	manager, err := engine.NewSkillManager()
 	if err != nil {
@@ -114,17 +111,15 @@ func runUse(skillID string) error {
 	}
 
 	// 保存到项目状态
-	if err := stateManager.AddSkillToProjectWithTarget(cwd, skillID, skill.Version, variables, useTarget); err != nil {
+	if err := stateManager.AddSkillToProjectWithTarget(cwd, skillID, skill.Version, variables, target); err != nil {
 		return fmt.Errorf("保存项目状态失败: %w", err)
 	}
 
-	fmt.Printf("\n✅ 技能 '%s' 已成功启用！\n", skillID)
+	fmt.Printf("\n✅ 技能 '%s' 已成功标记为使用！\n", skillID)
 
 	// 显示目标信息
-	if useTarget != "" {
-		fmt.Printf("项目首选目标已设置为: %s\n", useTarget)
-	}
-	fmt.Println("使用 'skill-hub apply' 将技能应用到当前项目")
+	fmt.Printf("技能目标环境: %s\n", target)
+	fmt.Println("使用 'skill-hub apply' 将技能物理分发到当前项目")
 
 	return nil
 }
