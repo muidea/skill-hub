@@ -35,20 +35,37 @@ func init() {
 }
 
 func runInit(args []string, target string) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("获取用户主目录失败: %w", err)
+	// 支持通过环境变量指定skill-hub目录
+	skillHubDir := os.Getenv("SKILL_HUB_HOME")
+	if skillHubDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("获取用户主目录失败: %w", err)
+		}
+		skillHubDir = filepath.Join(homeDir, ".skill-hub")
 	}
 
-	skillHubDir := filepath.Join(homeDir, ".skill-hub")
 	repoDir := filepath.Join(skillHubDir, "repo")
-
-	fmt.Printf("正在初始化Skill Hub工作区: %s\n", skillHubDir)
 
 	// 检查是否提供了Git URL
 	var gitURL string
 	if len(args) > 0 {
 		gitURL = args[0]
+	}
+
+	// 检查是否已经初始化了相同的配置
+	if alreadyInitialized, err := checkAlreadyInitialized(skillHubDir, gitURL); err == nil && alreadyInitialized {
+		fmt.Printf("✅ Skill Hub 已经初始化完成！\n")
+		fmt.Println("工作区位置:", skillHubDir)
+		if gitURL != "" {
+			fmt.Println("远程仓库:", gitURL)
+		}
+		fmt.Println("\n使用 'skill-hub list' 查看可用技能")
+		return nil
+	}
+
+	fmt.Printf("正在初始化Skill Hub工作区: %s\n", skillHubDir)
+	if gitURL != "" {
 		fmt.Printf("将克隆远程仓库: %s\n", gitURL)
 	}
 
@@ -56,19 +73,23 @@ func runInit(args []string, target string) error {
 	dirs := []string{
 		skillHubDir,
 		repoDir,
-		filepath.Join(homeDir, ".cursor"), // 全局Cursor配置目录
 	}
 
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("创建目录 %s 失败: %w", dir, err)
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return fmt.Errorf("创建目录 %s 失败: %w", dir, err)
+			}
+			fmt.Printf("✓ 创建目录: %s\n", dir)
+		} else {
+			fmt.Printf("✓ 目录已存在: %s\n", dir)
 		}
-		fmt.Printf("✓ 创建目录: %s\n", dir)
 	}
 
 	// 创建配置文件
 	configPath := filepath.Join(skillHubDir, "config.yaml")
-	configContent := fmt.Sprintf(`# Skill Hub 配置文件
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		configContent := fmt.Sprintf(`# Skill Hub 配置文件
 repo_path: "~/.skill-hub/repo"
 claude_config_path: "~/.claude/config.json"
 cursor_config_path: "~/.cursor/rules"
@@ -78,63 +99,80 @@ git_token: ""
 git_branch: "main"
 `, gitURL)
 
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		return fmt.Errorf("创建配置文件失败: %w", err)
+		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+			return fmt.Errorf("创建配置文件失败: %w", err)
+		}
+		fmt.Printf("✓ 创建配置文件: %s\n", configPath)
+	} else {
+		// 配置文件已存在，更新git_remote_url字段
+		if err := updateConfigGitURL(configPath, gitURL); err != nil {
+			return fmt.Errorf("更新配置文件失败: %w", err)
+		}
+		fmt.Printf("✓ 更新配置文件: %s\n", configPath)
 	}
-	fmt.Printf("✓ 创建配置文件: %s\n", configPath)
 
 	// 创建状态文件（在根目录）
 	statePath := filepath.Join(skillHubDir, "state.json")
-	initialState := `{}`
-	if err := os.WriteFile(statePath, []byte(initialState), 0644); err != nil {
-		return fmt.Errorf("创建状态文件失败: %w", err)
+	if _, err := os.Stat(statePath); os.IsNotExist(err) {
+		initialState := `{}`
+		if err := os.WriteFile(statePath, []byte(initialState), 0644); err != nil {
+			return fmt.Errorf("创建状态文件失败: %w", err)
+		}
+		fmt.Printf("✓ 创建状态文件: %s\n", statePath)
+	} else {
+		fmt.Printf("✓ 状态文件已存在: %s\n", statePath)
 	}
-	fmt.Printf("✓ 创建状态文件: %s\n", statePath)
 
 	// 根据是否提供git_url执行不同的初始化逻辑
 	repoAlreadyValid := false
 
 	if gitURL != "" {
 		// 情况1：提供了git_url，克隆远程仓库到repo目录
-		fmt.Println("\n正在克隆远程技能仓库...")
 
-		// 如果repo目录已存在且非空，备份
-		if entries, err := os.ReadDir(repoDir); err == nil && len(entries) > 0 {
-			backupDir := repoDir + ".bak." + time.Now().Format("20060102-150405")
-			fmt.Printf("备份现有仓库到: %s\n", backupDir)
-			if err := os.Rename(repoDir, backupDir); err != nil {
-				return fmt.Errorf("备份失败: %w", err)
+		// 检查是否已经是相同的git仓库
+		if isSameGitRepo(repoDir, gitURL) {
+			fmt.Println("\n✅ 检测到相同的远程仓库，跳过克隆")
+		} else {
+			fmt.Println("\n正在克隆远程技能仓库...")
+
+			// 如果repo目录已存在且非空，备份
+			if entries, err := os.ReadDir(repoDir); err == nil && len(entries) > 0 {
+				backupDir := repoDir + ".bak." + time.Now().Format("20060102-150405")
+				fmt.Printf("备份现有仓库到: %s\n", backupDir)
+				if err := os.Rename(repoDir, backupDir); err != nil {
+					return fmt.Errorf("备份失败: %w", err)
+				}
+				// 重新创建空目录
+				if err := os.MkdirAll(repoDir, 0755); err != nil {
+					return fmt.Errorf("创建目录失败: %w", err)
+				}
 			}
-			// 重新创建空目录
-			if err := os.MkdirAll(repoDir, 0755); err != nil {
-				return fmt.Errorf("创建目录失败: %w", err)
+
+			// 创建临时Repository对象用于克隆
+			tempRepo, err := git.NewRepository(repoDir)
+			if err != nil {
+				return fmt.Errorf("创建仓库对象失败: %w", err)
 			}
+
+			// 克隆远程仓库
+			if err := tempRepo.Clone(gitURL); err != nil {
+				fmt.Printf("⚠️  克隆远程仓库失败: %v\n", err)
+				fmt.Println("\n故障排除建议:")
+				fmt.Println("1. 对于SSH URL (git@...):")
+				fmt.Println("   - 确保SSH agent正在运行: eval $(ssh-agent) && ssh-add ~/.ssh/id_rsa")
+				fmt.Println("   - 或使用HTTPS URL代替: https://github.com/user/repo.git")
+				fmt.Println("2. 对于HTTPS URL:")
+				fmt.Println("   - 确保网络连接正常")
+				fmt.Println("   - 如果需要认证，设置Git token: skill-hub config set git_token YOUR_TOKEN")
+				fmt.Println("3. 检查URL格式是否正确")
+				fmt.Println("\n将创建本地空仓库")
+
+				// 如果克隆失败，创建本地空仓库
+				return initLocalEmptyRepository(repoDir, skillHubDir)
+			}
+
+			fmt.Println("✅ 远程技能仓库克隆完成")
 		}
-
-		// 创建临时Repository对象用于克隆
-		tempRepo, err := git.NewRepository(repoDir)
-		if err != nil {
-			return fmt.Errorf("创建仓库对象失败: %w", err)
-		}
-
-		// 克隆远程仓库
-		if err := tempRepo.Clone(gitURL); err != nil {
-			fmt.Printf("⚠️  克隆远程仓库失败: %v\n", err)
-			fmt.Println("\n故障排除建议:")
-			fmt.Println("1. 对于SSH URL (git@...):")
-			fmt.Println("   - 确保SSH agent正在运行: eval $(ssh-agent) && ssh-add ~/.ssh/id_rsa")
-			fmt.Println("   - 或使用HTTPS URL代替: https://github.com/user/repo.git")
-			fmt.Println("2. 对于HTTPS URL:")
-			fmt.Println("   - 确保网络连接正常")
-			fmt.Println("   - 如果需要认证，设置Git token: skill-hub config set git_token YOUR_TOKEN")
-			fmt.Println("3. 检查URL格式是否正确")
-			fmt.Println("\n将创建本地空仓库")
-
-			// 如果克隆失败，创建本地空仓库
-			return initLocalEmptyRepository(repoDir, skillHubDir)
-		}
-
-		fmt.Println("✅ 远程技能仓库克隆完成")
 
 		// 刷新技能索引
 		fmt.Println("\n正在刷新技能索引...")
@@ -356,6 +394,142 @@ func parseSkillMetadata(mdPath, skillID string) (*spec.SkillMetadata, error) {
 	}
 
 	return skillMeta, nil
+}
+
+// isSameGitRepo 检查repo目录是否已经是相同的git仓库
+func isSameGitRepo(repoDir, gitURL string) bool {
+	// 检查是否是git仓库
+	gitDir := filepath.Join(repoDir, ".git")
+	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
+		return false
+	}
+
+	// 读取git配置检查远程URL
+	configPath := filepath.Join(gitDir, "config")
+	configContent, err := os.ReadFile(configPath)
+	if err != nil {
+		return false
+	}
+
+	// 在配置文件中查找远程URL
+	configStr := string(configContent)
+	lines := strings.Split(configStr, "\n")
+
+	// 查找[remote "origin"]部分
+	inOriginSection := false
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+
+		if trimmedLine == `[remote "origin"]` {
+			inOriginSection = true
+			continue
+		}
+
+		if inOriginSection && strings.HasPrefix(trimmedLine, "url = ") {
+			remoteURL := strings.TrimSpace(strings.TrimPrefix(trimmedLine, "url = "))
+			return remoteURL == gitURL
+		}
+
+		// 如果遇到新的section，退出origin section
+		if inOriginSection && strings.HasPrefix(trimmedLine, "[") {
+			break
+		}
+	}
+
+	return false
+}
+
+// updateConfigGitURL 更新配置文件中的git_remote_url字段
+func updateConfigGitURL(configPath, gitURL string) error {
+	// 读取配置文件
+	configContent, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	lines := strings.Split(string(configContent), "\n")
+	updated := false
+
+	// 更新git_remote_url字段
+	for i, line := range lines {
+		if strings.HasPrefix(line, "git_remote_url:") {
+			lines[i] = fmt.Sprintf(`git_remote_url: "%s"`, gitURL)
+			updated = true
+			break
+		}
+	}
+
+	// 如果没有找到git_remote_url字段，添加它
+	if !updated {
+		// 找到合适的位置插入（在default_tool之后）
+		for i, line := range lines {
+			if strings.HasPrefix(line, "default_tool:") {
+				// 在下一行插入
+				newLines := make([]string, 0, len(lines)+1)
+				newLines = append(newLines, lines[:i+1]...)
+				newLines = append(newLines, fmt.Sprintf(`git_remote_url: "%s"`, gitURL))
+				newLines = append(newLines, lines[i+1:]...)
+				lines = newLines
+				break
+			}
+		}
+	}
+
+	// 写回文件
+	newContent := strings.Join(lines, "\n")
+	if err := os.WriteFile(configPath, []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("写入配置文件失败: %w", err)
+	}
+
+	return nil
+}
+
+// checkAlreadyInitialized 检查是否已经初始化了相同的配置
+func checkAlreadyInitialized(skillHubDir, gitURL string) (bool, error) {
+	// 检查配置文件是否存在
+	configPath := filepath.Join(skillHubDir, "config.yaml")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return false, nil
+	}
+
+	// 读取配置文件
+	configContent, err := os.ReadFile(configPath)
+	if err != nil {
+		return false, fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	// 解析配置文件中的git_remote_url
+	configStr := string(configContent)
+
+	// 查找git_remote_url字段
+	lines := strings.Split(configStr, "\n")
+	var currentGitURL string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "git_remote_url:") {
+			// 提取URL值，去除引号
+			urlPart := strings.TrimSpace(strings.TrimPrefix(line, "git_remote_url:"))
+			if len(urlPart) > 0 {
+				// 去除可能的引号
+				currentGitURL = strings.Trim(urlPart, `"`)
+			}
+			break
+		}
+	}
+
+	// 如果当前配置中没有git_remote_url，而新的gitURL为空，说明是相同的本地配置
+	if currentGitURL == "" && gitURL == "" {
+		return true, nil
+	}
+
+	// 如果当前配置中有git_remote_url，且与新的gitURL相同，说明是相同的远程配置
+	if currentGitURL != "" && currentGitURL == gitURL {
+		return true, nil
+	}
+
+	// 如果当前配置中有git_remote_url，但新的gitURL为空，说明是从远程切换到本地
+	// 或者当前配置中没有git_remote_url，但新的gitURL不为空，说明是从本地切换到远程
+	// 这两种情况都需要重新初始化
+	return false, nil
 }
 
 // setDefaultTargetIfEmpty 在init时检查当前目录的项目状态，如果状态文件不存在则设置目标

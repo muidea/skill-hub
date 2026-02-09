@@ -36,12 +36,16 @@ func GetConfig() (*Config, error) {
 
 // LoadConfig 加载配置文件
 func LoadConfig() error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("获取用户主目录失败: %w", err)
+	// 支持通过环境变量指定skill-hub目录
+	configDir := os.Getenv("SKILL_HUB_HOME")
+	if configDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("获取用户主目录失败: %w", err)
+		}
+		configDir = filepath.Join(homeDir, ".skill-hub")
 	}
 
-	configDir := filepath.Join(homeDir, ".skill-hub")
 	configFile := filepath.Join(configDir, "config.yaml")
 
 	// 检查配置文件是否存在
@@ -54,6 +58,13 @@ func LoadConfig() error {
 
 	// 设置默认值
 	viper.SetDefault("repo_path", filepath.Join(configDir, "repo"))
+
+	// 获取用户主目录用于其他路径
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("获取用户主目录失败: %w", err)
+	}
+
 	viper.SetDefault("claude_config_path", filepath.Join(homeDir, ".claude", "config.json"))
 	viper.SetDefault("cursor_config_path", filepath.Join(homeDir, ".cursor", "rules"))
 	viper.SetDefault("default_tool", "cursor")
