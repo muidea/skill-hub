@@ -82,17 +82,7 @@ func runRemove(skillID string) error {
 		}
 	}
 
-	// 2. 删除.skills/[skillID]目录（OpenCode目标）
-	skillsDir := filepath.Join(cwd, ".skills", skillID)
-	if _, err := os.Stat(skillsDir); err == nil {
-		if err := os.RemoveAll(skillsDir); err != nil {
-			fmt.Printf("⚠️  删除 .skills/%s 目录失败: %v\n", skillID, err)
-		} else {
-			fmt.Printf("✓ 删除 .skills/%s 目录\n", skillID)
-		}
-	}
-
-	// 3. 清理可能的其他目标环境文件
+	// 2. 清理可能的其他目标环境文件
 	// TODO: 根据项目目标环境清理Cursor、Claude等配置文件
 
 	fmt.Println("\n✅ 技能移除完成")

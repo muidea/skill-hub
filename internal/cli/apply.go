@@ -2,9 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
+	"skill-hub/internal/config"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/spec"
 
@@ -17,7 +19,7 @@ var applyCmd = &cobra.Command{
 	Long: `根据 state.json 中的启用记录和目标环境设置，将技能物理分发到项目。具体行为取决于项目工作区设置的目标环境：
 - cursor: 注入到 .cursorrules 文件
 - claude: 更新 Claude 配置文件
-- open_code: 创建 .skills/[id]/ 目录结构`,
+- open_code: 复制技能到项目工作区 .agents/skills/ 目录`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		force, _ := cmd.Flags().GetBool("force")
@@ -85,7 +87,7 @@ func runApply(dryRun bool, force bool) error {
 	case spec.TargetClaudeCode:
 		return applyToClaude(cwd, skills, dryRun, force)
 	case spec.TargetOpenCode:
-		return applyToOpenCode(cwd, skills, dryRun, force)
+		return applyToProjectWorkspace(cwd, skills, dryRun, force)
 	default:
 		return fmt.Errorf("不支持的目标环境: %s", target)
 	}
@@ -143,77 +145,138 @@ func applyToClaude(projectPath string, skills map[string]spec.SkillVars, dryRun 
 	return nil
 }
 
-// applyToOpenCode 应用技能到OpenCode
-func applyToOpenCode(projectPath string, skills map[string]spec.SkillVars, dryRun bool, force bool) error {
-	fmt.Println("\n=== 应用技能到 OpenCode ===")
+// applyToProjectWorkspace 应用技能到项目工作区
+func applyToProjectWorkspace(projectPath string, skills map[string]spec.SkillVars, dryRun bool, force bool) error {
+	fmt.Println("\n=== 应用技能到项目工作区 ===")
 
-	// 创建.skills目录
-	skillsDir := filepath.Join(projectPath, ".skills")
+	// 创建.agents/skills目录
+	agentsSkillsDir := filepath.Join(projectPath, ".agents", "skills")
 
 	if dryRun {
-		fmt.Printf("将创建/更新目录: %s\n", skillsDir)
+		fmt.Printf("将创建/更新目录: %s\n", agentsSkillsDir)
 		fmt.Println("将创建以下技能目录:")
 		for skillID := range skills {
-			skillDir := filepath.Join(skillsDir, skillID)
+			skillDir := filepath.Join(agentsSkillsDir, skillID)
 			fmt.Printf("  - %s\n", skillDir)
 		}
-		fmt.Println("\n注意: 实际实现需要创建.skills/[id]/目录结构")
+		fmt.Println("\n注意: 实际实现需要创建.agents/skills/[id]/目录结构")
 		return nil
 	}
 
-	// 创建.skills目录
-	if err := os.MkdirAll(skillsDir, 0755); err != nil {
-		return fmt.Errorf("创建.skills目录失败: %w", err)
+	// 创建.agents/skills目录
+	if err := os.MkdirAll(agentsSkillsDir, 0755); err != nil {
+		return fmt.Errorf("创建.agents/skills目录失败: %w", err)
 	}
-	fmt.Printf("✓ 创建目录: %s\n", skillsDir)
+	fmt.Printf("✓ 创建目录: %s\n", agentsSkillsDir)
 
-	// 为每个技能创建目录
+	// 为每个技能创建目录和文件
 	createdCount := 0
 	for skillID := range skills {
-		skillDir := filepath.Join(skillsDir, skillID)
+		skillDir := filepath.Join(agentsSkillsDir, skillID)
+		skillMdPath := filepath.Join(skillDir, "SKILL.md")
 
 		// 检查目录是否已存在
+		dirExists := false
 		if _, err := os.Stat(skillDir); err == nil {
+			dirExists = true
 			if !force {
 				fmt.Printf("⚠️  技能目录已存在: %s (使用 --force 覆盖)\n", skillDir)
-				continue
+			} else {
+				// 强制模式，删除现有目录
+				if err := os.RemoveAll(skillDir); err != nil {
+					fmt.Printf("⚠️  删除现有目录失败: %s: %v\n", skillDir, err)
+				} else {
+					dirExists = false // 标记为已删除
+				}
 			}
-			// 强制模式，删除现有目录
-			if err := os.RemoveAll(skillDir); err != nil {
-				fmt.Printf("⚠️  删除现有目录失败: %s: %v\n", skillDir, err)
-				continue
+		}
+
+		// 如果目录不存在或强制覆盖，创建目录和文件
+		if !dirExists {
+			// 创建技能目录
+			if err := os.MkdirAll(skillDir, 0755); err != nil {
+				fmt.Printf("⚠️  创建技能目录失败: %s: %v\n", skillDir, err)
+			} else {
+				// 从仓库复制技能文件
+				if err := copySkillFromRepo(skillID, skillMdPath); err != nil {
+					fmt.Printf("⚠️  创建SKILL.md文件失败: %s: %v\n", skillMdPath, err)
+				} else {
+					fmt.Printf("✓ 创建技能目录: %s\n", skillDir)
+					createdCount++
+				}
+			}
+		} else {
+			// 目录已存在且未强制覆盖，但检查文件是否存在
+			if _, err := os.Stat(skillMdPath); os.IsNotExist(err) {
+				// 目录存在但文件不存在，复制文件
+				if err := copySkillFromRepo(skillID, skillMdPath); err != nil {
+					fmt.Printf("⚠️  补充SKILL.md文件失败: %s: %v\n", skillMdPath, err)
+				} else {
+					fmt.Printf("✓ 补充技能文件: %s\n", skillMdPath)
+					createdCount++
+				}
+			} else {
+				// 目录和文件都已存在，检查是否需要更新
+				// 这里可以添加更复杂的逻辑，比如比较版本等
+				fmt.Printf("ℹ️  技能文件已存在: %s\n", skillMdPath)
 			}
 		}
-
-		// 创建技能目录
-		if err := os.MkdirAll(skillDir, 0755); err != nil {
-			fmt.Printf("⚠️  创建技能目录失败: %s: %v\n", skillDir, err)
-			continue
-		}
-
-		// 创建SKILL.md文件（简化实现）
-		skillMdPath := filepath.Join(skillDir, "SKILL.md")
-		content := fmt.Sprintf(`# %s Skill
-
-这是为OpenCode环境创建的技能目录。
-
-技能ID: %s
-
-注意: 这是自动生成的占位文件，实际技能内容应从.agents/skills/%s/SKILL.md复制。
-`, skillID, skillID, skillID)
-
-		if err := os.WriteFile(skillMdPath, []byte(content), 0644); err != nil {
-			fmt.Printf("⚠️  创建SKILL.md失败: %s: %v\n", skillMdPath, err)
-			continue
-		}
-
-		fmt.Printf("✓ 创建技能目录: %s\n", skillDir)
-		createdCount++
 	}
 
-	fmt.Printf("\n✅ 成功创建 %d 个技能目录\n", createdCount)
-	fmt.Println("技能已应用到OpenCode环境")
+	fmt.Printf("\n✅ 成功创建/更新 %d 个技能\n", createdCount)
+	fmt.Println("技能已应用到项目工作区")
 	fmt.Println("使用 'skill-hub status' 检查技能状态")
+
+	return nil
+}
+
+// copySkillFromRepo 从仓库复制技能文件
+func copySkillFromRepo(skillID, destPath string) error {
+	// 获取配置
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return fmt.Errorf("获取配置失败: %w", err)
+	}
+
+	// 展开repo路径中的~符号
+	repoPath := cfg.RepoPath
+	if repoPath == "" {
+		return fmt.Errorf("仓库路径未配置")
+	}
+
+	// 处理~符号
+	if repoPath[0] == '~' {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("获取用户主目录失败: %w", err)
+		}
+		repoPath = filepath.Join(homeDir, repoPath[1:])
+	}
+
+	// 构建源文件路径
+	srcPath := filepath.Join(repoPath, "skills", skillID, "SKILL.md")
+
+	// 检查源文件是否存在
+	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
+		return fmt.Errorf("技能文件在仓库中不存在: %s", srcPath)
+	}
+
+	// 复制文件
+	srcFile, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("打开源文件失败: %w", err)
+	}
+	defer srcFile.Close()
+
+	destFile, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("创建目标文件失败: %w", err)
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, srcFile); err != nil {
+		return fmt.Errorf("复制文件失败: %w", err)
+	}
 
 	return nil
 }
