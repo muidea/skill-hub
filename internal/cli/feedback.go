@@ -85,70 +85,86 @@ func runFeedback(skillID string) error {
 	}
 
 	skillExists := skillManager.SkillExists(skillID)
-	if !skillExists {
-		return fmt.Errorf("技能 '%s' 在本地仓库中不存在", skillID)
-	}
 
-	// 读取本地仓库文件内容
+	// 获取技能目录
 	skillsDir, err := engine.GetSkillsDir()
 	if err != nil {
 		return fmt.Errorf("获取技能目录失败: %w", err)
 	}
 
 	repoSkillPath := filepath.Join(skillsDir, skillID, "SKILL.md")
-	repoContent, err := os.ReadFile(repoSkillPath)
-	if err != nil {
-		return fmt.Errorf("读取本地仓库文件失败: %w", err)
+
+	var repoContent []byte
+	if skillExists {
+		// 技能在仓库中存在，读取仓库文件内容
+		repoContent, err = os.ReadFile(repoSkillPath)
+		if err != nil {
+			return fmt.Errorf("读取本地仓库文件失败: %w", err)
+		}
+	} else {
+		// 技能在仓库中不存在，这是新建的技能
+		fmt.Printf("ℹ️  技能 '%s' 在本地仓库中不存在，将作为新技能创建\n", skillID)
+		repoContent = []byte{} // 空内容，表示新建
 	}
 
 	// 比较内容
 	projectStr := strings.TrimSpace(string(projectContent))
 	repoStr := strings.TrimSpace(string(repoContent))
 
-	if projectStr == repoStr {
+	// 如果是新建技能（仓库内容为空）
+	if !skillExists {
+		fmt.Println("\n📝 新建技能内容:")
+		fmt.Println("========================================")
+		projectLines := strings.Split(projectStr, "\n")
+		for i, line := range projectLines {
+			fmt.Printf("%4d | %s\n", i+1, line)
+		}
+		fmt.Println("========================================")
+	} else if projectStr == repoStr {
+		// 技能已存在且内容相同
 		fmt.Println("✅ 技能内容未修改")
 		return nil
-	}
+	} else {
+		// 技能已存在但内容不同，显示差异
+		fmt.Println("\n🔍 检测到手动修改:")
+		fmt.Println("========================================")
 
-	// 显示差异
-	fmt.Println("\n🔍 检测到手动修改:")
-	fmt.Println("========================================")
+		projectLines := strings.Split(projectStr, "\n")
+		repoLines := strings.Split(repoStr, "\n")
 
-	projectLines := strings.Split(projectStr, "\n")
-	repoLines := strings.Split(repoStr, "\n")
-
-	// 简单差异显示
-	maxLines := len(projectLines)
-	if len(repoLines) > maxLines {
-		maxLines = len(repoLines)
-	}
-
-	changesFound := false
-	for i := 0; i < maxLines; i++ {
-		var projectLine, repoLine string
-		if i < len(projectLines) {
-			projectLine = projectLines[i]
-		}
-		if i < len(repoLines) {
-			repoLine = repoLines[i]
+		// 简单差异显示
+		maxLines := len(projectLines)
+		if len(repoLines) > maxLines {
+			maxLines = len(repoLines)
 		}
 
-		if projectLine != repoLine {
-			if !changesFound {
-				fmt.Println("行号 | 修改前                      | 修改后")
-				fmt.Println("-----|---------------------------|---------------------------")
-				changesFound = true
+		changesFound := false
+		for i := 0; i < maxLines; i++ {
+			var projectLine, repoLine string
+			if i < len(projectLines) {
+				projectLine = projectLines[i]
+			}
+			if i < len(repoLines) {
+				repoLine = repoLines[i]
 			}
 
-			lineNum := i + 1
-			fmt.Printf("%4d | %-25s | %-25s\n", lineNum,
-				truncate(repoLine, 25),
-				truncate(projectLine, 25))
-		}
-	}
+			if projectLine != repoLine {
+				if !changesFound {
+					fmt.Println("行号 | 修改前                      | 修改后")
+					fmt.Println("-----|---------------------------|---------------------------")
+					changesFound = true
+				}
 
-	if !changesFound {
-		fmt.Println("（仅空白字符差异）")
+				// 显示行号（从1开始）
+				lineNum := i + 1
+				fmt.Printf("%4d | %-25s | %-25s\n", lineNum, repoLine, projectLine)
+			}
+		}
+
+		if !changesFound {
+			fmt.Println("✅ 技能内容未修改")
+			return nil
+		}
 	}
 
 	fmt.Println("========================================")
@@ -176,6 +192,12 @@ func runFeedback(skillID string) error {
 	}
 
 	// 更新本地仓库文件
+	// 确保目录存在
+	repoSkillDir := filepath.Dir(repoSkillPath)
+	if err := os.MkdirAll(repoSkillDir, 0755); err != nil {
+		return fmt.Errorf("创建技能目录失败: %w", err)
+	}
+
 	if err := os.WriteFile(repoSkillPath, projectContent, 0644); err != nil {
 		return fmt.Errorf("更新本地仓库文件失败: %w", err)
 	}
