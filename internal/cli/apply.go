@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"skill-hub/internal/adapter"
 	"skill-hub/internal/config"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/spec"
@@ -81,16 +82,45 @@ func runApply(dryRun bool, force bool) error {
 	}
 
 	// 根据目标环境应用技能
-	switch target {
-	case spec.TargetCursor:
-		return applyToCursor(cwd, skills, dryRun, force)
-	case spec.TargetClaudeCode:
-		return applyToClaude(cwd, skills, dryRun, force)
-	case spec.TargetOpenCode:
-		return applyToProjectWorkspace(cwd, skills, dryRun, force)
-	default:
-		return fmt.Errorf("不支持的目标环境: %s", target)
+	adapter, err := adapter.GetAdapterForTarget(target)
+	if err != nil {
+		return fmt.Errorf("获取适配器失败: %w", err)
 	}
+
+	// 设置为项目模式
+	adapter.SetProjectMode()
+
+	// 应用所有技能
+	for skillID, skillVars := range skills {
+		fmt.Printf("应用技能: %s\n", skillID)
+
+		// 从仓库获取技能内容
+		content, err := getSkillContent(skillID)
+		if err != nil {
+			fmt.Printf("⚠️  获取技能内容失败: %s: %v\n", skillID, err)
+			continue
+		}
+
+		if dryRun {
+			fmt.Printf("  [演习] 将应用技能到: %s\n", target)
+			fmt.Printf("  变量: %v\n", skillVars.Variables)
+		} else {
+			// 实际应用技能
+			if err := adapter.Apply(skillID, content, skillVars.Variables); err != nil {
+				fmt.Printf("⚠️  应用技能失败: %s: %v\n", skillID, err)
+			} else {
+				fmt.Printf("✓ 成功应用技能: %s\n", skillID)
+			}
+		}
+	}
+
+	if dryRun {
+		fmt.Println("\n✅ 演习完成，未实际修改文件")
+	} else {
+		fmt.Println("\n✅ 所有技能应用完成")
+	}
+
+	return nil
 }
 
 // applyToCursor 应用技能到Cursor
@@ -228,6 +258,46 @@ func applyToProjectWorkspace(projectPath string, skills map[string]spec.SkillVar
 	fmt.Println("使用 'skill-hub status' 检查技能状态")
 
 	return nil
+}
+
+// getSkillContent 从仓库获取技能内容
+func getSkillContent(skillID string) (string, error) {
+	// 获取配置
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return "", fmt.Errorf("获取配置失败: %w", err)
+	}
+
+	// 展开repo路径中的~符号
+	repoPath := cfg.RepoPath
+	if repoPath == "" {
+		return "", fmt.Errorf("仓库路径未配置")
+	}
+
+	// 处理~符号
+	if repoPath[0] == '~' {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("获取用户主目录失败: %w", err)
+		}
+		repoPath = filepath.Join(homeDir, repoPath[1:])
+	}
+
+	// 构建源文件路径
+	srcPath := filepath.Join(repoPath, "skills", skillID, "SKILL.md")
+
+	// 检查源文件是否存在
+	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("技能文件在仓库中不存在: %s", srcPath)
+	}
+
+	// 读取文件内容
+	content, err := os.ReadFile(srcPath)
+	if err != nil {
+		return "", fmt.Errorf("读取技能文件失败: %w", err)
+	}
+
+	return string(content), nil
 }
 
 // copySkillFromRepo 从仓库复制技能文件

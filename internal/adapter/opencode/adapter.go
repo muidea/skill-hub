@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"skill-hub/internal/adapter"
 	"skill-hub/internal/config"
 )
 
@@ -23,16 +22,41 @@ func NewOpenCodeAdapter() *OpenCodeAdapter {
 	}
 }
 
-// WithProjectMode 设置为项目级模式
+// WithProjectMode 设置为项目级模式（向后兼容）
 func (a *OpenCodeAdapter) WithProjectMode() *OpenCodeAdapter {
 	a.mode = "project"
 	return a
 }
 
-// WithGlobalMode 设置为全局级模式
+// WithGlobalMode 设置为全局级模式（向后兼容）
 func (a *OpenCodeAdapter) WithGlobalMode() *OpenCodeAdapter {
 	a.mode = "global"
 	return a
+}
+
+// SetProjectMode 设置为项目模式
+func (a *OpenCodeAdapter) SetProjectMode() {
+	a.mode = "project"
+}
+
+// SetGlobalMode 设置为全局模式
+func (a *OpenCodeAdapter) SetGlobalMode() {
+	a.mode = "global"
+}
+
+// GetTarget 获取适配器对应的target类型
+func (a *OpenCodeAdapter) GetTarget() string {
+	return "open_code"
+}
+
+// GetSkillPath 获取技能在目标系统中的路径
+func (a *OpenCodeAdapter) GetSkillPath(skillID string) (string, error) {
+	return a.GetSkillDir(skillID)
+}
+
+// GetMode 获取当前模式（project/global）
+func (a *OpenCodeAdapter) GetMode() string {
+	return a.mode
 }
 
 // Apply 应用技能到OpenCode目录
@@ -252,8 +276,9 @@ func (a *OpenCodeAdapter) Cleanup() error {
 		if entry.IsDir() {
 			skillDir := filepath.Join(skillsDir, entry.Name())
 
-			// 使用统一的清理函数
-			if err := adapter.CleanupBackupDir(skillDir); err != nil {
+			// 清理备份目录
+			backupDir := skillDir + ".bak"
+			if err := os.RemoveAll(backupDir); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("清理技能目录备份失败 %s: %w", skillDir, err)
 			}
 		}

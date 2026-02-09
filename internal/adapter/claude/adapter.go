@@ -7,9 +7,24 @@ import (
 	"path/filepath"
 	"strings"
 
-	"skill-hub/internal/adapter"
 	"skill-hub/internal/config"
 )
+
+// Adapter 本地接口定义（避免循环导入）
+type Adapter interface {
+	Apply(skillID string, content string, variables map[string]string) error
+	Extract(skillID string) (string, error)
+	Remove(skillID string) error
+	List() ([]string, error)
+	Supports() bool
+	Cleanup() error
+	GetBackupPath() string
+	GetTarget() string
+	GetSkillPath(skillID string) (string, error)
+	WithProjectMode() Adapter
+	WithGlobalMode() Adapter
+	GetMode() string
+}
 
 // ClaudeAdapter 实现Claude配置文件的适配器
 type ClaudeAdapter struct {
@@ -24,16 +39,41 @@ func NewClaudeAdapter() *ClaudeAdapter {
 	}
 }
 
-// WithProjectMode 设置为项目模式
+// WithProjectMode 设置为项目模式（向后兼容）
 func (a *ClaudeAdapter) WithProjectMode() *ClaudeAdapter {
 	a.mode = "project"
 	return a
 }
 
-// WithGlobalMode 设置为全局模式
+// WithGlobalMode 设置为全局模式（向后兼容）
 func (a *ClaudeAdapter) WithGlobalMode() *ClaudeAdapter {
 	a.mode = "global"
 	return a
+}
+
+// SetProjectMode 设置为项目模式
+func (a *ClaudeAdapter) SetProjectMode() {
+	a.mode = "project"
+}
+
+// SetGlobalMode 设置为全局模式
+func (a *ClaudeAdapter) SetGlobalMode() {
+	a.mode = "global"
+}
+
+// GetTarget 获取适配器对应的target类型
+func (a *ClaudeAdapter) GetTarget() string {
+	return "claude_code"
+}
+
+// GetSkillPath 获取技能在目标系统中的路径
+func (a *ClaudeAdapter) GetSkillPath(skillID string) (string, error) {
+	return a.getConfigPath()
+}
+
+// GetMode 获取当前模式（project/global）
+func (a *ClaudeAdapter) GetMode() string {
+	return a.mode
 }
 
 // Apply 应用技能到Claude配置文件
@@ -446,8 +486,18 @@ func (a *ClaudeAdapter) Cleanup() error {
 		a.configPath = configPath
 	}
 
-	// 使用统一的清理函数
-	return adapter.CleanupTempFiles(a.configPath)
+	// 清理临时文件
+	backupPath := a.configPath + ".bak"
+	if err := os.Remove(backupPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("清理备份文件失败 %s: %w", backupPath, err)
+	}
+
+	tmpPath := a.configPath + ".tmp"
+	if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("清理临时文件失败 %s: %w", tmpPath, err)
+	}
+
+	return nil
 }
 
 // GetBackupPath 获取备份文件路径

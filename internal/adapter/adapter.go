@@ -22,4 +22,19 @@ type Adapter interface {
 
 	// GetBackupPath 获取备份文件路径
 	GetBackupPath() string
+
+	// GetTarget 获取适配器对应的target类型
+	GetTarget() string
+
+	// GetSkillPath 获取技能在目标系统中的路径
+	GetSkillPath(skillID string) (string, error)
+
+	// SetProjectMode 设置为项目模式
+	SetProjectMode()
+
+	// SetGlobalMode 设置为全局模式
+	SetGlobalMode()
+
+	// GetMode 获取当前模式（project/global）
+	GetMode() string
 }
