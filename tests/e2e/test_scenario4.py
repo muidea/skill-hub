@@ -26,7 +26,7 @@ class TestScenario4CancelCleanup:
         self.project_dir = temp_project_dir
         self.home_dir = temp_home_dir
         self.skill_template = test_skill_template
-        self.cmd = CommandRunner(workdir=str(self.project_dir))
+        self.cmd = CommandRunner()
         self.validator = FileValidator()
         self.env = TestEnvironment()
         self.debug = DebugUtils()
@@ -62,7 +62,7 @@ class TestScenario4CancelCleanup:
         result = self.cmd.run("use", {skill_name})
         assert result.success
         
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         assert result.success
         
         return skill_name
@@ -141,7 +141,7 @@ class TestScenario4CancelCleanup:
         result = home_cmd.run("skill-hub init", timeout=30)
         assert result.success
         
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
         # Try to remove a skill that doesn't exist
@@ -173,7 +173,7 @@ class TestScenario4CancelCleanup:
             assert result.success
         
         # Setup project
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
         # Enable all skills
@@ -182,7 +182,7 @@ class TestScenario4CancelCleanup:
             assert result.success
         
         # Apply all
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         assert result.success
         
         # Verify all skill directories exist
@@ -209,69 +209,46 @@ class TestScenario4CancelCleanup:
         print(f"  - Kept: {skills[2]}")
         print(f"  - Directories correctly cleaned up")
         
-    def test_04_all_target_cleanup(self):
-        """Test 4.4: Cleanup with --target all"""
-        print("\n=== Test 4.4: Cleanup with --target all ===")
-        
-        # This test assumes the skill was applied with --target all previously
-        # Since we can't easily test that, we'll test the concept
+    def test_04_cleanup_with_different_targets(self):
+        """Test 4.4: Cleanup when skill is applied to different targets"""
+        print("\n=== Test 4.4: Cleanup with Different Targets ===")
         
         # Setup skill normally
         skill_name = self._setup_skill_in_project()
         
-        # Also create .cursorrules if skill supports cursor
-        # (This is a simplified test - real test would apply with --target all)
+        # Apply skill to open_code target (default)
+        result = self.cmd.run("set-target", ["open_code"])
+        assert result.success
         
-        # Create a mock .cursorrules file to simulate all target application
-        cursorrules_file = self.project_dir / ".cursorrules"
-        cursor_content = f"""
-# Cursor Rules
-
-## {skill_name}
-Test skill block for cursor
-"""
+        result = self.cmd.run("use", [skill_name])
+        assert result.success
         
-        with open(cursorrules_file, 'w') as f:
-            f.write(cursor_content)
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
+        assert result.success
         
-        # Verify files exist
+        # Verify files exist for open_code target
         skill_dir = self.agents_skills_dir / skill_name
-        assert skill_dir.exists(), f"Skill directory should exist: {skill_dir}"
-        assert cursorrules_file.exists(), f".cursorrules should exist: {cursorrules_file}"
+        assert skill_dir.exists(), f"Skill directory should exist: {skill_name}"
         
-        # Remove with --target all
-        result = self.cmd.run(f"skill-hub remove {skill_name} --target all", timeout=30)
+        # Check if .skills directory was created for open_code target
+        skills_dir = self.project_dir / ".skills" / skill_name
+        open_code_files_exist = skills_dir.exists()
         
-        # Check results
-        if result.exit_code == 0:
-            # If command succeeded, verify cleanup
-            
-            # Skill directory should be deleted
-            assert not skill_dir.exists(), f"Skill directory should be deleted with --target all"
-            
-            # .cursorrules might be modified or deleted
-            if cursorrules_file.exists():
-                with open(cursorrules_file, 'r') as f:
-                    updated_content = f.read()
-                
-                # Skill block should be removed from .cursorrules
-                if skill_name in updated_content:
-                    print(f"  Note: Skill block still in .cursorrules (implementation dependent)")
-                else:
-                    print(f"  ✓ Skill block removed from .cursorrules")
-            else:
-                print(f"  Note: .cursorrules file deleted entirely")
-            
-            print(f"✓ --target all cleanup works")
-        else:
-            # Command might not support --target all yet
-            print(f"  Note: --target all flag may not be supported yet")
-            print(f"  stderr: {result.stderr[:100]}...")
-            
-            # Fallback: remove without --target all
-            result = self.cmd.run("remove", {skill_name})
-            assert result.success
-            print(f"  Fallback: Removed without --target all")
+        # Now remove the skill
+        result = self.cmd.run("remove", [skill_name])
+        assert result.success, f"skill-hub remove failed: {result.stderr}"
+        
+        # Verify skill directory was deleted
+        assert not skill_dir.exists(), f"Skill directory should be deleted: {skill_name}"
+        
+        # Verify .skills directory was cleaned up if it existed
+        if open_code_files_exist:
+            assert not skills_dir.exists(), f".skills directory should be cleaned up: {skills_dir}"
+        
+        print(f"✓ Skill cleanup works for different targets")
+        print(f"  - Removed skill: {skill_name}")
+        print(f"  - Cleaned up project files")
+        print(f"  - OpenCode target files cleaned: {open_code_files_exist}")
         
     def test_05_cleanup_with_modified_files(self):
         """Test 4.5: Cleanup when skill files have been modified"""
@@ -293,7 +270,7 @@ Test skill block for cursor
         assert "Local Modification" in content
         
         # Check status shows modified
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         print(f"  Status before removal: {result.stdout[:200]}...")
         
         # Remove the skill (with local modifications)
@@ -338,7 +315,7 @@ Test skill block for cursor
             assert result.success
         
         # Setup project
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
         # Enable all skills
@@ -347,7 +324,7 @@ Test skill block for cursor
             assert result.success
         
         # Apply all
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         assert result.success
         
         # Verify all directories exist

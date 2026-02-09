@@ -67,7 +67,7 @@ func runFeedback(skillID string) error {
 	}
 
 	// 检查项目工作区本地文件
-	projectSkillPath := filepath.Join(cwd, ".skills", skillID, "SKILL.md")
+	projectSkillPath := filepath.Join(cwd, ".agents", "skills", skillID, "SKILL.md")
 	if _, err := os.Stat(projectSkillPath); os.IsNotExist(err) {
 		return fmt.Errorf("项目工作区中未找到技能文件: %s", projectSkillPath)
 	}

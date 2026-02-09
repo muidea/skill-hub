@@ -68,7 +68,6 @@ func runList(target string, verbose bool) error {
 		} else {
 			fmt.Println("ℹ️  未找到任何技能")
 		}
-		fmt.Println("使用 'skill-hub init' 初始化技能仓库")
 		return nil
 	}
 

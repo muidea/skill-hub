@@ -59,7 +59,7 @@ class TestScenario2ProjectApplication:
         assert result.success, f"skill-hub create failed: {result.stderr}"
         
         # Then feedback to repo
-        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        result = self.cmd.run("feedback", [skill_name], cwd=self.project_dir)
         assert result.success, f"skill-hub feedback failed: {result.stderr}"
         
         # Set project target to open_code
@@ -101,7 +101,7 @@ class TestScenario2ProjectApplication:
         assert result.success
         
         # Feedback skill to repo (required before use)
-        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        result = self.cmd.run("feedback", [skill_name], cwd=self.project_dir)
         assert result.success
         
         result = self.cmd.run("set-target", ["open_code"], cwd=self.project_dir)
@@ -154,7 +154,7 @@ class TestScenario2ProjectApplication:
         assert result.success
         
         # Feedback skill to repo (required before use)
-        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        result = self.cmd.run("feedback", [skill_name], cwd=self.project_dir)
         assert result.success
         
         result = self.cmd.run("set-target", ["open_code"], cwd=self.project_dir)
@@ -217,7 +217,7 @@ class TestScenario2ProjectApplication:
         assert result.success
         
         # Feedback skill to repo
-        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        result = self.cmd.run("feedback", [skill_name], cwd=self.project_dir)
         assert result.success
         
         result = self.cmd.run("set-target", ["open_code"], cwd=self.project_dir)
@@ -275,7 +275,7 @@ class TestScenario2ProjectApplication:
             result = self.cmd.run("create", [skill], cwd=self.project_dir)
             assert result.success, f"Failed to create skill {skill}"
             # Feedback skill to repo (required before use)
-            result = self.cmd.run("feedback", [skill, "--archive"], cwd=self.project_dir)
+            result = self.cmd.run("feedback", [skill], cwd=self.project_dir)
             assert result.success, f"Failed to feedback skill {skill}"
         
         # Set project target
@@ -318,7 +318,7 @@ class TestScenario2ProjectApplication:
         result = self.cmd.run("create", [skill_name], cwd=self.project_dir)
         assert result.success
         # Feedback skill to repo (required before use)
-        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        result = self.cmd.run("feedback", [skill_name], cwd=self.project_dir)
         assert result.success
         
         # Test different targets
@@ -377,7 +377,7 @@ class TestScenario2ProjectApplication:
         assert result.success
         
         # Try to apply without enabling first
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         
         # This might fail or succeed depending on skill-hub implementation
         # For now, just log the result

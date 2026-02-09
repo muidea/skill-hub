@@ -72,7 +72,7 @@ func runInit(args []string, target string) error {
 repo_path: "~/.skill-hub/repo"
 claude_config_path: "~/.claude/config.json"
 cursor_config_path: "~/.cursor/rules"
-default_tool: "cursor"
+default_tool: "open_code"
 git_remote_url: "%s"
 git_token: ""
 git_branch: "main"

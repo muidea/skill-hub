@@ -57,7 +57,7 @@ class TestScenario3IterationFeedback:
         assert result.success
         
         # Feedback skill to repo (required before use)
-        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        result = self.cmd.run("feedback", [skill_name], cwd=self.project_dir)
         assert result.success
         
         # Setup project
@@ -155,7 +155,7 @@ class TestScenario3IterationFeedback:
         assert "Test Synchronization" in current_project_content
         
         # Check status shows Modified
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         assert result.success
         assert "modified" in result.stdout.lower()
         
@@ -173,7 +173,7 @@ class TestScenario3IterationFeedback:
         assert updated_repo_content != original_repo_content, "Repository file was not updated"
         
         # Check status shows Synced after feedback
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         assert result.success
         
         # Status should no longer show Modified (might show Synced or nothing)
@@ -218,7 +218,7 @@ class TestScenario3IterationFeedback:
                 modifications[filename] = (original, modified)
         
         # Check status
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         assert result.success
         
         output = result.stdout.lower()
@@ -251,13 +251,13 @@ class TestScenario3IterationFeedback:
         assert result.success
         
         # Setup project with open_code
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
         result = self.cmd.run("use", {skill_name})
         assert result.success
         
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         assert result.success
         
         # Modify in open_code location
@@ -266,7 +266,7 @@ class TestScenario3IterationFeedback:
             f.write("\n\n## OpenCode Modification\nModified in .agents/skills/")
         
         # Check status detects modification
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         assert result.success
         assert "modified" in result.stdout.lower()
         
@@ -277,7 +277,7 @@ class TestScenario3IterationFeedback:
         
         # Create a new project for cursor target
         with tempfile.TemporaryDirectory() as cursor_project:
-            cursor_cmd = CommandRunner(workdir=cursor_project)
+            cursor_cmd = CommandRunner()
             
             result = cursor_cmd.run("skill-hub set-target cursor", timeout=30)
             assert result.success
@@ -376,7 +376,7 @@ Example JSON:
         skill_name = self._setup_skill_in_project()
         
         # Test 1: Clean state (should show synced or nothing)
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         assert result.success
         clean_output = result.stdout.lower()
         print(f"  Clean state output: {clean_output[:200]}...")
@@ -386,7 +386,7 @@ Example JSON:
         with open(instructions_file, 'a') as f:
             f.write("\n\n## Status Accuracy Test\n")
         
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         assert result.success
         modified_output = result.stdout.lower()
         assert "modified" in modified_output
@@ -396,7 +396,7 @@ Example JSON:
         result = self.cmd.run("feedback", {skill_name})
         assert result.success
         
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         assert result.success
         after_feedback_output = result.stdout.lower()
         print(f"  After feedback output: {after_feedback_output[:200]}...")
@@ -408,7 +408,7 @@ Example JSON:
         result = home_cmd.run(f"skill-hub create {skill_name2}", timeout=30)
         if result.exit_code == 0:
             result = self.cmd.run(f"skill-hub use {skill_name2}", timeout=30)
-            result = self.cmd.run("apply")
+            result = self.cmd.run("apply", cwd=str(self.project_dir))
             
             # Modify second skill
             instructions_file2 = self.project_skills_dir / skill_name2 / "instructions.md"
@@ -416,7 +416,7 @@ Example JSON:
                 with open(instructions_file2, 'a') as f:
                     f.write("\n\n## Second Skill Modification\n")
                 
-                result = self.cmd.run("status")
+                result = self.cmd.run("status", cwd=str(self.project_dir))
                 assert result.success
                 multi_output = result.stdout.lower()
                 print(f"  Multiple skills output: {multi_output[:300]}...")
@@ -456,7 +456,7 @@ Example JSON:
             assert manifest_mtime_after == manifest_mtime_before, "manifest.yaml should not be modified"
         
         # Check status
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         assert result.success
         print(f"  Status with partial modification: {result.stdout[:200]}...")
         

@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
+	"skill-hub/internal/state"
+	"skill-hub/pkg/spec"
 )
 
 var createCmd = &cobra.Command{
@@ -50,25 +53,52 @@ func runCreate(skillID string, target string) error {
 		return fmt.Errorf("项目未初始化，请先运行 'skill-hub init' 命令")
 	}
 
-	// 创建技能目录结构
+	// 检查技能是否已经在项目本地工作区存在
 	skillDir := filepath.Join(agentsDir, "skills", skillID)
-	if err := os.MkdirAll(skillDir, 0755); err != nil {
-		return fmt.Errorf("创建技能目录失败: %w", err)
-	}
-
-	// 检查是否已存在同名技能文件
 	skillFilePath := filepath.Join(skillDir, "SKILL.md")
+
+	// 检查技能文件是否存在
 	if _, err := os.Stat(skillFilePath); err == nil {
-		fmt.Printf("⚠️  技能文件已存在: %s\n", skillFilePath)
-		fmt.Print("是否覆盖？ [y/N]: ")
+		// 技能文件已存在，检查是否经过验证
+		fmt.Printf("ℹ️  技能文件已存在: %s\n", skillFilePath)
 
-		reader := bufio.NewReader(os.Stdin)
-		response, _ := reader.ReadString('\n')
-		response = strings.TrimSpace(response)
+		// 尝试验证技能文件
+		if err := validateSkillFile(skillFilePath); err != nil {
+			fmt.Printf("⚠️  技能文件验证失败: %v\n", err)
+			fmt.Print("是否重新创建？ [y/N]: ")
 
-		if response != "y" && response != "Y" {
-			fmt.Println("❌ 取消创建")
+			reader := bufio.NewReader(os.Stdin)
+			response, _ := reader.ReadString('\n')
+			response = strings.TrimSpace(response)
+
+			if response != "y" && response != "Y" {
+				fmt.Println("❌ 取消操作")
+				return nil
+			}
+
+			// 用户选择重新创建，继续执行创建逻辑
+			fmt.Println("✅ 将重新创建技能文件")
+		} else {
+			// 技能文件验证通过，只需要刷新state.json
+			fmt.Println("✅ 技能文件验证通过")
+			fmt.Println("正在刷新项目状态...")
+
+			// 刷新state.json，标记当前项目工作区在使用该技能
+			if err := refreshProjectState(cwd, skillID, target); err != nil {
+				return fmt.Errorf("刷新项目状态失败: %w", err)
+			}
+
+			fmt.Printf("✅ 技能 '%s' 已成功登记到项目状态\n", skillID)
+			fmt.Println("\n下一步:")
+			fmt.Printf("1. 使用 'skill-hub apply' 应用技能到目标环境\n")
+			fmt.Printf("2. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", skillID)
+
 			return nil
+		}
+	} else {
+		// 技能文件不存在，创建目录结构
+		if err := os.MkdirAll(skillDir, 0755); err != nil {
+			return fmt.Errorf("创建技能目录失败: %w", err)
 		}
 	}
 
@@ -103,7 +133,9 @@ func runCreate(skillID string, target string) error {
 
 	// 刷新state.json，标记当前项目工作区在使用该技能
 	fmt.Println("正在刷新项目状态...")
-	// TODO: 实现state.json刷新逻辑
+	if err := refreshProjectState(cwd, skillID, target); err != nil {
+		return fmt.Errorf("刷新项目状态失败: %w", err)
+	}
 
 	fmt.Println("\n下一步:")
 	fmt.Println("1. 编辑 SKILL.md 文件以完善技能内容")
@@ -275,4 +307,91 @@ func isValidTarget(target string) bool {
 	}
 
 	return validOptions[target]
+}
+
+// validateSkillFile 验证技能文件的基本合规性
+func validateSkillFile(filePath string) error {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("读取技能文件失败: %w", err)
+	}
+
+	// 检查文件是否包含YAML frontmatter
+	lines := strings.Split(string(content), "\n")
+	if len(lines) < 2 || lines[0] != "---" {
+		return fmt.Errorf("无效的SKILL.md格式: 缺少frontmatter")
+	}
+
+	// 查找frontmatter结束标记
+	foundEnd := false
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" {
+			foundEnd = true
+			break
+		}
+	}
+
+	if !foundEnd {
+		return fmt.Errorf("无效的SKILL.md格式: frontmatter未正确结束")
+	}
+
+	// 尝试解析YAML frontmatter
+	var frontmatterLines []string
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" {
+			break
+		}
+		frontmatterLines = append(frontmatterLines, lines[i])
+	}
+
+	frontmatter := strings.Join(frontmatterLines, "\n")
+	var skillData map[string]interface{}
+	if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err != nil {
+		return fmt.Errorf("解析frontmatter失败: %w", err)
+	}
+
+	// 检查必需字段
+	if _, ok := skillData["name"].(string); !ok {
+		return fmt.Errorf("缺少必需字段: name")
+	}
+	if _, ok := skillData["description"].(string); !ok {
+		return fmt.Errorf("缺少必需字段: description")
+	}
+
+	return nil
+}
+
+// refreshProjectState 刷新项目状态，将技能登记到state.json
+func refreshProjectState(projectPath, skillID, target string) error {
+	// 创建状态管理器
+	stateManager, err := state.NewStateManager()
+	if err != nil {
+		return fmt.Errorf("创建状态管理器失败: %w", err)
+	}
+
+	// 加载当前项目状态
+	projectState, err := stateManager.LoadProjectState(projectPath)
+	if err != nil {
+		return fmt.Errorf("加载项目状态失败: %w", err)
+	}
+
+	// 更新技能状态
+	if projectState.Skills == nil {
+		projectState.Skills = make(map[string]spec.SkillVars)
+	}
+
+	// 设置技能变量（如果有的话）
+	projectState.Skills[skillID] = spec.SkillVars{
+		SkillID: skillID,
+		Variables: map[string]string{
+			"target": target,
+		},
+	}
+
+	// 保存项目状态
+	if err := stateManager.SaveProjectState(projectState); err != nil {
+		return fmt.Errorf("保存项目状态失败: %w", err)
+	}
+
+	return nil
 }

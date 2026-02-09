@@ -28,7 +28,7 @@ class TestScenario5UpdateValidation:
         self.project_dir = temp_project_dir
         self.home_dir = temp_home_dir
         self.skill_template = test_skill_template
-        self.cmd = CommandRunner(workdir=str(self.project_dir))
+        self.cmd = CommandRunner()
         self.validator = FileValidator()
         self.yaml_validator = YAMLValidator()
         self.env = TestEnvironment()
@@ -59,13 +59,13 @@ class TestScenario5UpdateValidation:
         assert result.success
         
         # Setup project
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
         result = self.cmd.run("use", {skill_name})
         assert result.success
         
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         assert result.success
         
         return skill_name
@@ -86,17 +86,17 @@ class TestScenario5UpdateValidation:
         assert result.success
         
         # Setup project with the skill
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
         result = self.cmd.run("use", {skill_name})
         assert result.success
         
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         assert result.success
         
         # Run update command
-        result = self.cmd.run("update")
+        result = self.cmd.run("update", cwd=str(self.project_dir))
         
         # Update might succeed or fail depending on network/git setup
         print(f"  Update result: returncode={result.exit_code}")
@@ -106,7 +106,7 @@ class TestScenario5UpdateValidation:
             print(f"  ✓ Repository update succeeded")
             
             # Check if status shows any outdated skills
-            result = self.cmd.run("status")
+            result = self.cmd.run("status", cwd=str(self.project_dir))
             print(f"  Status after update: {result.stdout[:200]}...")
             
             # If the skill is outdated, status should show it
@@ -278,13 +278,13 @@ class TestScenario5UpdateValidation:
         assert result.success
         
         # Setup project
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
         result = self.cmd.run("use", {skill_name})
         assert result.success
         
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         assert result.success
         
         # Get original repository file modification time
@@ -303,7 +303,7 @@ class TestScenario5UpdateValidation:
         os.utime(repo_skill_yaml, (new_mtime, new_mtime))
         
         # Check status - should show outdated
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         print(f"  Status after repository update: {result.stdout[:200]}...")
         
         if "outdated" in result.stdout.lower():
@@ -344,7 +344,7 @@ class TestScenario5UpdateValidation:
             }
         
         # Also validate all skills at once if supported
-        result = self.cmd.run("validate-local")
+        result = self.cmd.run("validate-local", cwd=str(self.project_dir))
         print(f"  Validate all result: returncode={result.exit_code}")
         print(f"  Output: {result.stdout[:200]}...")
         
@@ -487,13 +487,13 @@ dependencies:
         assert result.success
         
         # Setup project
-        result = self.cmd.run("set-target open_code")
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
         result = self.cmd.run("use", {skill_name})
         assert result.success
         
-        result = self.cmd.run("apply")
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         assert result.success
         
         # Test workflow: validate -> (simulate update) -> validate again
@@ -509,7 +509,7 @@ dependencies:
             f.write("\n# Simulated update from repository")
         
         # Step 3: Check status (should show outdated if detection works)
-        result = self.cmd.run("status")
+        result = self.cmd.run("status", cwd=str(self.project_dir))
         print(f"  Step 3 - Status check: {result.stdout[:150]}...")
         
         # Step 4: Validate again (should still be valid)

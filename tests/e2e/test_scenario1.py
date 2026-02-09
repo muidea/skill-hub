@@ -1,6 +1,6 @@
 """
-Test Scenario 1: Developer Full Workflow
-Tests the complete developer workflow from initialization to skill creation and submission.
+Test Scenario 1: New Skill "Local Incubation" Workflow (Create -> Feedback)
+Tests the workflow for developing a new skill from scratch and archiving it to repository with auto-activation.
 """
 
 import os
@@ -15,8 +15,8 @@ from tests.e2e.utils.test_environment import TestEnvironment
 from tests.e2e.utils.network_checker import NetworkChecker
 
 
-class TestScenario1DeveloperWorkflow:
-    """Test scenario 1: Developer full workflow (init -> create -> feedback)"""
+class TestScenario1LocalIncubation:
+    """Test scenario 1: New skill "local incubation" workflow (Create -> Feedback)"""
     
     @pytest.fixture(autouse=True)
     def setup(self, temp_home_dir, test_skill_template):
@@ -42,7 +42,7 @@ class TestScenario1DeveloperWorkflow:
         print("\n=== Test 1.1: Environment Initialization ===")
         
         # Run skill-hub init
-        result = self.cmd.run("init")
+        result = self.cmd.run("init", cwd=str(self.project_dir))
         assert result.success, f"skill-hub init failed: {result.stderr}"
         
         # Verify ~/.skill-hub directory was created
@@ -82,9 +82,13 @@ class TestScenario1DeveloperWorkflow:
         result = self.cmd.run("init", cwd=self.home_dir)
         assert result.success, f"skill-hub init failed: {result.stderr}"
         
-        # Create project directory and .agents directory
+        # Create project directory and initialize it
         self.project_dir.mkdir(exist_ok=True)
         self.project_agents_dir.mkdir(exist_ok=True)
+        
+        # Initialize project directory (实际skill-hub要求)
+        result = self.cmd.run("init", cwd=self.project_dir)
+        assert result.success, f"skill-hub init in project failed: {result.stderr}"
         
         # Create a new skill in project
         skill_name = "my-logic-skill"
@@ -167,8 +171,8 @@ class TestScenario1DeveloperWorkflow:
             current_content = f.read()
         assert "Test Modification" in current_content, "Modification not written to SKILL.md"
         
-        # Run skill-hub feedback with --archive flag (实际行为)
-        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        # Run skill-hub feedback (实际行为: 不需要--archive标志)
+        result = self.cmd.run("feedback", [skill_name], cwd=self.project_dir)
         assert result.success, f"skill-hub feedback failed: {result.stderr}"
         
         # Verify skill is now in global repo (V2: 仓库同步)
@@ -220,7 +224,7 @@ class TestScenario1DeveloperWorkflow:
         print(f"✓ Skill edited and feedback provided successfully")
         print(f"  - Modified: {skill_md}")
         print(f"  - Added test section")
-        print(f"  - Ran skill-hub feedback --archive")
+        print(f"  - Ran skill-hub feedback")
         print(f"  - Skill now in repo: ✓")
         print(f"  - Skill in registry: ✓")
         print(f"  - Note: feedback does NOT auto-enable (实际行为)")
@@ -244,7 +248,7 @@ class TestScenario1DeveloperWorkflow:
         assert result.success, f"skill-hub create failed: {result.stderr}"
         
         # Provide feedback to add skill to repo
-        result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+        result = self.cmd.run("feedback", [skill_name], cwd=self.project_dir)
         assert result.success, f"skill-hub feedback failed: {result.stderr}"
         
         # Run skill-hub list from project directory
@@ -309,11 +313,11 @@ class TestScenario1DeveloperWorkflow:
             steps_passed.append("edit")
             print(f"  ✓ Step 4: Edited SKILL.md")
             
-            # Step 5: Provide feedback with --archive
-            result = self.cmd.run("feedback", [skill_name, "--archive"], cwd=self.project_dir)
+            # Step 5: Provide feedback
+            result = self.cmd.run("feedback", [skill_name], cwd=self.project_dir)
             assert result.success
             steps_passed.append("feedback")
-            print(f"  ✓ Step 5: Provided feedback with --archive")
+            print(f"  ✓ Step 5: Provided feedback")
             
             # Verify skill now in repo
             assert repo_skill_dir.exists()

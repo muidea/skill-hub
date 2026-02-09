@@ -90,10 +90,19 @@ type ProjectState struct {
 	LastSync        string               `json:"last_sync,omitempty"`
 }
 
-// SkillVars 表示项目中某个技能的变量配置
+// 技能状态常量
+const (
+	SkillStatusSynced   = "Synced"   // 本地与仓库一致
+	SkillStatusModified = "Modified" // 本地有未反馈的修改
+	SkillStatusOutdated = "Outdated" // 仓库版本领先于本地
+	SkillStatusMissing  = "Missing"  // 技能已启用但本地文件缺失
+)
+
+// SkillVars 表示项目中某个技能的变量配置和状态
 type SkillVars struct {
 	SkillID   string            `json:"skill_id"`
 	Version   string            `json:"version"`
+	Status    string            `json:"status,omitempty"` // 技能状态：Synced, Modified, Outdated, Missing
 	Variables map[string]string `json:"variables"`
 }
 
