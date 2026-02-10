@@ -36,7 +36,7 @@ Based on the business scenarios defined in `docs/testCase.md`:
 
 5. **Update and Validation Workflow** (`test_scenario5.py`)
    - Repository updates with `skill-hub update`
-   - Skill validation with `skill-hub validate-local`
+   - Skill validation with `skill-hub validate`
    - Invalid YAML detection
    - Outdated skill detection
 

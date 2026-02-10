@@ -21,7 +21,6 @@
 - **技能创建**：从当前项目创建新的技能模板
 - **本地验证**：在本地项目中验证技能有效性
 - **技能归档**：将验证通过的技能归档到正式仓库
-- **变量支持**：技能模板支持变量替换
 - **跨工具同步**：支持 Cursor、Claude Code、OpenCode 等AI工具
 - **版本控制**：基于Git的技能版本管理
 - **差异检测**：自动检测手动修改并支持反馈
@@ -48,7 +47,7 @@ curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/instal
 skill-hub init
 
 # 2. 启用技能并设置目标
-skill-hub use git-expert --target open_code
+skill-hub use git-expert
 
 # 3. 应用技能到项目
 skill-hub apply
@@ -57,13 +56,13 @@ skill-hub apply
 #### 技能创建与验证流程
 ```bash
 # 1. 从当前项目创建新技能模板
-skill-hub create my-new-skill --description "技能描述"
+skill-hub create my-new-skill
 
 # 2. 在本地项目中验证技能有效性
-skill-hub validate-local my-new-skill
+skill-hub validate my-new-skill
 
 # 3. 反馈手动修改并归档技能
-skill-hub feedback my-new-skill --archive
+skill-hub feedback my-new-skill
 ```
 
 ## 📚 文档导航

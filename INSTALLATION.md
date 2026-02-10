@@ -204,8 +204,8 @@ skill-hub 提供了一系列命令来管理技能和项目。
 | `update` | 更新技能仓库 | `skill-hub update` |
 | `remove` | 从项目移除技能 | `skill-hub remove git-expert` |
 | `git` | Git仓库操作 | `skill-hub git --help` |
-| `create` | 创建新的技能模板 | `skill-hub create my-skill --description "技能描述"` |
-| `validate-local` | 在本地项目中验证技能 | `skill-hub validate-local my-skill --strict` |
+| `create` | 创建新的技能模板 | `skill-hub create my-skill` |
+| `validate` | 在本地项目中验证技能 | `skill-hub validate my-skill` |
 
 ### 常用工作流程
 
@@ -251,16 +251,10 @@ skill-hub remove golang-best-practices
 #### 技能创建和验证
 ```bash
 # 从当前项目创建新技能模板
-skill-hub create my-new-skill --description "Go项目代码审查最佳实践"
+skill-hub create my-new-skill
 
 # 在本地项目中验证技能有效性
-skill-hub validate-local my-new-skill
-
-# 使用严格模式验证（警告视为错误）
-skill-hub validate-local my-new-skill --strict
-
-# 创建技能时指定兼容性
-skill-hub create api-docs-skill --compatibility cursor,opencode --output-dir ./custom-skills
+skill-hub validate my-new-skill
 ```
 
 ## 技能管理
@@ -287,10 +281,7 @@ skill-hub 使用标准的目录结构来组织技能：
 ---
 name: git-expert              # 技能名称（必需）
 description: Git 提交专家      # 技能描述（必需）
-compatibility:                # 目标工具兼容性
-  cursor: true                # 支持 Cursor
-  claude_code: true           # 支持 Claude Code
-  open_code: true             # 支持 OpenCode
+compatibility: Designed for Claude Code, Cursor, and OpenCode (or similar AI coding assistants) # 目标工具兼容性
 metadata:                     # 元数据（可选）
   version: 1.0.0              # 版本号
   author: dev-team            # 作者/团队
@@ -306,9 +297,6 @@ metadata:                     # 元数据（可选）
 2. 识别变更类型（feat, fix, docs, style, refactor, test, chore）
 3. 生成简洁明了的提交说明
 
-## 变量
-- LANGUAGE: {{.LANGUAGE}} - 输出语言
-
 ## 示例
 当检测到新功能时，生成：
 feat: 添加用户登录功能
@@ -316,64 +304,6 @@ feat: 添加用户登录功能
 当修复bug时，生成：
 fix: 修复登录页面样式错位问题
 ```
-
-### 变量系统
-
-skill-hub 支持变量替换，使技能更加灵活：
-
-#### 预定义变量
-- `{{ .ProjectName }}`: 项目名称
-- `{{ .Language }}`: 编程语言
-- `{{ .ProjectPath }}`: 项目路径
-
-#### 自定义变量
-在项目配置中定义，在 `SKILL.md` 中使用：
-
-```yaml
-# 在项目配置中定义变量
-vars:
-  api_key: "your-api-key-here"
-  debug_mode: "false"
-```
-
-在SKILL.md中使用变量：
-```markdown
-## API配置
-- API密钥: {{.api_key}}
-- 调试模式: {{.debug_mode}}
-```
-
-#### 变量使用示例
-```markdown
-# {{.project_name}} 项目配置
-
-## API配置
-- API密钥: {{.api_key}}
-- 调试模式: {{.debug_mode}}
-
-## 项目信息
-- 编程语言: {{.language}}
-- 项目路径: {{.project_path}}
-```
-
-### 示例技能
-
-项目包含三个高质量的技能示例，可以作为创建自定义技能的参考：
-
-#### 1. golang-best-practices
-- **描述**: Go语言最佳实践和代码规范
-- **标签**: `golang`, `best-practices`, `code-review`, `coding-standards`
-- **适用场景**: Go项目开发、代码审查、团队规范制定
-
-#### 2. react-typescript
-- **描述**: React + TypeScript开发最佳实践
-- **标签**: `react`, `typescript`, `frontend`, `web-development`
-- **适用场景**: React项目开发、TypeScript配置、前端工程化
-
-#### 3. docker-devops
-- **描述**: Docker容器化和DevOps最佳实践
-- **标签**: `docker`, `devops`, `containerization`, `deployment`
-- **适用场景**: 容器化部署、CI/CD流水线、运维自动化
 
 ## 支持的AI工具
 
@@ -414,7 +344,7 @@ skill-hub 支持多种AI开发工具，可以将技能同步到不同的工具�
 
 ```bash
 # 启用技能并同步到多个工具
-skill-hub use git-expert --target cursor,claude_code,opencode
+skill-hub use git-expert --target opencode
 
 # 应用技能到所有配置
 skill-hub apply
