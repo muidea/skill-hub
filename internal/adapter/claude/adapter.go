@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"skill-hub/internal/config"
+	"skill-hub/pkg/utils"
 )
 
 // Adapter 本地接口定义（避免循环导入）
@@ -242,60 +243,7 @@ func (a *ClaudeAdapter) readConfig() (map[string]interface{}, error) {
 
 // writeConfig 写入配置文件（原子操作）
 func (a *ClaudeAdapter) writeConfig(configData map[string]interface{}) error {
-	// 确保目录存在
-	dir := filepath.Dir(a.configPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("创建目录失败: %w", err)
-	}
-
-	// 创建备份（如果文件存在）
-	if _, err := os.Stat(a.configPath); err == nil {
-		backupPath := a.configPath + ".bak"
-		if err := os.Rename(a.configPath, backupPath); err != nil {
-			return fmt.Errorf("创建备份失败: %w", err)
-		}
-	}
-
-	// 写入临时文件
-	tmpPath := a.configPath + ".tmp"
-	data, err := json.MarshalIndent(configData, "", "  ")
-	if err != nil {
-		// 尝试恢复备份
-		if backupPath := a.configPath + ".bak"; fileExists(backupPath) {
-			os.Rename(backupPath, a.configPath)
-		}
-		return fmt.Errorf("序列化JSON失败: %w", err)
-	}
-
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		// 尝试恢复备份
-		if backupPath := a.configPath + ".bak"; fileExists(backupPath) {
-			os.Rename(backupPath, a.configPath)
-		}
-		return fmt.Errorf("写入临时文件失败: %w", err)
-	}
-
-	// 重命名为目标文件
-	if err := os.Rename(tmpPath, a.configPath); err != nil {
-		// 尝试恢复备份
-		if backupPath := a.configPath + ".bak"; fileExists(backupPath) {
-			os.Rename(backupPath, a.configPath)
-		}
-		return fmt.Errorf("重命名文件失败: %w", err)
-	}
-
-	// 清理备份文件
-	if backupPath := a.configPath + ".bak"; fileExists(backupPath) {
-		os.Remove(backupPath)
-	}
-
-	return nil
-}
-
-// fileExists 检查文件是否存在
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+	return utils.SafeWriteJSONFile(a.configPath, configData)
 }
 
 // createDefaultConfig 创建默认配置

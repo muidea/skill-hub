@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"skill-hub/pkg/fs"
 )
 
 func TestSkillManager(t *testing.T) {
@@ -16,7 +18,7 @@ func TestSkillManager(t *testing.T) {
 	}
 
 	t.Run("Create skill manager", func(t *testing.T) {
-		manager := &SkillManager{skillsDir: skillsDir}
+		manager := NewSkillManagerWithFS(skillsDir, fs.NewRealFileSystem(), fs.NewRealPath())
 
 		if manager.skillsDir != skillsDir {
 			t.Errorf("Skills directory = %v, want %v", manager.skillsDir, skillsDir)
@@ -24,7 +26,7 @@ func TestSkillManager(t *testing.T) {
 	})
 
 	t.Run("Load skill from Markdown", func(t *testing.T) {
-		manager := &SkillManager{skillsDir: skillsDir}
+		manager := NewSkillManagerWithFS(skillsDir, fs.NewRealFileSystem(), fs.NewRealPath())
 
 		// 创建测试技能目录
 		skillID := "test-skill"
@@ -81,7 +83,7 @@ This is a test skill for unit testing.`
 	})
 
 	t.Run("Load non-existent skill", func(t *testing.T) {
-		manager := &SkillManager{skillsDir: skillsDir}
+		manager := NewSkillManagerWithFS(skillsDir, fs.NewRealFileSystem(), fs.NewRealPath())
 
 		skill, err := manager.LoadSkill("non-existent-skill")
 		if err == nil {
@@ -93,7 +95,7 @@ This is a test skill for unit testing.`
 	})
 
 	t.Run("Load skill without SKILL.md", func(t *testing.T) {
-		manager := &SkillManager{skillsDir: skillsDir}
+		manager := NewSkillManagerWithFS(skillsDir, fs.NewRealFileSystem(), fs.NewRealPath())
 
 		// 创建空目录（没有SKILL.md文件）
 		skillID := "empty-skill"
@@ -149,7 +151,7 @@ This is the prompt content for testing.`
 	})
 
 	t.Run("Check skill exists", func(t *testing.T) {
-		manager := &SkillManager{skillsDir: skillsDir}
+		manager := NewSkillManagerWithFS(skillsDir, fs.NewRealFileSystem(), fs.NewRealPath())
 
 		// 创建测试技能目录
 		skillID := "exists-skill"
@@ -190,7 +192,7 @@ description: A skill for exists testing
 			t.Fatalf("Failed to create test skills directory: %v", err)
 		}
 
-		manager := &SkillManager{skillsDir: testSkillsDir}
+		manager := NewSkillManagerWithFS(testSkillsDir, fs.NewRealFileSystem(), fs.NewRealPath())
 
 		// 创建多个测试技能
 		skillIDs := []string{"skill-1", "skill-2", "skill-3"}

@@ -47,10 +47,18 @@ func runCreate(skillID string, target string) error {
 		return fmt.Errorf("获取当前目录失败: %w", err)
 	}
 
-	// 检查项目是否已初始化（检查.agents目录）
+	// 检查.agents目录是否存在，如果不存在则创建
 	agentsDir := filepath.Join(cwd, ".agents")
 	if _, err := os.Stat(agentsDir); os.IsNotExist(err) {
-		return fmt.Errorf("项目未初始化，请先运行 'skill-hub init' 命令")
+		// 当target为open_code时，允许直接创建.agents目录
+		if target == "open_code" {
+			if err := os.MkdirAll(agentsDir, 0755); err != nil {
+				return fmt.Errorf("创建.agents目录失败: %w", err)
+			}
+			fmt.Printf("✓ 创建.agents目录: %s\n", agentsDir)
+		} else {
+			return fmt.Errorf("项目未初始化，请先运行 'skill-hub init' 命令")
+		}
 	}
 
 	// 检查技能是否已经在项目本地工作区存在

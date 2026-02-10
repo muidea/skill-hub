@@ -20,6 +20,7 @@ profile.cov
 __pycache__
 
 .agents
+.agents_bk
 
 bin
 docs

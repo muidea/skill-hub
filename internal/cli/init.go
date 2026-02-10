@@ -14,6 +14,7 @@ import (
 	"skill-hub/internal/git"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/spec"
+	"skill-hub/pkg/utils"
 )
 
 var initCmd = &cobra.Command{
@@ -76,14 +77,10 @@ func runInit(args []string, target string) error {
 	}
 
 	for _, dir := range dirs {
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				return fmt.Errorf("创建目录 %s 失败: %w", dir, err)
-			}
-			fmt.Printf("✓ 创建目录: %s\n", dir)
-		} else {
-			fmt.Printf("✓ 目录已存在: %s\n", dir)
+		if err := utils.EnsureDir(dir); err != nil {
+			return err
 		}
+		fmt.Printf("✓ 目录已就绪: %s\n", dir)
 	}
 
 	// 创建配置文件
@@ -143,8 +140,8 @@ git_branch: "main"
 					return fmt.Errorf("备份失败: %w", err)
 				}
 				// 重新创建空目录
-				if err := os.MkdirAll(repoDir, 0755); err != nil {
-					return fmt.Errorf("创建目录失败: %w", err)
+				if err := utils.EnsureDir(repoDir); err != nil {
+					return err
 				}
 			}
 
@@ -264,8 +261,8 @@ func initLocalEmptyRepository(repoDir, skillHubDir string) error {
 	}
 
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("创建目录 %s 失败: %w", dir, err)
+		if err := utils.EnsureDir(dir); err != nil {
+			return err
 		}
 		fmt.Printf("✓ 创建目录: %s\n", dir)
 	}

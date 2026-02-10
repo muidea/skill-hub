@@ -23,7 +23,7 @@ class TestScenario4CancelCleanup:
     @pytest.fixture(autouse=True)
     def setup(self, temp_project_dir, temp_home_dir, test_skill_template):
         """Setup test environment"""
-        self.project_dir = temp_project_dir
+        self.project_dir = Path(temp_project_dir)
         self.home_dir = temp_home_dir
         self.skill_template = test_skill_template
         self.cmd = CommandRunner()
@@ -48,18 +48,26 @@ class TestScenario4CancelCleanup:
         """Helper to setup a skill in the project"""
         # Initialize home directory
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init")
         assert result.success
         
-        # Create skill
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        # Ensure .agents/skills directory exists (required for create command)
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create skill in project
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
+        
+        # Feedback skill to repo
+        result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
         assert result.success
         
         # Setup project
-        result = self.cmd.run("set-target", {target})
+        result = self.cmd.run("set-target", [target], cwd=str(self.project_dir))
         assert result.success
         
-        result = self.cmd.run("use", {skill_name})
+        result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir))
         assert result.success
         
         result = self.cmd.run("apply", cwd=str(self.project_dir))
@@ -79,53 +87,49 @@ class TestScenario4CancelCleanup:
         assert skill_dir.exists(), f"Skill directory should exist before removal: {skill_dir}"
         
         # Verify state.json exists and contains skill
-        assert self.project_state.exists(), f"state.json should exist: {self.project_state}"
+        # state.json is in home directory, not project directory
+        global_state_file = self.skill_hub_dir / "state.json"
+        assert global_state_file.exists(), f"state.json should exist: {global_state_file}"
         
-        with open(self.project_state, 'r') as f:
+        with open(global_state_file, 'r') as f:
             state_before = json.load(f)
         
-        # Check skill is in state (exact field depends on implementation)
-        skill_in_state = False
-        for key, value in state_before.items():
-            if isinstance(value, list) and skill_name in value:
-                skill_in_state = True
-                break
-            elif isinstance(value, dict) and skill_name in value:
-                skill_in_state = True
-                break
+        # Check skill is in state
+        project_path_str = str(self.project_dir)
+        assert project_path_str in state_before, f"Project path not in state.json: {project_path_str}"
         
+        project_state = state_before[project_path_str]
+        assert "skills" in project_state, "skills not in project state"
+        
+        skill_in_state = skill_name in project_state["skills"]
         assert skill_in_state, f"Skill '{skill_name}' should be in state.json before removal"
         
         # Remove the skill
-        result = self.cmd.run("remove", {skill_name})
+        result = self.cmd.run("remove", [skill_name], input_text="y\n")
         assert result.success, f"skill-hub remove failed: {result.stderr}"
         
         # Verify physical cleanup: skill directory should be deleted
         assert not skill_dir.exists(), f"Skill directory should be deleted: {skill_dir}"
         
         # Verify state.json was updated (skill removed)
-        assert self.project_state.exists(), f"state.json should still exist after removal"
+        # state.json is in home directory, not project directory
+        assert global_state_file.exists(), f"state.json should still exist after removal"
         
-        with open(self.project_state, 'r') as f:
+        with open(global_state_file, 'r') as f:
             state_after = json.load(f)
         
         # Check skill is NOT in state after removal
-        skill_still_in_state = False
-        for key, value in state_after.items():
-            if isinstance(value, list) and skill_name in value:
-                skill_still_in_state = True
-                break
-            elif isinstance(value, dict) and skill_name in value:
-                skill_still_in_state = True
-                break
-        
-        assert not skill_still_in_state, f"Skill '{skill_name}' should be removed from state.json"
+        project_path_str = str(self.project_dir)
+        if project_path_str in state_after:
+            project_state = state_after[project_path_str]
+            if "skills" in project_state:
+                skill_still_in_state = skill_name in project_state["skills"]
+                assert not skill_still_in_state, f"Skill '{skill_name}' should be removed from state.json"
         
         # Safety check: repository files must be preserved
         repo_skill_dir = self.skills_dir / skill_name
         assert repo_skill_dir.exists(), f"Repository skill directory must be preserved: {repo_skill_dir}"
-        assert (repo_skill_dir / "skill.yaml").exists(), "Repository skill.yaml must be preserved"
-        assert (repo_skill_dir / "prompt.md").exists(), "Repository prompt.md must be preserved"
+        assert (repo_skill_dir / "SKILL.md").exists(), "Repository SKILL.md must be preserved"
         
         print(f"✓ Basic skill removal works")
         print(f"  - Physical cleanup: {skill_dir} deleted")
@@ -138,7 +142,7 @@ class TestScenario4CancelCleanup:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init")
         assert result.success
         
         result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
@@ -146,7 +150,7 @@ class TestScenario4CancelCleanup:
         
         # Try to remove a skill that doesn't exist
         nonexistent_skill = "nonexistent-skill-12345"
-        result = self.cmd.run(f"skill-hub remove {nonexistent_skill}", timeout=30)
+        result = self.cmd.run("remove", [nonexistent_skill], input_text="y\n")
         
         # This might fail or succeed with a message
         print(f"  Remove nonexistent skill result: returncode={result.exit_code}")
@@ -162,15 +166,23 @@ class TestScenario4CancelCleanup:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init")
         assert result.success
         
         # Create multiple skills
         skills = ["skill-to-remove-1", "skill-to-remove-2", "skill-to-keep"]
         
+        # Ensure .agents/skills directory exists
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+        
         for skill in skills:
-            result = home_cmd.run(f"skill-hub create {skill}", timeout=30)
-            assert result.success
+            result = self.cmd.run("create", [skill], cwd=str(self.project_dir))
+            assert result.success, f"skill-hub create {skill} failed: {result.stderr}"
+            
+            # Feedback skill to repo before use
+            result = self.cmd.run("feedback", [skill], cwd=str(self.project_dir), input_text="y\n")
+            assert result.success, f"skill-hub feedback {skill} failed: {result.stderr}"
         
         # Setup project
         result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
@@ -178,8 +190,8 @@ class TestScenario4CancelCleanup:
         
         # Enable all skills
         for skill in skills:
-            result = self.cmd.run(f"skill-hub use {skill}", timeout=30)
-            assert result.success
+            result = self.cmd.run("use", [skill], cwd=str(self.project_dir))
+            assert result.success, f"skill-hub use {skill} failed: {result.stderr}"
         
         # Apply all
         result = self.cmd.run("apply", cwd=str(self.project_dir))
@@ -192,7 +204,7 @@ class TestScenario4CancelCleanup:
         
         # Remove first two skills
         for skill in skills[:2]:
-            result = self.cmd.run(f"skill-hub remove {skill}", timeout=30)
+            result = self.cmd.run("remove", [skill], input_text="y\n")
             assert result.success
         
         # Verify removed skills are gone
@@ -220,7 +232,7 @@ class TestScenario4CancelCleanup:
         result = self.cmd.run("set-target", ["open_code"])
         assert result.success
         
-        result = self.cmd.run("use", [skill_name])
+        result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir))
         assert result.success
         
         result = self.cmd.run("apply", cwd=str(self.project_dir))
@@ -235,7 +247,7 @@ class TestScenario4CancelCleanup:
         open_code_files_exist = skills_dir.exists()
         
         # Now remove the skill
-        result = self.cmd.run("remove", [skill_name])
+        result = self.cmd.run("remove", [skill_name], input_text="y\n")
         assert result.success, f"skill-hub remove failed: {result.stderr}"
         
         # Verify skill directory was deleted
@@ -259,7 +271,7 @@ class TestScenario4CancelCleanup:
         
         # Modify skill files
         skill_dir = self.agents_skills_dir / skill_name
-        instructions_file = skill_dir / "instructions.md"
+        instructions_file = skill_dir / "SKILL.md"
         
         with open(instructions_file, 'a') as f:
             f.write("\n\n## Local Modification\nThis was modified locally and not synced back.")
@@ -274,7 +286,7 @@ class TestScenario4CancelCleanup:
         print(f"  Status before removal: {result.stdout[:200]}...")
         
         # Remove the skill (with local modifications)
-        result = self.cmd.run("remove", {skill_name})
+        result = self.cmd.run("remove", [skill_name], input_text="y\n")
         assert result.success, f"skill-hub remove failed with modified files: {result.stderr}"
         
         # Verify cleanup happened despite modifications
@@ -285,7 +297,7 @@ class TestScenario4CancelCleanup:
         assert repo_skill_dir.exists(), f"Repository skill directory must be preserved"
         
         # Check repository files don't have the local modification
-        repo_prompt = repo_skill_dir / "prompt.md"
+        repo_prompt = repo_skill_dir / "SKILL.md"
         with open(repo_prompt, 'r') as f:
             repo_content = f.read()
         
@@ -305,14 +317,22 @@ class TestScenario4CancelCleanup:
         
         # Setup multiple skills
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = home_cmd.run("init")
         assert result.success
         
         skills = ["skill-to-remove", "skill-to-keep-1", "skill-to-keep-2"]
         
+        # Ensure .agents/skills directory exists
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+        
         for skill in skills:
-            result = home_cmd.run(f"skill-hub create {skill}", timeout=30)
-            assert result.success
+            result = self.cmd.run("create", [skill], cwd=str(self.project_dir))
+            assert result.success, f"skill-hub create {skill} failed: {result.stderr}"
+            
+            # Feedback skill to repo before use
+            result = self.cmd.run("feedback", [skill], cwd=str(self.project_dir), input_text="y\n")
+            assert result.success, f"skill-hub feedback {skill} failed: {result.stderr}"
         
         # Setup project
         result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
@@ -320,8 +340,8 @@ class TestScenario4CancelCleanup:
         
         # Enable all skills
         for skill in skills:
-            result = self.cmd.run(f"skill-hub use {skill}", timeout=30)
-            assert result.success
+            result = self.cmd.run("use", [skill], cwd=str(self.project_dir))
+            assert result.success, f"skill-hub use {skill} failed: {result.stderr}"
         
         # Apply all
         result = self.cmd.run("apply", cwd=str(self.project_dir))
@@ -334,7 +354,7 @@ class TestScenario4CancelCleanup:
         
         # Remove only the first skill
         skill_to_remove = skills[0]
-        result = self.cmd.run(f"skill-hub remove {skill_to_remove}", timeout=30)
+        result = self.cmd.run("remove", [skill_to_remove], input_text="y\n")
         assert result.success
         
         # Verify removed skill is gone
@@ -346,9 +366,8 @@ class TestScenario4CancelCleanup:
             skill_dir = self.agents_skills_dir / skill
             assert skill_dir.exists(), f"Other skill directory should still exist: {skill_dir}"
             
-            # Verify their files are intact
-            assert (skill_dir / "manifest.yaml").exists(), f"manifest.yaml should exist for {skill}"
-            assert (skill_dir / "instructions.md").exists(), f"instructions.md should exist for {skill}"
+            # Verify their files are intact (only SKILL.md exists)
+            assert (skill_dir / "SKILL.md").exists(), f"SKILL.md should exist for {skill}"
         
         print(f"✓ Cleanup preserves other skills")
         print(f"  - Removed: {skill_to_remove}")
@@ -384,7 +403,7 @@ class TestScenario4CancelCleanup:
         assert another_nested_file.exists(), f"Another nested file should exist: {another_nested_file}"
         
         # Remove the skill
-        result = self.cmd.run("remove", {skill_name})
+        result = self.cmd.run("remove", [skill_name], input_text="y\n")
         assert result.success
         
         # Verify entire skill directory (including nested structure) is deleted
@@ -406,39 +425,30 @@ class TestScenario4CancelCleanup:
         
         # Get repository paths
         repo_skill_dir = self.skills_dir / skill_name
-        repo_skill_yaml = repo_skill_dir / "skill.yaml"
-        repo_prompt_md = repo_skill_dir / "prompt.md"
+        # Only SKILL.md exists, not skill.yaml
+        repo_skill_md = repo_skill_dir / "SKILL.md"
         
         # Get original content
-        with open(repo_skill_yaml, 'r') as f:
-            original_yaml = f.read()
-        
-        with open(repo_prompt_md, 'r') as f:
-            original_prompt = f.read()
+        with open(repo_skill_md, 'r') as f:
+            original_content = f.read()
         
         # Remove skill from project
-        result = self.cmd.run("remove", {skill_name})
+        result = self.cmd.run("remove", [skill_name], input_text="y\n")
         assert result.success
         
         # CRITICAL: Repository files must still exist
         assert repo_skill_dir.exists(), f"Repository skill directory MUST exist: {repo_skill_dir}"
-        assert repo_skill_yaml.exists(), f"Repository skill.yaml MUST exist: {repo_skill_yaml}"
-        assert repo_prompt_md.exists(), f"Repository prompt.md MUST exist: {repo_prompt_md}"
+        assert repo_skill_md.exists(), f"Repository SKILL.md MUST exist: {repo_skill_md}"
         
         # CRITICAL: Repository content must be unchanged
-        with open(repo_skill_yaml, 'r') as f:
-            current_yaml = f.read()
+        with open(repo_skill_md, 'r') as f:
+            current_content = f.read()
         
-        with open(repo_prompt_md, 'r') as f:
-            current_prompt = f.read()
-        
-        assert current_yaml == original_yaml, "Repository skill.yaml content changed!"
-        assert current_prompt == original_prompt, "Repository prompt.md content changed!"
+        assert current_content == original_content, "Repository SKILL.md content changed!"
         
         print(f"✓ Repository safety verified")
         print(f"  - Repository directory preserved: {repo_skill_dir}")
-        print(f"  - skill.yaml unchanged: {len(current_yaml)} chars")
-        print(f"  - prompt.md unchanged: {len(current_prompt)} chars")
+        print(f"  - SKILL.md unchanged: {len(current_content)} chars")
         print(f"  - CRITICAL: Source files never deleted by remove operation")
 
 

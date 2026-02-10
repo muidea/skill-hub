@@ -1,0 +1,90 @@
+# === SKILL-HUB BEGIN: test-target-skill ===
+---
+name: test-target-skill
+description: 为项目定制的 test-target-skill 技能
+compatibility: Designed for OpenCode (or similar AI coding assistants)
+metadata:
+  version: "1.0.0"
+  author: "rangh"
+  created_at: "2026-02-10T13:20:53+08:00"
+---
+# test-target-skill
+
+为项目定制的 test-target-skill 技能
+
+## 使用说明
+
+这是一个自定义技能模板，请根据您的项目需求进行修改。
+
+## 变量
+
+技能支持以下变量，可以在启用技能时配置：
+
+- `PROJECT_NAME`: 项目名称 {{.PROJECT_NAME}}
+- `PROJECT_PATH`: 项目路径 {{.PROJECT_PATH}}
+- `LANGUAGE`: 编程语言 {{.LANGUAGE}}
+- `FRAMEWORK`: 框架 {{.FRAMEWORK}}
+
+## 最佳实践
+
+### 1. 保持技能专注
+- 每个技能应该专注于一个特定的任务或领域
+- 避免创建过于通用的技能
+
+### 2. 清晰的变量命名
+- 使用有意义的变量名称
+- 为每个变量提供清晰的描述
+
+### 3. 结构化内容
+- 使用清晰的章节结构
+- 包含示例和代码片段
+- 提供故障排除指南
+
+### 4. 版本控制
+- 每次重要修改时更新版本号
+- 在metadata中记录修改历史
+
+## 示例
+
+### 添加新功能
+当需要添加新功能时，可以参考以下结构：
+
+```markdown
+## 功能名称
+
+### 用途
+描述功能的用途和适用场景。
+
+### 使用方法
+```
+具体的命令或代码示例
+```
+
+### 注意事项
+- 注意事项1
+- 注意事项2
+```
+
+### 配置说明
+对于需要配置的功能：
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `CONFIG_1` | 配置1说明 | 默认值1 |
+| `CONFIG_2` | 配置2说明 | 默认值2 |
+
+## 更新日志
+
+### v1.0.0 (2026-02-10)
+- 初始版本创建
+
+# === SKILL-HUB END: test-target-skill ===
+
+
+
+
+
+
+
+
+

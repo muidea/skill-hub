@@ -25,7 +25,7 @@ class TestScenario5UpdateValidation:
     @pytest.fixture(autouse=True)
     def setup(self, temp_project_dir, temp_home_dir, test_skill_template):
         """Setup test environment"""
-        self.project_dir = temp_project_dir
+        self.project_dir = Path( temp_project_dir)
         self.home_dir = temp_home_dir
         self.skill_template = test_skill_template
         self.cmd = CommandRunner()
@@ -51,18 +51,22 @@ class TestScenario5UpdateValidation:
         """Helper to setup a skill in the project"""
         # Initialize home directory
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
+        # Ensure .agents/skills directory exists (required for create command)
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+        
         # Create skill
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
         assert result.success
         
         # Setup project
         result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
-        result = self.cmd.run("use", {skill_name})
+        result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir), input_text="\n")
         assert result.success
         
         result = self.cmd.run("apply", cwd=str(self.project_dir))
@@ -77,19 +81,29 @@ class TestScenario5UpdateValidation:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
         # Create a skill
         skill_name = "update-test-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        # Ensure .agents/skills directory exists (required for create command)
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+
+        
+        # Create skill first
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success
+
+        # Feedback skill to repo (required for use command)
+        result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
         assert result.success
         
         # Setup project with the skill
         result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
-        result = self.cmd.run("use", {skill_name})
+        result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir), input_text="\n")
         assert result.success
         
         result = self.cmd.run("apply", cwd=str(self.project_dir))
@@ -126,16 +140,22 @@ class TestScenario5UpdateValidation:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
         # Create a skill
         skill_name = "validation-test-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        # Ensure .agents/skills directory exists (required for create command)
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+
+        
+        # Create skill first
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
         assert result.success
         
         # Validate the skill
-        result = self.cmd.run("validate-local", {skill_name})
+        result = self.cmd.run("validate", [skill_name], cwd=str(self.project_dir))
         
         print(f"  Validation result: returncode={result.exit_code}")
         print(f"  stdout: {result.stdout[:200]}...")
@@ -148,13 +168,13 @@ class TestScenario5UpdateValidation:
             print(f"  stderr: {result.stderr[:200]}...")
         
         # Also test with our YAMLValidator
-        skill_yaml = self.skills_dir / skill_name / "skill.yaml"
+        skill_yaml = self.skills_dir / skill_name / "SKILL.md"
         if skill_yaml.exists():
             is_valid, errors = self.yaml_validator.validate_yaml_file(skill_yaml)
             print(f"  YAMLValidator: valid={is_valid}, errors={errors}")
             
             if is_valid:
-                print(f"  ✓ YAMLValidator confirms skill.yaml is valid")
+                print(f"  ✓ YAMLValidator confirms SKILL.md is valid")
             else:
                 print(f"  ✗ YAMLValidator found issues: {errors}")
         
@@ -166,16 +186,21 @@ class TestScenario5UpdateValidation:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
         # Create a skill
-        skill_name = "invalid-yaml-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        skill_name = "validation-test-skill"
+        # Ensure .agents/skills directory exists (required for create command)
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create skill first
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
         assert result.success
         
-        # Get the skill.yaml file
-        skill_yaml = self.skills_dir / skill_name / "skill.yaml"
+        # Get the SKILL.md file from project directory
+        skill_yaml = self.project_dir / ".agents" / "skills" / skill_name / "SKILL.md"
         assert skill_yaml.exists()
         
         # Read original content
@@ -190,7 +215,7 @@ class TestScenario5UpdateValidation:
             f.write(invalid_content)
         
         # Try to validate with skill-hub
-        result = self.cmd.run("validate-local", {skill_name})
+        result = self.cmd.run("validate", [skill_name], cwd=str(self.project_dir))
         
         print(f"  Invalid YAML validation result: returncode={result.exit_code}")
         print(f"  stdout: {result.stdout[:200]}...")
@@ -202,7 +227,9 @@ class TestScenario5UpdateValidation:
             print(f"  Note: Invalid YAML may not be detected by skill-hub")
         
         # Test with our YAMLValidator
-        is_valid, errors = self.yaml_validator.validate_yaml_file(skill_yaml)
+        result = self.yaml_validator.validate_skill_yaml(str(skill_yaml))
+        is_valid = result["valid"]
+        errors = result["errors"]
         print(f"  YAMLValidator: valid={is_valid}, errors={errors}")
         
         if not is_valid:
@@ -222,32 +249,53 @@ class TestScenario5UpdateValidation:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
         # Create a skill
-        skill_name = "missing-field-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        skill_name = "validation-test-skill"
+        # Ensure .agents/skills directory exists (required for create command)
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create skill first
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
         assert result.success
         
-        # Get the skill.yaml file
-        skill_yaml = self.skills_dir / skill_name / "skill.yaml"
+        # Get the SKILL.md file from project directory
+        skill_yaml = self.project_dir / ".agents" / "skills" / skill_name / "SKILL.md"
         assert skill_yaml.exists()
         
-        # Read and parse YAML
+        # Read and parse YAML frontmatter
         with open(skill_yaml, 'r') as f:
-            yaml_data = yaml.safe_load(f)
+            content = f.read()
+        
+        # Extract YAML frontmatter (between --- markers)
+        import re
+        yaml_match = re.search(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL | re.MULTILINE)
+        if yaml_match:
+            yaml_content = yaml_match.group(1)
+            yaml_data = yaml.safe_load(yaml_content)
+        else:
+            # Fallback: try to load entire file as YAML
+            yaml_data = yaml.safe_load(content)
         
         # Remove a required field (e.g., description)
         if 'description' in yaml_data:
             del yaml_data['description']
         
-        # Write back without description
+        # Write back without description, preserving frontmatter format
         with open(skill_yaml, 'w') as f:
+            f.write('---\n')
             yaml.dump(yaml_data, f)
+            f.write('---\n\n')
+            # Keep the rest of the content (Markdown part)
+            if yaml_match:
+                markdown_content = content[yaml_match.end():]
+                f.write(markdown_content)
         
         # Try to validate
-        result = self.cmd.run("validate-local", {skill_name})
+        result = self.cmd.run("validate", [skill_name], cwd=str(self.project_dir))
         
         print(f"  Missing field validation result: returncode={result.exit_code}")
         print(f"  stdout: {result.stdout[:200]}...")
@@ -269,26 +317,30 @@ class TestScenario5UpdateValidation:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
         # Create and setup a skill
         skill_name = "outdated-test-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success
+        
+        # Feedback skill to repo (required for use command)
+        result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
         assert result.success
         
         # Setup project
         result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
-        result = self.cmd.run("use", {skill_name})
+        result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir), input_text="\n")
         assert result.success
         
         result = self.cmd.run("apply", cwd=str(self.project_dir))
         assert result.success
         
         # Get original repository file modification time
-        repo_skill_yaml = self.skills_dir / skill_name / "skill.yaml"
+        repo_skill_yaml = self.skills_dir / skill_name / "SKILL.md"
         original_mtime = repo_skill_yaml.stat().st_mtime
         
         # Wait a bit
@@ -320,7 +372,7 @@ class TestScenario5UpdateValidation:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
         # Create multiple skills with different characteristics
@@ -330,21 +382,21 @@ class TestScenario5UpdateValidation:
         ]
         
         for skill_name, _ in skills:
-            result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+            result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
             assert result.success
         
         # Validate each skill
         validation_results = {}
         
         for skill_name, _ in skills:
-            result = self.cmd.run("validate-local", {skill_name})
+            result = self.cmd.run("validate", [skill_name], cwd=str(self.project_dir))
             validation_results[skill_name] = {
                 "returncode": result.exit_code,
                 "output": result.stdout[:100] + "..."
             }
         
         # Also validate all skills at once if supported
-        result = self.cmd.run("validate-local", cwd=str(self.project_dir))
+        result = self.cmd.run("validate", cwd=str(self.project_dir))
         print(f"  Validate all result: returncode={result.exit_code}")
         print(f"  Output: {result.stdout[:200]}...")
         
@@ -362,20 +414,37 @@ class TestScenario5UpdateValidation:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
         # Create a skill
-        skill_name = "dependency-test-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        skill_name = "validation-test-skill"
+        # Ensure .agents/skills directory exists (required for create command)
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create skill first
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
         assert result.success
         
-        # Get skill.yaml
-        skill_yaml = self.skills_dir / skill_name / "skill.yaml"
+        # Get SKILL.md from project directory
+        skill_yaml = self.project_dir / ".agents" / "skills" / skill_name / "SKILL.md"
         
         # Read and add dependencies
         with open(skill_yaml, 'r') as f:
-            yaml_data = yaml.safe_load(f)
+            content = f.read()
+        
+        # Extract YAML frontmatter (between --- markers)
+        import re
+        yaml_match = re.search(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL | re.MULTILINE)
+        if yaml_match:
+            yaml_content = yaml_match.group(1)
+            yaml_data = yaml.safe_load(yaml_content)
+            markdown_content = content[yaml_match.end():]
+        else:
+            # Fallback: try to load entire file as YAML
+            yaml_data = yaml.safe_load(content)
+            markdown_content = ""
         
         # Add dependency field
         yaml_data['dependencies'] = [
@@ -385,10 +454,13 @@ class TestScenario5UpdateValidation:
         ]
         
         with open(skill_yaml, 'w') as f:
+            f.write('---\n')
             yaml.dump(yaml_data, f)
+            f.write('---\n\n')
+            f.write(markdown_content)
         
         # Validate
-        result = self.cmd.run("validate-local", {skill_name})
+        result = self.cmd.run("validate", [skill_name], cwd=str(self.project_dir))
         
         print(f"  Dependency validation result: returncode={result.exit_code}")
         print(f"  stdout: {result.stdout[:200]}...")
@@ -408,16 +480,20 @@ class TestScenario5UpdateValidation:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
-        
+
         # Create a skill with intentional errors
         skill_name = "error-message-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        # Ensure .agents/skills directory exists (required for create command)
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
         assert result.success
         
-        # Get skill.yaml
-        skill_yaml = self.skills_dir / skill_name / "skill.yaml"
+        # Get SKILL.md from project directory
+        skill_yaml = self.project_dir / ".agents" / "skills" / skill_name / "SKILL.md"
         
         # Create multiple errors
         error_yaml = """
@@ -435,7 +511,7 @@ dependencies:
             f.write(error_yaml)
         
         # Validate
-        result = self.cmd.run("validate-local", {skill_name})
+        result = self.cmd.run("validate", [skill_name], cwd=str(self.project_dir))
         
         print(f"  Error message validation result: returncode={result.exit_code}")
         
@@ -478,19 +554,28 @@ dependencies:
         
         # Setup environment
         home_cmd = CommandRunner()
-        result = home_cmd.run("skill-hub init", timeout=30)
+        result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
         # Create a skill
-        skill_name = "integration-test-skill"
-        result = home_cmd.run(f"skill-hub create {skill_name}", timeout=30)
+        skill_name = "validation-test-skill"
+        # Ensure .agents/skills directory exists (required for create command)
+        agents_skills_dir = self.project_dir / ".agents" / "skills"
+        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create skill first
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success
+        
+        # Feedback skill to repo (required for use command)
+        result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
         assert result.success
         
         # Setup project
         result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
         assert result.success
         
-        result = self.cmd.run("use", {skill_name})
+        result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir), input_text="\n")
         assert result.success
         
         result = self.cmd.run("apply", cwd=str(self.project_dir))
@@ -499,12 +584,14 @@ dependencies:
         # Test workflow: validate -> (simulate update) -> validate again
         
         # Step 1: Initial validation
-        result = self.cmd.run("validate-local", {skill_name})
+        result = self.cmd.run("validate", [skill_name], cwd=str(self.project_dir))
         initial_valid = result.exit_code == 0
         print(f"  Step 1 - Initial validation: {'✓' if initial_valid else '✗'}")
         
         # Step 2: Simulate repository modification (like an update would do)
-        repo_skill_yaml = self.skills_dir / skill_name / "skill.yaml"
+        repo_skill_yaml = self.skills_dir / skill_name / "SKILL.md"
+        # Ensure directory exists
+        repo_skill_yaml.parent.mkdir(parents=True, exist_ok=True)
         with open(repo_skill_yaml, 'a') as f:
             f.write("\n# Simulated update from repository")
         
@@ -513,7 +600,7 @@ dependencies:
         print(f"  Step 3 - Status check: {result.stdout[:150]}...")
         
         # Step 4: Validate again (should still be valid)
-        result = self.cmd.run("validate-local", {skill_name})
+        result = self.cmd.run("validate", [skill_name], cwd=str(self.project_dir))
         final_valid = result.exit_code == 0
         print(f"  Step 4 - Final validation: {'✓' if final_valid else '✗'}")
         

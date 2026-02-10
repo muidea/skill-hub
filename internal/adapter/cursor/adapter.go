@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"skill-hub/internal/config"
+	"skill-hub/pkg/utils"
 )
 
 // Adapter 本地接口定义（避免循环导入）
@@ -229,51 +230,7 @@ func (a *CursorAdapter) readFile() (string, error) {
 
 // writeFile 写入文件内容（原子操作）
 func (a *CursorAdapter) writeFile(content string) error {
-	// 确保目录存在
-	dir := filepath.Dir(a.filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("创建目录失败: %w", err)
-	}
-
-	// 创建备份（如果文件存在）
-	if _, err := os.Stat(a.filePath); err == nil {
-		backupPath := a.filePath + ".bak"
-		if err := os.Rename(a.filePath, backupPath); err != nil {
-			return fmt.Errorf("创建备份失败: %w", err)
-		}
-	}
-
-	// 写入临时文件
-	tmpPath := a.filePath + ".tmp"
-	if err := os.WriteFile(tmpPath, []byte(content), 0644); err != nil {
-		// 尝试恢复备份
-		if backupPath := a.filePath + ".bak"; fileExists(backupPath) {
-			os.Rename(backupPath, a.filePath)
-		}
-		return fmt.Errorf("写入临时文件失败: %w", err)
-	}
-
-	// 重命名为目标文件
-	if err := os.Rename(tmpPath, a.filePath); err != nil {
-		// 尝试恢复备份
-		if backupPath := a.filePath + ".bak"; fileExists(backupPath) {
-			os.Rename(backupPath, a.filePath)
-		}
-		return fmt.Errorf("重命名文件失败: %w", err)
-	}
-
-	// 清理备份文件
-	if backupPath := a.filePath + ".bak"; fileExists(backupPath) {
-		os.Remove(backupPath)
-	}
-
-	return nil
-}
-
-// fileExists 检查文件是否存在
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+	return utils.SafeWriteFile(a.filePath, content)
 }
 
 // extractMarkedContent 从标记块中提取内容
