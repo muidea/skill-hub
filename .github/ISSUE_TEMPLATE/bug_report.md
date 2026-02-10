@@ -23,7 +23,7 @@ What actually happened, including any error messages.
 
 ## Environment
 - OS: [e.g. macOS 14.0, Ubuntu 22.04, Windows 11]
-- Skill Hub Version: [e.g. v0.1.0]
+- skill-hub Version: [e.g. v0.1.0]
 - Go Version: [e.g. 1.21.0]
 - Target Tools: [e.g. Cursor, Claude Code, OpenCode]
 

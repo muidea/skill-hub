@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Main test runner for Skill Hub end-to-end tests.
+Main test runner for skill-hub end-to-end tests.
 """
 
 import os
@@ -91,7 +91,7 @@ def check_environment():
 
 def run_tests(scenarios=None, verbose=False, debug=False):
     """Run the specified test scenarios."""
-    print("\n🚀 Running Skill Hub End-to-End Tests")
+    print("\n🚀 Running skill-hub End-to-End Tests")
     print("="*60)
     
     # Default to all scenarios if none specified
@@ -244,7 +244,7 @@ def cleanup_temp_files():
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Run Skill Hub end-to-end tests",
+        description="Run skill-hub end-to-end tests",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -308,7 +308,7 @@ Examples:
     
     args = parser.parse_args()
     
-    print("🎯 Skill Hub End-to-End Test Runner")
+    print("🎯 skill-hub End-to-End Test Runner")
     print("="*60)
     
     # Handle cleanup

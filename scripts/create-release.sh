@@ -9,7 +9,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Skill Hub 发布助手${NC}"
+echo -e "${GREEN}skill-hub 发布助手${NC}"
 echo "====================="
 
 # 检查是否在git仓库中

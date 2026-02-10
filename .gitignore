@@ -23,13 +23,15 @@ __pycache__
 .agents_bk
 
 bin
-docs
+docs/*
 dist
 skill-hub
 validate
 
 !cmd/skill-hub
 !cmd/validate
+
+!docs/Skill-Hub命令规范.md
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

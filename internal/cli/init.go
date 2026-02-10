@@ -8,13 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	"skill-hub/internal/adapter"
 	"skill-hub/internal/git"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/spec"
 	"skill-hub/pkg/utils"
+
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var initCmd = &cobra.Command{
@@ -56,7 +57,7 @@ func runInit(args []string, target string) error {
 
 	// 检查是否已经初始化了相同的配置
 	if alreadyInitialized, err := checkAlreadyInitialized(skillHubDir, gitURL); err == nil && alreadyInitialized {
-		fmt.Printf("✅ Skill Hub 已经初始化完成！\n")
+		fmt.Printf("✅ skill-hub 已经初始化完成！\n")
 		fmt.Println("工作区位置:", skillHubDir)
 		if gitURL != "" {
 			fmt.Println("远程仓库:", gitURL)
@@ -86,7 +87,7 @@ func runInit(args []string, target string) error {
 	// 创建配置文件
 	configPath := filepath.Join(skillHubDir, "config.yaml")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		configContent := fmt.Sprintf(`# Skill Hub 配置文件
+		configContent := fmt.Sprintf(`# skill-hub 配置文件
 repo_path: "~/.skill-hub/repo"
 claude_config_path: "~/.claude/config.json"
 cursor_config_path: "~/.cursor/rules"
@@ -193,7 +194,7 @@ git_branch: "main"
 		}
 	}
 
-	fmt.Println("\n✅ Skill Hub 初始化完成！")
+	fmt.Println("\n✅ skill-hub 初始化完成！")
 	fmt.Println("工作区位置:", skillHubDir)
 
 	if gitURL != "" {

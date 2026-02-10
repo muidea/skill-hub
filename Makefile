@@ -1,4 +1,4 @@
-# Skill Hub Makefile
+# skill-hub Makefile
 
 .PHONY: build clean test install release release-all lint deps
 

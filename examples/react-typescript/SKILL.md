@@ -2,14 +2,16 @@
 compatibility: Designed for Claude Code, Cursor, and OpenCode (or similar AI coding assistants)
 description: Provides React + TypeScript development best practices. Use when building React applications with TypeScript, reviewing frontend code, or when the user asks about React patterns, TypeScript types, or modern frontend development.
 metadata:
-    author: Skill Hub Team
-    tags: react,typescript,frontend,web-development
-    version: 1.0.0
+  author: skill-hub Team
+  tags: react,typescript,frontend,web-development
+  version: 1.0.0
 name: react-typescript
 ---
+
 # React + TypeScript最佳实践技能
 
 ## 项目结构
+
 ```
 src/
 ├── components/         # 可复用组件
@@ -32,7 +34,9 @@ src/
 ```
 
 ## TypeScript配置
+
 ### tsconfig.json推荐配置
+
 ```json
 {
   "compilerOptions": {
@@ -63,10 +67,12 @@ src/
 ```
 
 ## 组件开发
+
 ### 函数组件模式
+
 ```tsx
-import React, { useState, useEffect, useCallback, memo } from 'react';
-import type { FC } from 'react';
+import React, { useState, useEffect, useCallback, memo } from "react";
+import type { FC } from "react";
 
 interface UserCardProps {
   user: User;
@@ -74,56 +80,55 @@ interface UserCardProps {
   isActive?: boolean;
 }
 
-const UserCard: FC<UserCardProps> = memo(({
-  user,
-  onSelect,
-  isActive = false
-}) => {
-  const [isLoading, setIsLoading] = useState(false);
+const UserCard: FC<UserCardProps> = memo(
+  ({ user, onSelect, isActive = false }) => {
+    const [isLoading, setIsLoading] = useState(false);
 
-  const handleClick = useCallback(() => {
-    if (onSelect) {
-      onSelect(user.id);
+    const handleClick = useCallback(() => {
+      if (onSelect) {
+        onSelect(user.id);
+      }
+    }, [onSelect, user.id]);
+
+    useEffect(() => {
+      // 组件挂载/卸载逻辑
+      return () => {
+        // 清理函数
+      };
+    }, []);
+
+    if (isLoading) {
+      return <div>Loading...</div>;
     }
-  }, [onSelect, user.id]);
 
-  useEffect(() => {
-    // 组件挂载/卸载逻辑
-    return () => {
-      // 清理函数
-    };
-  }, []);
-
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
-  return (
-    <div
-      className={`user-card ${isActive ? 'active' : ''}`}
-      onClick={handleClick}
-      role="button"
-      tabIndex={0}
-      aria-label={`Select user ${user.name}`}
-    >
-      <img src={user.avatar} alt={user.name} />
-      <div className="user-info">
-        <h3>{user.name}</h3>
-        <p>{user.email}</p>
+    return (
+      <div
+        className={`user-card ${isActive ? "active" : ""}`}
+        onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        aria-label={`Select user ${user.name}`}
+      >
+        <img src={user.avatar} alt={user.name} />
+        <div className="user-info">
+          <h3>{user.name}</h3>
+          <p>{user.email}</p>
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);
 
-UserCard.displayName = 'UserCard';
+UserCard.displayName = "UserCard";
 
 export default UserCard;
 ```
 
 ### 自定义Hooks
+
 ```tsx
-import { useState, useEffect, useCallback } from 'react';
-import type { DependencyList } from 'react';
+import { useState, useEffect, useCallback } from "react";
+import type { DependencyList } from "react";
 
 export function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -172,11 +177,13 @@ export function useFetch<T>(url: string, options?: RequestInit) {
 ```
 
 ## 状态管理
+
 ### Redux Toolkit模式
+
 ```tsx
 // store/slices/userSlice.ts
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import type { RootState } from '../store';
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import type { RootState } from "../store";
 
 interface UserState {
   users: User[];
@@ -187,31 +194,31 @@ interface UserState {
 const initialState: UserState = {
   users: [],
   loading: false,
-  error: null
+  error: null,
 };
 
 export const fetchUsers = createAsyncThunk(
-  'users/fetchUsers',
+  "users/fetchUsers",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch('/api/users');
+      const response = await fetch("/api/users");
       return await response.json();
     } catch (error) {
-      return rejectWithValue('Failed to fetch users');
+      return rejectWithValue("Failed to fetch users");
     }
-  }
+  },
 );
 
 const userSlice = createSlice({
-  name: 'users',
+  name: "users",
   initialState,
   reducers: {
     addUser: (state, action: PayloadAction<User>) => {
       state.users.push(action.payload);
     },
     removeUser: (state, action: PayloadAction<string>) => {
-      state.users = state.users.filter(user => user.id !== action.payload);
-    }
+      state.users = state.users.filter((user) => user.id !== action.payload);
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -227,7 +234,7 @@ const userSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       });
-  }
+  },
 });
 
 export const { addUser, removeUser } = userSlice.actions;
@@ -236,19 +243,25 @@ export default userSlice.reducer;
 ```
 
 ## 性能优化
+
 ### React.memo使用
+
 ```tsx
 // 仅当props变化时重新渲染
-const ExpensiveComponent = memo(({ data }: { data: DataType }) => {
-  // 复杂计算
-  return <div>{/* 渲染逻辑 */}</div>;
-}, (prevProps, nextProps) => {
-  // 自定义比较函数
-  return prevProps.data.id === nextProps.data.id;
-});
+const ExpensiveComponent = memo(
+  ({ data }: { data: DataType }) => {
+    // 复杂计算
+    return <div>{/* 渲染逻辑 */}</div>;
+  },
+  (prevProps, nextProps) => {
+    // 自定义比较函数
+    return prevProps.data.id === nextProps.data.id;
+  },
+);
 ```
 
 ### useMemo和useCallback
+
 ```tsx
 const expensiveCalculation = useMemo(() => {
   return computeExpensiveValue(deps);
@@ -260,50 +273,55 @@ const handleClick = useCallback(() => {
 ```
 
 ## 测试策略
-### 单元测试（Jest + React Testing Library）
-```tsx
-import { render, screen, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import Button from './Button';
 
-describe('Button Component', () => {
-  it('renders button with correct text', () => {
+### 单元测试（Jest + React Testing Library）
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import Button from "./Button";
+
+describe("Button Component", () => {
+  it("renders button with correct text", () => {
     render(<Button>Click me</Button>);
-    expect(screen.getByRole('button')).toHaveTextContent('Click me');
+    expect(screen.getByRole("button")).toHaveTextContent("Click me");
   });
 
-  it('calls onClick handler when clicked', async () => {
+  it("calls onClick handler when clicked", async () => {
     const handleClick = jest.fn();
     const user = userEvent.setup();
-    
+
     render(<Button onClick={handleClick}>Click me</Button>);
-    
-    await user.click(screen.getByRole('button'));
+
+    await user.click(screen.getByRole("button"));
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
 
-  it('disables button when disabled prop is true', () => {
+  it("disables button when disabled prop is true", () => {
     render(<Button disabled>Click me</Button>);
-    expect(screen.getByRole('button')).toBeDisabled();
+    expect(screen.getByRole("button")).toBeDisabled();
   });
 });
 ```
 
 ### E2E测试（Cypress）
+
 ```tsx
-describe('User Flow', () => {
-  it('completes user registration', () => {
-    cy.visit('/register');
-    cy.get('[data-testid="email-input"]').type('test@example.com');
-    cy.get('[data-testid="password-input"]').type('password123');
+describe("User Flow", () => {
+  it("completes user registration", () => {
+    cy.visit("/register");
+    cy.get('[data-testid="email-input"]').type("test@example.com");
+    cy.get('[data-testid="password-input"]').type("password123");
     cy.get('[data-testid="submit-button"]').click();
-    cy.url().should('include', '/dashboard');
+    cy.url().should("include", "/dashboard");
   });
 });
 ```
 
 ## 代码质量
+
 ### ESLint配置
+
 ```json
 {
   "extends": [
@@ -322,6 +340,7 @@ describe('User Flow', () => {
 ```
 
 ### Prettier配置
+
 ```json
 {
   "semi": true,
@@ -336,12 +355,14 @@ describe('User Flow', () => {
 ```
 
 ## 部署优化
-### 代码分割
-```tsx
-import { lazy, Suspense } from 'react';
 
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Settings = lazy(() => import('./pages/Settings'));
+### 代码分割
+
+```tsx
+import { lazy, Suspense } from "react";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Settings = lazy(() => import("./pages/Settings"));
 
 function App() {
   return (
@@ -356,6 +377,7 @@ function App() {
 ```
 
 ### 环境变量管理
+
 ```env
 # .env.development
 REACT_APP_API_URL=http://localhost:3000/api
@@ -367,6 +389,7 @@ REACT_APP_DEBUG=false
 ```
 
 ## 安全检查清单
+
 - [ ] XSS防护：对用户输入进行转义
 - [ ] CSRF防护：使用anti-CSRF token
 - [ ] CORS配置：限制允许的源
@@ -374,6 +397,7 @@ REACT_APP_DEBUG=false
 - [ ] 依赖安全：定期更新依赖包
 
 ## 性能检查清单
+
 - [ ] 图片优化：使用WebP格式，懒加载
 - [ ] 包大小：代码分割，tree shaking
 - [ ] 渲染性能：避免不必要的重新渲染

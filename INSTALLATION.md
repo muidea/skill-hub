@@ -1,10 +1,10 @@
-# Skill Hub 详细安装和使用指南
+# skill-hub 详细安装和使用指南
 
 > 如果您是首次使用，建议先查看 [README.md](README.md) 中的快速开始部分。
 
 ## 安装方法
 
-Skill Hub 提供多种安装方式，您可以根据自己的需求选择最适合的方法。
+skill-hub 提供多种安装方式，您可以根据自己的需求选择最适合的方法。
 
 ### 1. 一键安装脚本（最常用）
 
@@ -188,7 +188,7 @@ go test ./...
 
 ## 命令参考
 
-Skill Hub 提供了一系列命令来管理技能和项目。
+skill-hub 提供了一系列命令来管理技能和项目。
 
 ### 核心命令
 
@@ -267,7 +267,7 @@ skill-hub create api-docs-skill --compatibility cursor,opencode --output-dir ./c
 
 ### 目录结构
 
-Skill Hub 使用标准的目录结构来组织技能：
+skill-hub 使用标准的目录结构来组织技能：
 
 ```
 /skills
@@ -319,7 +319,7 @@ fix: 修复登录页面样式错位问题
 
 ### 变量系统
 
-Skill Hub 支持变量替换，使技能更加灵活：
+skill-hub 支持变量替换，使技能更加灵活：
 
 #### 预定义变量
 - `{{ .ProjectName }}`: 项目名称
@@ -377,7 +377,7 @@ vars:
 
 ## 支持的AI工具
 
-Skill Hub 支持多种AI开发工具，可以将技能同步到不同的工具配置中。
+skill-hub 支持多种AI开发工具，可以将技能同步到不同的工具配置中。
 
 ### Cursor
 - **支持状态**: ✅ 完全支持

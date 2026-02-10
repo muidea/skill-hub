@@ -1,10 +1,10 @@
-# Skill Hub End-to-End Tests
+# skill-hub End-to-End Tests
 
-Python-based end-to-end test framework for Skill Hub, covering the 5 business scenarios from `docs/testCase.md`.
+Python-based end-to-end test framework for skill-hub, covering the 5 business scenarios from `docs/testCase.md`.
 
 ## Overview
 
-This test framework provides comprehensive end-to-end testing for Skill Hub's core functionality. It tests the complete workflow from skill creation to application, modification, and cleanup.
+This test framework provides comprehensive end-to-end testing for skill-hub's core functionality. It tests the complete workflow from skill creation to application, modification, and cleanup.
 
 ## Test Scenarios
 
@@ -288,4 +288,4 @@ test-e2e:
 
 ## License
 
-Part of the Skill Hub project. See main project LICENSE for details.
+Part of the skill-hub project. See main project LICENSE for details.

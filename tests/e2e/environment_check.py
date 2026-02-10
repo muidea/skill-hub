@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Environment check script for Skill Hub end-to-end tests.
+Environment check script for skill-hub end-to-end tests.
 """
 
 import os
@@ -149,7 +149,7 @@ def check_system_info():
 
 def run_all_checks():
     """Run all environment checks."""
-    print("🔍 Skill Hub Test Environment Check")
+    print("🔍 skill-hub Test Environment Check")
     print("="*60)
     
     check_system_info()
@@ -257,7 +257,7 @@ def main():
     args = parser.parse_args()
     
     if not args.quiet:
-        print("🎯 Skill Hub Test Environment Checker")
+        print("🎯 skill-hub Test Environment Checker")
         print()
     
     environment_ok = run_all_checks()

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Skill Hub 自动安装脚本
+# skill-hub 自动安装脚本
 # 用法: curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
 # 备用用法: bash <(curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh)
 
@@ -36,7 +36,7 @@ GITHUB_API="https://api.github.com/repos/$REPO_OWNER/$REPO_NAME"
 # 默认版本（最新）
 VERSION="${1:-latest}"
 
-    echo -e "${GREEN}Skill Hub 安装助手${NC}"
+    echo -e "${GREEN}skill-hub 安装助手${NC}"
     echo "====================="
 
 # 检测系统信息
@@ -333,7 +333,7 @@ main() {
         
         # 安装完成信息提示
         echo -e "\n${BLUE}📦 安装内容:${NC}"
-        echo "• 程序名称: Skill Hub"
+        echo "• 程序名称: skill-hub"
         echo "• 可执行文件: $ACTUAL_BINARY"
         echo "• 安装位置: ~/.local/bin/$ACTUAL_BINARY"
         echo "• 版本: $VERSION"
@@ -392,7 +392,7 @@ main() {
                 # 添加到配置文件
                 echo "  添加到 $shell_rc"
                 echo "" >> "$shell_rc"
-                echo "# Added by Skill Hub installer - $(date)" >> "$shell_rc"
+                echo "# Added by skill-hub installer - $(date)" >> "$shell_rc"
                 echo "$path_line" >> "$shell_rc"
                 echo "  ✅ 已添加到 $shell_rc"
                 return 0
@@ -513,7 +513,7 @@ main() {
     echo "临时文件保存在: $TEMP_DIR"
     echo "安装完成后可手动删除: rm -rf $TEMP_DIR"
     echo ""
-    echo "${GREEN}🎉 Skill Hub 安装完成！开始使用吧！${NC}"
+    echo "${GREEN}🎉 skill-hub 安装完成！开始使用吧！${NC}"
 }
 
 # 运行主函数

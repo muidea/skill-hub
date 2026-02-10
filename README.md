@@ -1,4 +1,4 @@
-# Skill Hub
+# skill-hub
 
 一款专为 AI 时代开发者设计的"技能（Prompt/Script）生命周期管理工具"。它旨在解决 AI 指令碎片化、跨工具同步难、缺乏版本控制等痛点。
 

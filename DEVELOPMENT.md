@@ -1,4 +1,4 @@
-# Skill Hub 开发指南
+# skill-hub 开发指南
 
 > 本文档面向Skill Hub的开发者、贡献者和高级用户，包含构建、发布和贡献指南。
 
@@ -407,7 +407,7 @@ git push origin feature/amazing-feature
 
 ### 适配器模式
 
-Skill Hub 使用适配器模式支持不同的AI工具：
+skill-hub 使用适配器模式支持不同的AI工具：
 
 ```go
 // 适配器接口

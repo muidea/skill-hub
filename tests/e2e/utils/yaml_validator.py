@@ -340,7 +340,7 @@ class YAMLValidator:
             "version": "1.0.0",
             "compatibility": "Designed for Cursor, Claude Code, and OpenCode",
             "metadata": {
-                "author": "Skill Hub User",
+                "author": "skill-hub User",
                 "tags": ["skill", "template"],
                 "created": __import__('datetime').datetime.now().strftime("%Y-%m-%d")
             },

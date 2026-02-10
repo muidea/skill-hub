@@ -2,21 +2,25 @@
 compatibility: Designed for Claude Code, Cursor, and OpenCode (or similar AI coding assistants)
 description: Provides Docker containerization and DevOps best practices. Use when working with Docker, container orchestration, CI/CD pipelines, or when the user asks about containerization, DevOps workflows, or infrastructure as code.
 metadata:
-    author: Skill Hub Team
-    tags: docker,devops,containerization,ci-cd,kubernetes
-    version: 1.0.0
+  author: skill-hub Team
+  tags: docker,devops,containerization,ci-cd,kubernetes
+  version: 1.0.0
 name: docker-devops
 ---
+
 # Docker和DevOps最佳实践技能
 
 ## 容器化原则
+
 1. **单一职责**: 每个容器只运行一个进程
 2. **不可变性**: 容器应该是不可变的，运行时不应修改
 3. **最小化**: 使用最小的基础镜像，减少攻击面
 4. **可观测性**: 容器应输出日志和指标
 
 ## Dockerfile最佳实践
+
 ### 多阶段构建
+
 ```dockerfile
 # 第一阶段：构建阶段
 FROM golang:1.21-alpine AS builder
@@ -48,6 +52,7 @@ CMD ["./main"]
 ```
 
 ### 安全加固
+
 ```dockerfile
 # 使用特定版本的基础镜像
 FROM node:18-alpine@sha256:abc123...
@@ -82,8 +87,9 @@ CMD ["node", "server.js"]
 ```
 
 ## Docker Compose配置
+
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   app:
@@ -185,7 +191,9 @@ volumes:
 ```
 
 ## CI/CD流水线
+
 ### GitHub Actions示例
+
 ```yaml
 name: CI/CD Pipeline
 
@@ -200,36 +208,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Build and test
         run: |
           docker build -t myapp:test .
           docker run --rm myapp:test npm test
-      
+
       - name: Security scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'myapp:test'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          image-ref: "myapp:test"
+          format: "sarif"
+          output: "trivy-results.sarif"
 
   build:
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -245,10 +253,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Deploy to Kubernetes
         uses: azure/k8s-deploy@v4
         with:
@@ -259,11 +267,13 @@ jobs:
             k8s/ingress.yaml
           images: |
             ${{ secrets.DOCKER_USERNAME }}/myapp:${{ github.sha }}
-          kubectl-version: 'latest'
+          kubectl-version: "latest"
 ```
 
 ## Kubernetes配置
+
 ### Deployment配置
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -295,52 +305,53 @@ spec:
         runAsUser: 1000
         fsGroup: 2000
       containers:
-      - name: myapp
-        image: myorg/myapp:latest
-        imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 8080
-          name: http
-        env:
-        - name: NODE_ENV
-          value: "production"
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: connection-string
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "256Mi"
-            cpu: "200m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
-          timeoutSeconds: 3
-        volumeMounts:
-        - name: config-volume
-          mountPath: /app/config
+        - name: myapp
+          image: myorg/myapp:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: db-secret
+                  key: connection-string
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config
       volumes:
-      - name: config-volume
-        configMap:
-          name: app-config
+        - name: config-volume
+          configMap:
+            name: app-config
 ```
 
 ### Service和Ingress配置
+
 ```yaml
 apiVersion: v1
 kind: Service
@@ -351,10 +362,10 @@ spec:
   selector:
     app: myapp
   ports:
-  - port: 80
-    targetPort: 8080
-    protocol: TCP
-    name: http
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: http
   type: ClusterIP
 ---
 apiVersion: networking.k8s.io/v1
@@ -369,24 +380,26 @@ metadata:
 spec:
   ingressClassName: nginx
   tls:
-  - hosts:
-    - myapp.example.com
-    secretName: myapp-tls
+    - hosts:
+        - myapp.example.com
+      secretName: myapp-tls
   rules:
-  - host: myapp.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: myapp-service
-            port:
-              number: 80
+    - host: myapp.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: myapp-service
+                port:
+                  number: 80
 ```
 
 ## 监控和日志
+
 ### Prometheus配置
+
 ```yaml
 # prometheus.yml
 global:
@@ -394,13 +407,13 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: 'myapp'
+  - job_name: "myapp"
     static_configs:
-      - targets: ['myapp-service:8080']
-    metrics_path: '/metrics'
+      - targets: ["myapp-service:8080"]
+    metrics_path: "/metrics"
     scrape_interval: 10s
-    
-  - job_name: 'kubernetes-pods'
+
+  - job_name: "kubernetes-pods"
     kubernetes_sd_configs:
       - role: pod
     relabel_configs:
@@ -414,6 +427,7 @@ scrape_configs:
 ```
 
 ### Grafana仪表板
+
 ```json
 {
   "dashboard": {
@@ -443,7 +457,9 @@ scrape_configs:
 ```
 
 ## 安全最佳实践
+
 ### 镜像扫描
+
 ```bash
 # 使用Trivy扫描镜像漏洞
 trivy image myapp:latest
@@ -456,6 +472,7 @@ snyk container test myapp:latest
 ```
 
 ### 网络策略
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -467,35 +484,37 @@ spec:
     matchLabels:
       app: myapp
   policyTypes:
-  - Ingress
-  - Egress
+    - Ingress
+    - Egress
   ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: ingress-nginx
-    ports:
-    - protocol: TCP
-      port: 8080
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
   egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: postgres
-    ports:
-    - protocol: TCP
-      port: 5432
-  - to:
-    - podSelector:
-        matchLabels:
-          app: redis
-    ports:
-    - protocol: TCP
-      port: 6379
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
 ```
 
 ## 灾难恢复
+
 ### 备份策略
+
 ```bash
 # 数据库备份
 pg_dump -U user -d mydb -f backup.sql
@@ -509,11 +528,13 @@ kubectl get all --all-namespaces -o yaml > k8s-backup.yaml
 ```
 
 ### 恢复流程
+
 1. 恢复数据库: `psql -U user -d mydb -f backup.sql`
 2. 恢复卷: `docker run --rm -v postgres-data:/volume -v $(pwd):/backup alpine tar xzf /backup/postgres-backup.tar.gz -C /volume`
 3. 恢复Kubernetes: `kubectl apply -f k8s-backup.yaml`
 
 ## 性能优化检查清单
+
 - [ ] 镜像大小优化（多阶段构建）
 - [ ] 资源限制设置（CPU/内存）
 - [ ] 健康检查配置

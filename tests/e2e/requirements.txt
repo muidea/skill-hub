@@ -1,4 +1,4 @@
-# Skill Hub 端到端测试依赖
+# skill-hub 端到端测试依赖
 # 注意：使用 ~/codespace/venv 中的包，此文件仅作参考
 
 pytest>=7.0.0

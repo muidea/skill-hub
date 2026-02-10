@@ -2,21 +2,25 @@
 compatibility: Designed for Claude Code, Cursor, and OpenCode (or similar AI coding assistants)
 description: Provides Go language best practices and coding standards guidance. Use when writing Go code, reviewing Go projects, or when the user asks about Go conventions, patterns, or style guides.
 metadata:
-    author: Skill Hub Team
-    tags: golang,best-practices,code-review,coding-standards
-    version: 1.0.0
+  author: skill-hub Team
+  tags: golang,best-practices,code-review,coding-standards
+  version: 1.0.0
 name: golang-best-practices
 ---
+
 # Go语言最佳实践技能
 
 ## 核心原则
+
 1. **简洁性**: 代码应该简单明了，易于理解
 2. **可读性**: 代码是给人读的，其次才是给机器执行
 3. **一致性**: 遵循项目统一的编码风格
 4. **错误处理**: 错误是值，应该被正确处理
 
 ## 代码组织
+
 ### 包结构
+
 ```
 project/
 ├── cmd/          # 可执行程序入口
@@ -34,19 +38,23 @@ project/
 ```
 
 ### 文件命名
+
 - 使用小写字母，单词间用下划线分隔
 - 测试文件：`xxx_test.go`
 - 示例文件：`example_test.go`
 - 平台特定文件：`xxx_linux.go`, `xxx_windows.go`
 
 ## 编码规范
+
 ### 命名约定
+
 - **包名**: 小写，简短，单数形式
 - **接口名**: 以`er`结尾（如`Reader`, `Writer`）
 - **变量名**: 驼峰式，简短但描述性
 - **常量名**: 全大写，下划线分隔
 
 ### 错误处理
+
 ```go
 // 推荐：使用errors.New或fmt.Errorf
 if err != nil {
@@ -64,6 +72,7 @@ func (e *NotFoundError) Error() string {
 ```
 
 ### 并发安全
+
 ```go
 // 使用sync.Mutex保护共享资源
 type SafeCounter struct {
@@ -79,17 +88,22 @@ func (c *SafeCounter) Increment() {
 ```
 
 ## 性能优化
+
 ### 内存分配
+
 - 预分配切片容量：`make([]T, 0, n)`
 - 避免在循环中分配内存
 - 使用`sync.Pool`重用对象
 
 ### 字符串处理
+
 - 使用`strings.Builder`进行字符串拼接
 - 避免频繁的字符串转换
 
 ## 测试规范
+
 ### 单元测试
+
 ```go
 func TestAdd(t *testing.T) {
     tests := []struct {
@@ -114,6 +128,7 @@ func TestAdd(t *testing.T) {
 ```
 
 ### 基准测试
+
 ```go
 func BenchmarkConcat(b *testing.B) {
     for i := 0; i < b.N; i++ {
@@ -123,13 +138,16 @@ func BenchmarkConcat(b *testing.B) {
 ```
 
 ## 工具链
+
 ### 必备工具
+
 - `go fmt`: 代码格式化
 - `go vet`: 静态分析
 - `golangci-lint`: 代码检查
 - `go test -race`: 竞态检测
 
 ### 构建配置
+
 ```makefile
 .PHONY: build test lint clean
 
@@ -147,12 +165,14 @@ clean:
 ```
 
 ## 常见陷阱
+
 1. **循环变量捕获**: 在goroutine中使用循环变量需要复制
 2. **接口nil检查**: 接口值为nil时，其类型可能不为nil
 3. **defer执行时机**: defer在函数返回时执行，但参数在defer语句处求值
 4. **map并发访问**: map不是并发安全的，需要加锁或使用sync.Map
 
 ## 最佳实践检查清单
+
 - [ ] 错误是否被正确处理？
 - [ ] 资源是否被正确释放？
 - [ ] 代码是否有适当的注释？
@@ -161,6 +181,7 @@ clean:
 - [ ] 并发代码是否安全？
 
 ## 参考资料
+
 - [Effective Go](https://golang.org/doc/effective_go)
 - [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
 - [Uber Go Style Guide](https://github.com/uber-go/guide)

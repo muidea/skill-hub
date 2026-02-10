@@ -4,7 +4,7 @@
 
 1. **Check the documentation**: Read the [README](https://github.com/muidea/skill-hub#readme) for basic usage instructions
 2. **Search existing issues**: Check if your question has already been answered in [issues](https://github.com/muidea/skill-hub/issues) or [discussions](https://github.com/muidea/skill-hub/discussions)
-3. **Update to latest version**: Make sure you're using the latest version of Skill Hub
+3. **Update to latest version**: Make sure you're using the latest version of skill-hub
 
 ## How to Get Help
 
