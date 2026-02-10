@@ -218,14 +218,6 @@ func runFeedback(skillID string) error {
 	return nil
 }
 
-// truncate 截断字符串
-func truncate(s string, length int) string {
-	if len(s) <= length {
-		return s
-	}
-	return s[:length-3] + "..."
-}
-
 // updateRegistryVersion 更新registry.json中的版本信息
 func updateRegistryVersion(skillID string) error {
 	// 获取技能管理器
