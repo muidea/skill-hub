@@ -112,12 +112,12 @@ func runGitSync() error {
 func runGitStatus() error {
 	repo, err := git.NewSkillRepository()
 	if err != nil {
-		return err
+		return fmt.Errorf("创建技能仓库失败: %w", err)
 	}
 
 	status, err := repo.GetStatus()
 	if err != nil {
-		return err
+		return fmt.Errorf("获取状态失败: %w", err)
 	}
 
 	fmt.Println(status)

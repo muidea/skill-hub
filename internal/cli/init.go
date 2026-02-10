@@ -4,18 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 	"skill-hub/internal/adapter"
 	"skill-hub/internal/git"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/spec"
 	"skill-hub/pkg/utils"
-
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var initCmd = &cobra.Command{
@@ -56,7 +56,23 @@ func runInit(args []string, target string) error {
 	}
 
 	// 检查是否已经初始化了相同的配置
-	if alreadyInitialized, err := checkAlreadyInitialized(skillHubDir, gitURL); err == nil && alreadyInitialized {
+	alreadyInitialized, err := checkAlreadyInitialized(skillHubDir, gitURL)
+	if err != nil {
+		return fmt.Errorf("检查初始化状态失败: %w", err)
+	}
+
+	// 如果gitURL为空，检查是否有现有的git仓库需要更新配置
+	if gitURL == "" && alreadyInitialized {
+		// 尝试从现有git仓库获取远程URL
+		if remoteURL, err := getRemoteURLFromGit(repoDir); err == nil && remoteURL != "" {
+			// 有git仓库且有远程URL，需要更新配置
+			fmt.Printf("检测到现有git仓库，将更新配置中的远程URL: %s\n", remoteURL)
+			gitURL = remoteURL
+			alreadyInitialized = false // 强制重新初始化以更新配置
+		}
+	}
+
+	if alreadyInitialized {
 		fmt.Printf("✅ skill-hub 已经初始化完成！\n")
 		fmt.Println("工作区位置:", skillHubDir)
 		if gitURL != "" {
@@ -86,7 +102,18 @@ func runInit(args []string, target string) error {
 
 	// 创建配置文件
 	configPath := filepath.Join(skillHubDir, "config.yaml")
+
+	// 如果gitURL为空，但仓库已存在且有远程URL，尝试从git配置读取
+	if gitURL == "" {
+		repoPath := filepath.Join(skillHubDir, "repo")
+		if remoteURL, err := getRemoteURLFromGit(repoPath); err == nil && remoteURL != "" {
+			gitURL = remoteURL
+			fmt.Printf("✓ 从现有Git仓库读取远程URL: %s\n", gitURL)
+		}
+	}
+
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		// 创建新配置文件
 		configContent := fmt.Sprintf(`# skill-hub 配置文件
 repo_path: "~/.skill-hub/repo"
 claude_config_path: "~/.claude/config.json"
@@ -103,6 +130,15 @@ git_branch: "main"
 		fmt.Printf("✓ 创建配置文件: %s\n", configPath)
 	} else {
 		// 配置文件已存在，更新git_remote_url字段
+		// 首先检查是否需要从git配置读取远程URL
+		if gitURL == "" {
+			repoPath := filepath.Join(skillHubDir, "repo")
+			if remoteURL, err := getRemoteURLFromGit(repoPath); err == nil && remoteURL != "" {
+				gitURL = remoteURL
+				fmt.Printf("✓ 从现有Git仓库读取远程URL: %s\n", gitURL)
+			}
+		}
+
 		if err := updateConfigGitURL(configPath, gitURL); err != nil {
 			return fmt.Errorf("更新配置文件失败: %w", err)
 		}
@@ -451,8 +487,15 @@ func updateConfigGitURL(configPath, gitURL string) error {
 	// 更新git_remote_url字段
 	for i, line := range lines {
 		if strings.HasPrefix(line, "git_remote_url:") {
-			lines[i] = fmt.Sprintf(`git_remote_url: "%s"`, gitURL)
-			updated = true
+			// 检查当前值是否与要设置的值相同
+			currentValue := strings.TrimSpace(strings.TrimPrefix(line, "git_remote_url:"))
+			// 移除可能的引号
+			currentValue = strings.Trim(currentValue, `"' `)
+
+			if currentValue != gitURL {
+				lines[i] = fmt.Sprintf(`git_remote_url: "%s"`, gitURL)
+				updated = true
+			}
 			break
 		}
 	}
@@ -468,6 +511,7 @@ func updateConfigGitURL(configPath, gitURL string) error {
 				newLines = append(newLines, fmt.Sprintf(`git_remote_url: "%s"`, gitURL))
 				newLines = append(newLines, lines[i+1:]...)
 				lines = newLines
+				updated = true
 				break
 			}
 		}
@@ -558,6 +602,25 @@ func setDefaultTargetIfEmpty(target string) error {
 	}
 
 	return nil
+}
+
+// getRemoteURLFromGit 从现有Git仓库读取远程URL
+func getRemoteURLFromGit(repoPath string) (string, error) {
+	// 检查.git目录是否存在
+	gitDir := filepath.Join(repoPath, ".git")
+	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
+		return "", fmt.Errorf("Git仓库不存在")
+	}
+
+	// 使用git命令读取远程URL
+	cmd := exec.Command("git", "config", "--get", "remote.origin.url")
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("读取Git远程URL失败: %w", err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
 }
 
 // refreshSkillRegistry 刷新技能索引

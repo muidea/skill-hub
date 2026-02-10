@@ -161,23 +161,35 @@ func (sr *SkillRepository) CloneRemote(url string) error {
 
 // GetStatus 获取技能仓库状态
 func (sr *SkillRepository) GetStatus() (string, error) {
-	if !sr.repo.IsInitialized() {
+	// 检查仓库目录是否存在且有.git目录
+	repoPath := sr.repo.GetPath()
+	gitDir := filepath.Join(repoPath, ".git")
+
+	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
 		return "技能仓库未初始化", nil
 	}
 
+	// 尝试获取git状态
 	status, err := sr.repo.GetStatus()
 	if err != nil {
 		return "", err
 	}
 
-	latestCommit, err := sr.repo.GetLatestCommit()
-	if err != nil {
-		return "", err
+	result := "技能仓库状态:\n"
+
+	// 显示远程URL（如果有）
+	if sr.repo.remoteURL != "" {
+		result += fmt.Sprintf("远程仓库: %s\n", sr.repo.remoteURL)
+	} else {
+		result += "远程仓库: 未设置\n"
 	}
 
-	result := "技能仓库状态:\n"
-	result += fmt.Sprintf("远程仓库: %s\n", sr.repo.remoteURL)
-	result += fmt.Sprintf("最新提交: %s\n", latestCommit)
+	// 显示最新提交（如果有）
+	latestCommit, err := sr.repo.GetLatestCommit()
+	if err == nil {
+		result += fmt.Sprintf("最新提交: %s\n", latestCommit)
+	}
+
 	result += "文件状态:\n"
 	result += status
 

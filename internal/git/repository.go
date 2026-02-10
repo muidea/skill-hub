@@ -42,11 +42,21 @@ func NewRepository(repoPath string) (*Repository, error) {
 		return nil, fmt.Errorf("打开Git仓库失败: %w", err)
 	}
 
-	return &Repository{
+	// 创建Repository对象
+	r := &Repository{
 		path:       repoPath,
 		repo:       repo,
 		remoteName: "origin",
-	}, nil
+	}
+
+	// 尝试从git配置获取远程URL
+	if remote, err := repo.Remote("origin"); err == nil {
+		if urls := remote.Config().URLs; len(urls) > 0 {
+			r.remoteURL = urls[0]
+		}
+	}
+
+	return r, nil
 }
 
 // NewSkillsRepository 创建技能仓库实例
@@ -56,12 +66,12 @@ func NewSkillsRepository() (*Repository, error) {
 		return nil, err
 	}
 
-	skillsDir, err := config.GetSkillsDir()
+	repoPath, err := config.GetRepoPath()
 	if err != nil {
 		return nil, err
 	}
 
-	repo, err := NewRepository(skillsDir)
+	repo, err := NewRepository(repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +307,12 @@ func (r *Repository) GetLatestCommit() (string, error) {
 
 // IsInitialized 检查仓库是否已初始化
 func (r *Repository) IsInitialized() bool {
-	return r.remoteURL != ""
+	// 检查是否有.git目录
+	gitDir := filepath.Join(r.path, ".git")
+	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
+		return false
+	}
+	return true
 }
 
 // GetPath 获取仓库路径
