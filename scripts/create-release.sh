@@ -20,7 +20,7 @@ fi
 
 # 获取当前分支
 CURRENT_BRANCH=$(git branch --show-current)
-if [ "$CURRENT_BRANCH" != "main" ]; then
+if [ "$CURRENT_BRANCH" != "master" ]; then
     echo -e "${YELLOW}警告: 当前不在main分支 (在 $CURRENT_BRANCH 分支)${NC}"
     read -p "是否继续? (y/N): " -n 1 -r
     echo
