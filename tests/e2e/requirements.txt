@@ -1,13 +1,16 @@
-# skill-hub 端到端测试依赖
-# 注意：使用 ~/codespace/venv 中的包，此文件仅作参考
+# skill-hub end-to-end test dependencies
 
+# Core dependencies
 pytest>=7.0.0
 pyyaml>=6.0.0
+requests>=2.31.0
+
+# Optional dependencies (for better test reporting)
 pytest-html>=4.0.0
 pytest-xdist>=3.0.0
 pytest-cov>=4.0.0
 
-# 开发依赖（可选）
+# Development dependencies (optional)
 black>=23.0.0
 flake8>=6.0.0
 mypy>=1.0.0

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -161,55 +160,4 @@ func getSkillContent(skillID string) (string, error) {
 	}
 
 	return string(content), nil
-}
-
-// copySkillFromRepo 从仓库复制技能文件
-func copySkillFromRepo(skillID, destPath string) error {
-	// 获取配置
-	cfg, err := config.GetConfig()
-	if err != nil {
-		return fmt.Errorf("获取配置失败: %w", err)
-	}
-
-	// 展开repo路径中的~符号
-	repoPath := cfg.RepoPath
-	if repoPath == "" {
-		return fmt.Errorf("仓库路径未配置")
-	}
-
-	// 处理~符号
-	if repoPath[0] == '~' {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("获取用户主目录失败: %w", err)
-		}
-		repoPath = filepath.Join(homeDir, repoPath[1:])
-	}
-
-	// 构建源文件路径
-	srcPath := filepath.Join(repoPath, "skills", skillID, "SKILL.md")
-
-	// 检查源文件是否存在
-	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-		return fmt.Errorf("技能文件在仓库中不存在: %s", srcPath)
-	}
-
-	// 复制文件
-	srcFile, err := os.Open(srcPath)
-	if err != nil {
-		return fmt.Errorf("打开源文件失败: %w", err)
-	}
-	defer srcFile.Close()
-
-	destFile, err := os.Create(destPath)
-	if err != nil {
-		return fmt.Errorf("创建目标文件失败: %w", err)
-	}
-	defer destFile.Close()
-
-	if _, err := io.Copy(destFile, srcFile); err != nil {
-		return fmt.Errorf("复制文件失败: %w", err)
-	}
-
-	return nil
 }

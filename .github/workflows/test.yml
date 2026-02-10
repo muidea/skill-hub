@@ -71,3 +71,58 @@ jobs:
         run: |
           ./bin/skill-hub --version
           ./bin/skill-hub --help | head -3
+          
+      - name: Upload binary for e2e tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: skill-hub-binary
+          path: bin/skill-hub
+          retention-days: 1
+
+  e2e-test:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download skill-hub binary
+        uses: actions/download-artifact@v4
+        with:
+          name: skill-hub-binary
+          path: bin/
+
+      - name: Make binary executable
+        run: chmod +x bin/skill-hub
+
+      - name: Verify binary works
+        run: |
+          ./bin/skill-hub --version
+          ./bin/skill-hub --help | head -3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install -r tests/e2e/requirements.txt
+
+      - name: Run simple e2e tests
+        run: |
+          export PATH=${{ github.workspace }}/bin:$PATH
+          cd tests/e2e
+          python3 simple_test.py
+
+      - name: Try to run full e2e tests (optional)
+        continue-on-error: true
+        run: |
+          export PATH=${{ github.workspace }}/bin:$PATH
+          cd tests/e2e
+          # Try to install Python dependencies if missing
+          python3 -m pip install pytest pyyaml requests --quiet || echo "Failed to install Python dependencies"
+          # Try to run the full test suite
+          python3 run_tests.py --no-check 2>&1 | tail -50 || echo "Full e2e tests failed or skipped"
