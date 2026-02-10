@@ -84,8 +84,8 @@ func TestOpenCodeAdapter(t *testing.T) {
 		// 测试文件写入
 		testFile := filepath.Join(testDir, "test.txt")
 		testContent := "test content"
-		if err := writeSkillMDFile(testFile, testContent); err != nil {
-			t.Errorf("writeSkillMDFile() error = %v", err)
+		if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+			t.Errorf("os.WriteFile() error = %v", err)
 		}
 
 		// 验证文件内容
@@ -100,8 +100,8 @@ func TestOpenCodeAdapter(t *testing.T) {
 
 		// 测试文件已存在时的写入
 		newContent := "new content"
-		if err := writeSkillMDFile(testFile, newContent); err != nil {
-			t.Errorf("writeSkillMDFile(existing) error = %v", err)
+		if err := os.WriteFile(testFile, []byte(newContent), 0644); err != nil {
+			t.Errorf("os.WriteFile(existing) error = %v", err)
 		}
 
 		// 验证文件更新

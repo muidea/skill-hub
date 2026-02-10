@@ -90,6 +90,11 @@ func (a *OpenCodeAdapter) Apply(skillID string, content string, variables map[st
 		return fmt.Errorf("写入SKILL.md失败: %w", err)
 	}
 
+	// 对于open_code适配器，还需要从仓库复制其他文件
+	if err := a.copyAdditionalFiles(skillID, skillDir); err != nil {
+		return fmt.Errorf("复制额外文件失败: %w", err)
+	}
+
 	return nil
 }
 
@@ -113,7 +118,84 @@ func (a *OpenCodeAdapter) Extract(skillID string) (string, error) {
 		return "", fmt.Errorf("读取SKILL.md失败: %w", err)
 	}
 
-	return string(content), nil
+	// 转换回标准格式
+	standardContent, err := convertFromOpenCodeFormat(string(content))
+	if err != nil {
+		return "", fmt.Errorf("转换技能格式失败: %w", err)
+	}
+
+	return standardContent, nil
+}
+
+// copyAdditionalFiles 从仓库复制技能的其他文件
+func (a *OpenCodeAdapter) copyAdditionalFiles(skillID, targetDir string) error {
+	// 获取配置
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return fmt.Errorf("获取配置失败: %w", err)
+	}
+
+	// 展开repo路径中的~符号
+	repoPath := cfg.RepoPath
+	if repoPath == "" {
+		return fmt.Errorf("仓库路径未配置")
+	}
+
+	// 处理~符号
+	if repoPath[0] == '~' {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("获取用户主目录失败: %w", err)
+		}
+		repoPath = filepath.Join(homeDir, repoPath[1:])
+	}
+
+	// 源技能目录
+	srcSkillDir := filepath.Join(repoPath, "skills", skillID)
+
+	// 检查源目录是否存在
+	if _, err := os.Stat(srcSkillDir); os.IsNotExist(err) {
+		// 源目录不存在，可能只有SKILL.md文件
+		return nil
+	}
+
+	// 复制除SKILL.md之外的所有文件
+	return filepath.Walk(srcSkillDir, func(srcPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// 计算相对路径
+		relPath, err := filepath.Rel(srcSkillDir, srcPath)
+		if err != nil {
+			return fmt.Errorf("计算相对路径失败: %w", err)
+		}
+
+		// 跳过SKILL.md文件（已经由Apply方法处理）
+		if relPath == "SKILL.md" {
+			return nil
+		}
+
+		// 目标路径
+		dstPath := filepath.Join(targetDir, relPath)
+
+		// 如果是目录，创建目录
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		// 如果是文件，复制文件
+		content, err := os.ReadFile(srcPath)
+		if err != nil {
+			return fmt.Errorf("读取文件失败 %s: %w", srcPath, err)
+		}
+
+		if err := os.WriteFile(dstPath, content, info.Mode()); err != nil {
+			return fmt.Errorf("写入文件失败 %s: %w", dstPath, err)
+		}
+
+		return nil
+	})
 }
 
 // Remove 从OpenCode目录移除技能
@@ -282,6 +364,24 @@ func (a *OpenCodeAdapter) Cleanup() error {
 				return fmt.Errorf("清理技能目录备份失败 %s: %w", skillDir, err)
 			}
 		}
+	}
+
+	return nil
+}
+
+// writeSkillMDFile 写入SKILL.md文件（原子操作）
+func writeSkillMDFile(skillPath string, content string) error {
+	// 创建临时文件
+	tmpPath := skillPath + ".tmp"
+	if err := os.WriteFile(tmpPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("写入临时文件失败: %w", err)
+	}
+
+	// 重命名为目标文件
+	if err := os.Rename(tmpPath, skillPath); err != nil {
+		// 清理临时文件
+		os.Remove(tmpPath)
+		return fmt.Errorf("重命名文件失败: %w", err)
 	}
 
 	return nil

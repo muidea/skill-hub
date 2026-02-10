@@ -57,24 +57,6 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// writeSkillMDFile 写入SKILL.md文件（原子操作）
-func writeSkillMDFile(skillPath string, content string) error {
-	// 创建临时文件
-	tmpPath := skillPath + ".tmp"
-	if err := os.WriteFile(tmpPath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("写入临时文件失败: %w", err)
-	}
-
-	// 重命名为目标文件
-	if err := os.Rename(tmpPath, skillPath); err != nil {
-		// 清理临时文件
-		os.Remove(tmpPath)
-		return fmt.Errorf("重命名文件失败: %w", err)
-	}
-
-	return nil
-}
-
 // backupSkill 备份现有技能
 func backupSkill(skillDir string) error {
 	// 检查目录是否存在
