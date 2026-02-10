@@ -66,8 +66,9 @@ func runFeedback(skillID string) error {
 		return fmt.Errorf("技能 '%s' 未在项目工作区中启用", skillID)
 	}
 
-	// 检查项目工作区本地文件
-	projectSkillPath := filepath.Join(cwd, ".agents", "skills", skillID, "SKILL.md")
+	// 检查项目工作区本地技能目录
+	projectSkillDir := filepath.Join(cwd, ".agents", "skills", skillID)
+	projectSkillPath := filepath.Join(projectSkillDir, "SKILL.md")
 	if _, err := os.Stat(projectSkillPath); os.IsNotExist(err) {
 		return fmt.Errorf("项目工作区中未找到技能文件: %s", projectSkillPath)
 	}
@@ -92,7 +93,8 @@ func runFeedback(skillID string) error {
 		return fmt.Errorf("获取技能目录失败: %w", err)
 	}
 
-	repoSkillPath := filepath.Join(skillsDir, skillID, "SKILL.md")
+	repoSkillDir := filepath.Join(skillsDir, skillID)
+	repoSkillPath := filepath.Join(repoSkillDir, "SKILL.md")
 
 	var repoContent []byte
 	if skillExists {
@@ -107,63 +109,71 @@ func runFeedback(skillID string) error {
 		repoContent = []byte{} // 空内容，表示新建
 	}
 
-	// 比较内容
+	// 比较SKILL.md文件内容
 	projectStr := strings.TrimSpace(string(projectContent))
 	repoStr := strings.TrimSpace(string(repoContent))
+
+	// 检查整个目录的差异
+	changes, err := compareSkillDirectories(projectSkillDir, repoSkillDir, skillExists)
+	if err != nil {
+		return fmt.Errorf("比较技能目录失败: %w", err)
+	}
 
 	// 如果是新建技能（仓库内容为空）
 	if !skillExists {
 		fmt.Println("\n📝 新建技能内容:")
 		fmt.Println("========================================")
-		projectLines := strings.Split(projectStr, "\n")
-		for i, line := range projectLines {
-			fmt.Printf("%4d | %s\n", i+1, line)
+		fmt.Printf("技能目录: %s\n", skillID)
+		fmt.Printf("文件数量: %d\n", len(changes))
+		for _, change := range changes {
+			fmt.Printf("  - %s\n", change)
 		}
 		fmt.Println("========================================")
-	} else if projectStr == repoStr {
+	} else if len(changes) == 0 && projectStr == repoStr {
 		// 技能已存在且内容相同
 		fmt.Println("✅ 技能内容未修改")
 		return nil
 	} else {
-		// 技能已存在但内容不同，显示差异
-		fmt.Println("\n🔍 检测到手动修改:")
+		// 显示差异
+		fmt.Println("\n🔍 检测到修改:")
 		fmt.Println("========================================")
+		fmt.Printf("技能目录: %s\n", skillID)
+		fmt.Printf("修改文件数: %d\n", len(changes))
 
-		projectLines := strings.Split(projectStr, "\n")
-		repoLines := strings.Split(repoStr, "\n")
-
-		// 简单差异显示
-		maxLines := len(projectLines)
-		if len(repoLines) > maxLines {
-			maxLines = len(repoLines)
+		if len(changes) > 0 {
+			fmt.Println("\n修改的文件:")
+			for _, change := range changes {
+				fmt.Printf("  - %s\n", change)
+			}
 		}
 
-		changesFound := false
-		for i := 0; i < maxLines; i++ {
-			var projectLine, repoLine string
-			if i < len(projectLines) {
-				projectLine = projectLines[i]
-			}
-			if i < len(repoLines) {
-				repoLine = repoLines[i]
+		// 如果SKILL.md有修改，显示内容差异
+		if projectStr != repoStr {
+			fmt.Println("\nSKILL.md 内容差异:")
+			fmt.Println("行号 | 修改前                      | 修改后")
+			fmt.Println("-----|---------------------------|---------------------------")
+
+			projectLines := strings.Split(projectStr, "\n")
+			repoLines := strings.Split(repoStr, "\n")
+			maxLines := len(projectLines)
+			if len(repoLines) > maxLines {
+				maxLines = len(repoLines)
 			}
 
-			if projectLine != repoLine {
-				if !changesFound {
-					fmt.Println("行号 | 修改前                      | 修改后")
-					fmt.Println("-----|---------------------------|---------------------------")
-					changesFound = true
+			for i := 0; i < maxLines; i++ {
+				var projectLine, repoLine string
+				if i < len(projectLines) {
+					projectLine = projectLines[i]
+				}
+				if i < len(repoLines) {
+					repoLine = repoLines[i]
 				}
 
-				// 显示行号（从1开始）
-				lineNum := i + 1
-				fmt.Printf("%4d | %-25s | %-25s\n", lineNum, repoLine, projectLine)
+				if projectLine != repoLine {
+					lineNum := i + 1
+					fmt.Printf("%4d | %-25s | %-25s\n", lineNum, repoLine, projectLine)
+				}
 			}
-		}
-
-		if !changesFound {
-			fmt.Println("✅ 技能内容未修改")
-			return nil
 		}
 	}
 
@@ -193,13 +203,13 @@ func runFeedback(skillID string) error {
 
 	// 更新本地仓库文件
 	// 确保目录存在
-	repoSkillDir := filepath.Dir(repoSkillPath)
 	if err := os.MkdirAll(repoSkillDir, 0755); err != nil {
 		return fmt.Errorf("创建技能目录失败: %w", err)
 	}
 
-	if err := os.WriteFile(repoSkillPath, projectContent, 0644); err != nil {
-		return fmt.Errorf("更新本地仓库文件失败: %w", err)
+	// 复制整个技能目录
+	if err := copySkillDirectory(projectSkillDir, repoSkillDir); err != nil {
+		return fmt.Errorf("复制技能目录失败: %w", err)
 	}
 
 	fmt.Println("✓ 更新本地仓库文件")
@@ -235,5 +245,188 @@ func updateRegistryVersion(skillID string) error {
 	// 更新registry.json
 	// 这里简化实现，实际应该更新registry.json文件
 	fmt.Printf("技能 '%s' 版本信息已更新: %s\n", skillID, skill.Version)
+	return nil
+}
+
+// compareSkillDirectories 比较两个技能目录的差异
+func compareSkillDirectories(projectDir, repoDir string, repoExists bool) ([]string, error) {
+	var changes []string
+
+	// 如果仓库目录不存在，则所有文件都是新增的
+	if !repoExists {
+		err := filepath.Walk(projectDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if !info.IsDir() {
+				relPath, err := filepath.Rel(projectDir, path)
+				if err != nil {
+					return err
+				}
+				changes = append(changes, fmt.Sprintf("新增: %s", relPath))
+			}
+			return nil
+		})
+		return changes, err
+	}
+
+	// 收集项目目录中的所有文件
+	projectFiles := make(map[string]bool)
+	err := filepath.Walk(projectDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			relPath, err := filepath.Rel(projectDir, path)
+			if err != nil {
+				return err
+			}
+			projectFiles[relPath] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 收集仓库目录中的所有文件，并比较
+	err = filepath.Walk(repoDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			relPath, err := filepath.Rel(repoDir, path)
+			if err != nil {
+				return err
+			}
+
+			projectPath := filepath.Join(projectDir, relPath)
+			repoPath := path
+
+			// 检查文件是否存在
+			if _, err := os.Stat(projectPath); os.IsNotExist(err) {
+				// 文件在项目目录中不存在，可能被删除
+				changes = append(changes, fmt.Sprintf("删除: %s", relPath))
+			} else {
+				// 比较文件内容
+				projectContent, err1 := os.ReadFile(projectPath)
+				repoContent, err2 := os.ReadFile(repoPath)
+
+				if err1 != nil || err2 != nil {
+					// 读取错误，标记为修改
+					changes = append(changes, fmt.Sprintf("修改: %s (读取错误)", relPath))
+				} else if string(projectContent) != string(repoContent) {
+					// 内容不同
+					changes = append(changes, fmt.Sprintf("修改: %s", relPath))
+				}
+
+				// 从projectFiles中移除，表示已处理
+				delete(projectFiles, relPath)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 剩余在projectFiles中的文件是新增的
+	for relPath := range projectFiles {
+		changes = append(changes, fmt.Sprintf("新增: %s", relPath))
+	}
+
+	return changes, nil
+}
+
+// copySkillDirectory 复制整个技能目录，同步删除操作
+func copySkillDirectory(srcDir, dstDir string) error {
+	// 确保目标目录存在
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		return fmt.Errorf("创建目标目录失败: %w", err)
+	}
+
+	// 收集源目录中的所有文件
+	srcFiles := make(map[string]bool)
+	err := filepath.Walk(srcDir, func(srcPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			relPath, err := filepath.Rel(srcDir, srcPath)
+			if err != nil {
+				return err
+			}
+			srcFiles[relPath] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("遍历源目录失败: %w", err)
+	}
+
+	// 收集目标目录中的所有文件，用于删除操作
+	dstFiles := make(map[string]bool)
+	err = filepath.Walk(dstDir, func(dstPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			relPath, err := filepath.Rel(dstDir, dstPath)
+			if err != nil {
+				return err
+			}
+			dstFiles[relPath] = true
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("遍历目标目录失败: %w", err)
+	}
+
+	// 复制源目录中的所有文件
+	for relPath := range srcFiles {
+		srcPath := filepath.Join(srcDir, relPath)
+		dstPath := filepath.Join(dstDir, relPath)
+
+		// 确保目标目录存在
+		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+			return fmt.Errorf("创建目录失败 %s: %w", filepath.Dir(dstPath), err)
+		}
+
+		// 读取源文件
+		content, err := os.ReadFile(srcPath)
+		if err != nil {
+			return fmt.Errorf("读取文件失败 %s: %w", srcPath, err)
+		}
+
+		// 获取文件权限
+		info, err := os.Stat(srcPath)
+		if err != nil {
+			return fmt.Errorf("获取文件权限失败 %s: %w", srcPath, err)
+		}
+
+		// 写入目标文件
+		if err := os.WriteFile(dstPath, content, info.Mode()); err != nil {
+			return fmt.Errorf("写入文件失败 %s: %w", dstPath, err)
+		}
+
+		// 从dstFiles中移除，表示已处理
+		delete(dstFiles, relPath)
+	}
+
+	// 删除目标目录中多余的文件（在源目录中不存在的文件）
+	for relPath := range dstFiles {
+		dstPath := filepath.Join(dstDir, relPath)
+		if err := os.Remove(dstPath); err != nil {
+			return fmt.Errorf("删除文件失败 %s: %w", dstPath, err)
+		}
+	}
+
+	// 清理空目录（可选）
 	return nil
 }
