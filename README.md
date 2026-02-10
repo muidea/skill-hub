@@ -1,6 +1,10 @@
-# skill-hub
+# skill-hub 🚀
 
 一款专为 AI 时代开发者设计的"技能（Prompt/Script）生命周期管理工具"。它旨在解决 AI 指令碎片化、跨工具同步难、缺乏版本控制等痛点。
+
+[![CI](https://github.com/muidea/skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/ci.yml)
+[![Tests](https://github.com/muidea/skill-hub/actions/workflows/test.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/test.yml)
+[![Release](https://github.com/muidea/skill-hub/actions/workflows/release.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/release.yml)
 
 ## 简介
 
@@ -9,6 +13,7 @@
 - **Git 为中心**：所有技能存储在Git仓库中，作为单一可信源
 - **一键分发**：将技能快速应用到不同的AI工具
 - **闭环反馈**：将项目中的手动修改反馈回技能仓库
+- **现代架构**：采用 Go 1.24+ 特性，遵循 Effective Go 最佳实践
 
 ### 功能特性
 
@@ -21,6 +26,7 @@
 - **版本控制**：基于Git的技能版本管理
 - **差异检测**：自动检测手动修改并支持反馈
 - **安全操作**：原子文件写入和备份机制
+- **全面测试**：单元测试 + 端到端测试覆盖
 
 ## 🚀 快速开始
 
@@ -85,6 +91,7 @@ skill-hub feedback my-new-skill --archive
 ### CI/CD状态
 
 [![CI](https://github.com/muidea/skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/ci.yml)
+[![Tests](https://github.com/muidea/skill-hub/actions/workflows/test.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/test.yml)
 [![Release](https://github.com/muidea/skill-hub/actions/workflows/release.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/release.yml)
 
 ### 许可证
@@ -98,9 +105,15 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 2. 创建新的Issue，详细描述问题
 3. 提供复现步骤和环境信息
 
+### 贡献指南
+
+欢迎贡献代码！请参考 [DEVELOPMENT.md](DEVELOPMENT.md) 中的贡献指南。
+
 ---
 
 **快速链接**:
 - [GitHub仓库](https://github.com/muidea/skill-hub)
 - [最新发布版本](https://github.com/muidea/skill-hub/releases)
 - [问题反馈](https://github.com/muidea/skill-hub/issues)
+- [开发文档](DEVELOPMENT.md)
+- [安装指南](INSTALLATION.md)
