@@ -88,7 +88,8 @@ make build VERSION="$VERSION"
 
 # 验证版本
 echo -e "\n${GREEN}验证版本...${NC}"
-BUILD_VERSION=$(./bin/skill-hub --version | awk '{print $3}')
+# 获取版本行并提取版本号
+BUILD_VERSION=$(./bin/skill-hub --version | grep "skill-hub version" | awk '{print $3}')
 if [ "$BUILD_VERSION" != "$VERSION" ]; then
     echo -e "${RED}版本不匹配: 期望 $VERSION, 实际 $BUILD_VERSION${NC}"
     exit 1
