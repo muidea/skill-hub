@@ -72,6 +72,15 @@ def test_skill_hub_basic():
         return False
     print(f"  ✅ List command executed (return code: {result['returncode']})")
     
+    # Test 4: Check info command (basic functionality)
+    print("  Testing: skill-hub info")
+    result = run_command("skill-hub info")
+    # Info command should provide basic information
+    if result['returncode'] not in [0, 1]:
+        print(f"  ❌ Unexpected error: {result['stderr']}")
+        return False
+    print(f"  ✅ Info command executed (return code: {result['returncode']})")
+    
     return True
 
 def test_skill_hub_init():
@@ -82,6 +91,7 @@ def test_skill_hub_init():
     temp_dir = tempfile.mkdtemp(prefix="skill_hub_test_")
     print(f"  Using temporary directory: {temp_dir}")
     
+    original_cwd = None
     try:
         # Change to temp directory
         original_cwd = os.getcwd()
@@ -92,7 +102,8 @@ def test_skill_hub_init():
         result = run_command("skill-hub init")
         if not result['success']:
             print(f"  ❌ Init failed: {result['stderr']}")
-            os.chdir(original_cwd)
+            if original_cwd:
+                os.chdir(original_cwd)
             shutil.rmtree(temp_dir, ignore_errors=True)
             return False
         
@@ -106,13 +117,15 @@ def test_skill_hub_init():
             print(f"  ⚠️  Config file not found at expected location")
         
         # Change back to original directory
-        os.chdir(original_cwd)
+        if original_cwd:
+            os.chdir(original_cwd)
         
         return True
         
     except Exception as e:
         print(f"  ❌ Exception during test: {e}")
-        os.chdir(original_cwd)
+        if original_cwd:
+            os.chdir(original_cwd)
         return False
     finally:
         # Clean up

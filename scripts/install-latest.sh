@@ -1,5 +1,5 @@
 #!/bin/bash
-# skill-hub 自动安装脚本
+# skill-hub 自动安装脚本（无颜色版本）
 # 用法: curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
 # 备用用法: bash <(curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh)
 
@@ -21,13 +21,6 @@ fi
 INSTALL_MODE="auto"
 AUTO_INSTALL_TARGET="user"
 
-# 颜色输出
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
 # GitHub仓库信息
 REPO_OWNER="muidea"
 REPO_NAME="skill-hub"
@@ -36,7 +29,7 @@ GITHUB_API="https://api.github.com/repos/$REPO_OWNER/$REPO_NAME"
 # 默认版本（最新）
 VERSION="${1:-latest}"
 
-    echo -e "${GREEN}skill-hub 安装助手${NC}"
+    echo "skill-hub 安装助手"
     echo "====================="
 
 # 检测系统信息
@@ -67,7 +60,7 @@ get_latest_version() {
         echo "获取最新版本..."
         LATEST_TAG=$(curl -s "$GITHUB_API/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         if [ -z "$LATEST_TAG" ]; then
-            echo -e "${RED}错误: 无法获取最新版本${NC}"
+            echo "错误: 无法获取最新版本"
             exit 1
         fi
         VERSION="$LATEST_TAG"
@@ -84,16 +77,16 @@ download_file() {
     
     if command -v wget >/dev/null 2>&1; then
         if ! wget -q --show-progress -O "$output" "$url"; then
-            echo -e "${RED}错误: 下载失败 - $url${NC}"
+            echo "错误: 下载失败 - $url"
             return 1
         fi
     elif command -v curl >/dev/null 2>&1; then
         if ! curl -L --progress-bar -o "$output" "$url"; then
-            echo -e "${RED}错误: 下载失败 - $url${NC}"
+            echo "错误: 下载失败 - $url"
             return 1
         fi
     else
-        echo -e "${RED}错误: 需要 wget 或 curl${NC}"
+        echo "错误: 需要 wget 或 curl"
         exit 1
     fi
 }
@@ -104,12 +97,12 @@ verify_file() {
     local checksum_file="$2"
     
     if [ ! -f "$checksum_file" ]; then
-        echo -e "${YELLOW}警告: 校验和文件不存在，跳过验证${NC}"
+        echo "警告: 校验和文件不存在，跳过验证"
         return 0
     fi
     
     if [ ! -f "$file" ]; then
-        echo -e "${RED}错误: 要验证的文件不存在 - $file${NC}"
+        echo "错误: 要验证的文件不存在 - $file"
         return 1
     fi
     
@@ -118,7 +111,7 @@ verify_file() {
     if command -v sha256sum >/dev/null 2>&1; then
         # 首先尝试直接验证
         if sha256sum -c "$checksum_file" 2>/dev/null; then
-            echo -e "${GREEN}✓ 文件验证成功${NC}"
+            echo "✓ 文件验证成功"
             return 0
         else
             # 如果验证失败，可能是文件名不匹配
@@ -141,10 +134,10 @@ verify_file() {
             fi
             
             if [ -n "$extracted_hash" ] && [ "$extracted_hash" = "$expected_hash" ]; then
-                echo -e "${GREEN}✓ 文件验证成功（哈希值匹配）${NC}"
+                echo "✓ 文件验证成功（哈希值匹配）"
                 return 0
             else
-                echo -e "${RED}✗ 文件验证失败${NC}"
+                echo "✗ 文件验证失败"
                 echo "  期望的哈希: $expected_hash"
                 echo "  提取的哈希: $extracted_hash"
                 echo "  校验文件内容: '$checksum_content'"
@@ -154,14 +147,14 @@ verify_file() {
     elif command -v shasum >/dev/null 2>&1; then
         # macOS
         if shasum -a 256 -c "$checksum_file" 2>/dev/null; then
-            echo -e "${GREEN}✓ 文件验证成功${NC}"
+            echo "✓ 文件验证成功"
             return 0
         else
-            echo -e "${RED}✗ 文件验证失败${NC}"
+            echo "✗ 文件验证失败"
             return 1
         fi
     else
-        echo -e "${YELLOW}警告: 无法验证文件完整性（缺少 sha256sum/shasum）${NC}"
+        echo "警告: 无法验证文件完整性（缺少 sha256sum/shasum）"
         return 0
     fi
 }
@@ -175,23 +168,23 @@ extract_file() {
     case "$file" in
         *.tar.gz|*.tgz)
             if ! tar -xzf "$file"; then
-                echo -e "${RED}错误: 解压失败 - $file${NC}"
+                echo "错误: 解压失败 - $file"
                 return 1
             fi
             ;;
         *.zip)
             if command -v unzip >/dev/null 2>&1; then
                 if ! unzip -q "$file"; then
-                    echo -e "${RED}错误: 解压失败 - $file${NC}"
+                    echo "错误: 解压失败 - $file"
                     return 1
                 fi
             else
-                echo -e "${RED}错误: 需要 unzip 解压 .zip 文件${NC}"
+                echo "错误: 需要 unzip 解压 .zip 文件"
                 return 1
             fi
             ;;
         *)
-            echo -e "${RED}错误: 不支持的文件格式${NC}"
+            echo "错误: 不支持的文件格式"
             return 1
             ;;
     esac
@@ -202,14 +195,14 @@ main() {
     # 检测系统
     SYSTEM=$(detect_system)
     if [ "$SYSTEM" = "unknown-unknown" ]; then
-        echo -e "${RED}错误: 无法检测系统架构${NC}"
+        echo "错误: 无法检测系统架构"
         exit 1
     fi
     
     OS=$(echo "$SYSTEM" | cut -d'-' -f1)
     ARCH=$(echo "$SYSTEM" | cut -d'-' -f2)
     
-    echo -e "${BLUE}系统检测: $OS $ARCH${NC}"
+    echo "系统检测: $OS $ARCH"
     
     # 获取版本
     get_latest_version
@@ -233,17 +226,18 @@ main() {
     TEMP_DIR=$(mktemp -d)
     cd "$TEMP_DIR"
     
-    echo -e "\n${GREEN}开始下载...${NC}"
+    echo ""
+    echo "开始下载..."
     
     # 下载文件
     if ! download_file "$DOWNLOAD_URL" "$ARCHIVE_NAME"; then
-        echo -e "${RED}下载失败${NC}"
-        echo -e "${YELLOW}可能的原因:${NC}"
+        echo "下载失败"
+        echo "可能的原因:"
         echo "1. Release $VERSION 可能没有包含 $ARCHIVE_NAME 文件"
         echo "2. GitHub Releases 文件可能还未完全就绪"
         echo "3. 网络连接问题"
         echo ""
-        echo -e "${RED}错误: 无法下载指定版本的文件${NC}"
+        echo "错误: 无法下载指定版本的文件"
         echo "请检查:"
         echo "  - Release $VERSION 是否存在: https://github.com/$REPO_OWNER/$REPO_NAME/releases/tag/$VERSION"
         echo "  - 文件是否存在: $ARCHIVE_NAME"
@@ -256,13 +250,13 @@ main() {
     # 下载校验文件（使用当前有效的版本）
     CHECKSUM_DOWNLOADED=true
     if ! download_file "$CHECKSUM_URL" "$CHECKSUM_NAME"; then
-        echo -e "${YELLOW}警告: 校验和文件下载失败，跳过验证${NC}"
+        echo "警告: 校验和文件下载失败，跳过验证"
         CHECKSUM_DOWNLOADED=false
     fi
     
     # 解压文件
     if ! extract_file "$ARCHIVE_NAME"; then
-        echo -e "${RED}解压失败${NC}"
+        echo "解压失败"
         cd /
         rm -rf "$TEMP_DIR"
         exit 1
@@ -286,7 +280,7 @@ main() {
     fi
     
     if [ -z "$ACTUAL_BINARY" ]; then
-        echo -e "${RED}错误: 未找到可执行文件${NC}"
+        echo "错误: 未找到可执行文件"
         echo "解压后的文件:"
         ls -la
         cd /
@@ -300,39 +294,43 @@ main() {
     # 注意：校验文件验证的是解压后的二进制文件，不是压缩包
     if [ "$CHECKSUM_DOWNLOADED" = "true" ]; then
         if ! verify_file "$ACTUAL_BINARY" "$CHECKSUM_NAME"; then
-            echo -e "${RED}下载失败: 文件验证错误${NC}"
+            echo "下载失败: 文件验证错误"
             cd /
             rm -rf "$TEMP_DIR"
             exit 1
         fi
     else
-        echo -e "${YELLOW}跳过文件验证（校验文件缺失）${NC}"
+        echo "跳过文件验证（校验文件缺失）"
     fi
     
     # 显示内容
-    echo -e "\n${GREEN}下载完成！准备安装...${NC}"
+    echo ""
+    echo "下载完成！准备安装..."
     echo "文件保存在: $TEMP_DIR"
     echo ""
     echo "内容:"
     ls -la
     
     # 安装信息
-    echo -e "\n${BLUE}安装信息:${NC}"
+    echo ""
+    echo "安装信息:"
     echo "• 可执行文件: ./$ACTUAL_BINARY"
     echo "• 将自动安装到: ~/.local/bin/"
     
     # 自动安装到 ~/.local/bin/
-    echo -e "\n${GREEN}自动安装到 ~/.local/bin/...${NC}"
+    echo ""
+    echo "自动安装到 ~/.local/bin/..."
     
     # 创建目录（如果不存在）
     mkdir -p ~/.local/bin
     
     # 复制文件
     if cp "$ACTUAL_BINARY" ~/.local/bin/; then
-        echo -e "${GREEN}✓ 安装成功！${NC}"
+        echo "✓ 安装成功！"
         
         # 安装完成信息提示
-        echo -e "\n${BLUE}📦 安装内容:${NC}"
+        echo ""
+        echo "📦 安装内容:"
         echo "• 程序名称: skill-hub"
         echo "• 可执行文件: $ACTUAL_BINARY"
         echo "• 安装位置: ~/.local/bin/$ACTUAL_BINARY"
@@ -340,7 +338,8 @@ main() {
         echo "• 文件大小: $(du -h "$ACTUAL_BINARY" | cut -f1)"
         
         # 检查并自动配置PATH
-        echo -e "\n${GREEN}🔧 检查并配置PATH...${NC}"
+        echo ""
+        echo "🔧 检查并配置PATH..."
         
         # 首先检查是否已经在PATH中
         local user_local_bin="$HOME/.local/bin"
@@ -416,13 +415,14 @@ main() {
         fi
         
     else
-        echo -e "${RED}✗ 安装失败${NC}"
+        echo "✗ 安装失败"
         echo "文件保存在: $TEMP_DIR"
         echo "您可以手动复制: cp $TEMP_DIR/$ACTUAL_BINARY ~/.local/bin/"
     fi
     
     # 验证安装和使用说明
-    echo -e "\n${GREEN}🔧 验证安装和使用说明:${NC}"
+    echo ""
+    echo "🔧 验证安装和使用说明:"
     
     # 检查PATH配置状态
     local user_local_bin="$HOME/.local/bin"
@@ -442,7 +442,7 @@ main() {
     done
     
     if command -v "$ACTUAL_BINARY" >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ 安装验证成功！${NC}"
+        echo "✅ 安装验证成功！"
         echo ""
         
         # 显示PATH配置状态
@@ -466,7 +466,8 @@ main() {
         
         # 检查版本信息是否为空
         if [[ "$version_output" == *"version  (commit: , built: )"* ]]; then
-            echo -e "\n${YELLOW}⚠️  版本信息说明:${NC}"
+            echo ""
+            echo "⚠️  版本信息说明:"
             echo "当前版本的二进制文件编译时未嵌入版本信息。"
             echo "这不会影响功能使用，只是显示信息不完整。"
             echo "实际版本: $VERSION (从GitHub Releases获取)"
@@ -479,7 +480,7 @@ main() {
         echo "  3. 列出可用技能: $ACTUAL_BINARY list"
         echo "  4. 启用技能: $ACTUAL_BINARY use <skill-name>"
     else
-        echo -e "${YELLOW}⚠️  安装验证: 命令未在PATH中找到${NC}"
+        echo "⚠️  安装验证: 命令未在PATH中找到"
         echo ""
         
         # 显示PATH配置状态
@@ -503,17 +504,18 @@ main() {
     fi
     
     # 清理提示和总结
-    echo -e "\n${BLUE}📝 安装总结:${NC}"
+    echo ""
+    echo "📝 安装总结:"
     echo "• ✅ 下载完成: skill-hub-linux-amd64.tar.gz"
     echo "• ✅ 验证通过: SHA256 校验成功"
     echo "• ✅ 文件解压: 找到可执行文件 $ACTUAL_BINARY"
     echo "• ✅ 安装完成: 已复制到 ~/.local/bin/"
     echo ""
-    echo "${YELLOW}🗑️  清理提示:${NC}"
+    echo "🗑️  清理提示:"
     echo "临时文件保存在: $TEMP_DIR"
     echo "安装完成后可手动删除: rm -rf $TEMP_DIR"
     echo ""
-    echo "${GREEN}🎉 skill-hub 安装完成！开始使用吧！${NC}"
+    echo "🎉 skill-hub 安装完成！开始使用吧！"
 }
 
 # 运行主函数

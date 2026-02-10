@@ -106,10 +106,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Python dependencies
+      - name: Install Python dependencies (optional for simple tests)
+        continue-on-error: true
         run: |
           python3 -m pip install --upgrade pip
-          pip install -r tests/e2e/requirements.txt
+          # Simple tests don't need dependencies, but install if requirements.txt exists
+          if [ -f tests/e2e/requirements.txt ]; then
+            pip install -r tests/e2e/requirements.txt
+          fi
 
       - name: Run simple e2e tests
         run: |
