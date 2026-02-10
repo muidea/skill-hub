@@ -49,7 +49,7 @@ if [ -z "$VERSION" ]; then
 fi
 
 # 验证版本号格式
-if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?$ ]]; then
+if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?$ ]]; then
     echo -e "${RED}错误: 版本号格式不正确${NC}"
     echo "正确格式: X.Y.Z 或 X.Y.Z-后缀"
     exit 1
