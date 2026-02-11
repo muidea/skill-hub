@@ -46,10 +46,13 @@ curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/instal
 # 1. 初始化工作区
 skill-hub init
 
-# 2. 启用技能并设置目标
+# 2. 设置项目目标环境
+skill-hub set-target open_code
+
+# 3. 启用技能
 skill-hub use git-expert
 
-# 3. 应用技能到项目
+# 4. 应用技能到项目
 skill-hub apply
 ```
 
@@ -64,6 +67,33 @@ skill-hub validate my-new-skill
 # 3. 反馈手动修改并归档技能
 skill-hub feedback my-new-skill
 ```
+
+## 🛠️ 命令参考
+
+| 命令 | 参数 | 功能说明 |
+|------|------|----------|
+| `init` | `[git_url] [--target <value>]` | 初始化本地仓库 |
+| `set-target` | `<value>` | 设置项目目标环境 |
+| `list` | `[--target <value>] [--verbose]` | 列出可用技能 |
+| `search` | `<keyword> [--target <value>] [--limit <number>]` | 搜索远程技能 |
+| `create` | `<id> [--target <value>]` | 创建新技能模板 |
+| `remove` | `<id>` | 移除项目技能 |
+| `validate` | `<id>` | 验证技能合规性 |
+| `use` | `<id> [--target <value>]` | 使用指定技能 |
+| `status` | `[id] [--verbose]` | 检查技能状态 |
+| `apply` | `[--dry-run] [--force]` | 应用技能到项目 |
+| `feedback` | `<id> [--dry-run] [--force]` | 反馈修改到仓库 |
+| `pull` | `[--force] [--check]` | 从远程拉取技能 |
+| `push` | `[--message MESSAGE] [--force] [--dry-run]` | 推送本地更改 |
+| `git` | `<subcommand>` | Git仓库操作 |
+
+**语法说明**：`<参数>`为必需参数，`[参数]`为可选参数
+
+**全局选项**：
+- `-h, --help` - 显示帮助信息
+- `-v, --version` - 显示版本信息
+- `--dry-run` - 演习模式
+- `--force` - 强制模式
 
 ## 📚 文档导航
 

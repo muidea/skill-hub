@@ -194,28 +194,33 @@ skill-hub 提供了一系列命令来管理技能和项目。
 
 | 命令 | 描述 | 示例 |
 |------|------|------|
-| `init` | 初始化Skill Hub工作区 | `skill-hub init [git-url]` |
-| `list` | 列出所有可用技能 | `skill-hub list` |
-| `use` | 在当前项目启用技能 | `skill-hub use git-expert --target open_code` |
-| `set-target` | 设置项目首选目标 | `skill-hub set-target open_code` |
-| `apply` | 将技能应用到项目 | `skill-hub apply --dry-run` |
-| `status` | 检查技能状态 | `skill-hub status` |
-| `feedback` | 反馈手动修改 | `skill-hub feedback git-expert` |
-| `update` | 更新技能仓库 | `skill-hub update` |
-| `remove` | 从项目移除技能 | `skill-hub remove git-expert` |
-| `git` | Git仓库操作 | `skill-hub git --help` |
-| `create` | 创建新的技能模板 | `skill-hub create my-skill` |
-| `validate` | 在本地项目中验证技能 | `skill-hub validate my-skill` |
+| `init` | 初始化本地仓库 | `skill-hub init [git_url] [--target <value>]` |
+| `set-target` | 设置项目目标环境 | `skill-hub set-target <value>` |
+| `list` | 列出可用技能 | `skill-hub list [--target <value>] [--verbose]` |
+| `search` | 搜索远程技能 | `skill-hub search <keyword> [--target <value>] [--limit <number>]` |
+| `create` | 创建新技能模板 | `skill-hub create <id> [--target <value>]` |
+| `remove` | 移除项目技能 | `skill-hub remove <id>` |
+| `validate` | 验证技能合规性 | `skill-hub validate <id>` |
+| `use` | 使用本地仓库里的指定技能 | `skill-hub use <id> [--target <value>]` |
+| `status` | 检查技能状态 | `skill-hub status [id] [--verbose]` |
+| `apply` | 应用技能到项目 | `skill-hub apply [--dry-run] [--force]` |
+| `feedback` | 将项目工作区技能修改内容更新至到本地仓库 | `skill-hub feedback <id> [--dry-run] [--force]` |
+| `pull` | 从远程仓库拉取最新技能 | `skill-hub pull [--force] [--check]` |
+| `push` | 推送本地更改到远程仓库 | `skill-hub push [--message MESSAGE] [--force] [--dry-run]` |
+| `git` | Git仓库操作 | `skill-hub git <subcommand>` |
 
 ### 常用工作流程
 
 #### 初始化新项目
 ```bash
-# 在当前目录初始化
+# 在当前目录初始化（仅本地管理）
 skill-hub init
 
-# 使用自定义技能仓库
+# 使用自定义技能仓库初始化
 skill-hub init https://github.com/your-org/skills.git
+
+# 初始化并设置项目为 OpenCode 环境
+skill-hub init https://github.com/your-org/skills.git --target open_code
 ```
 
 #### 启用和管理技能
@@ -223,14 +228,23 @@ skill-hub init https://github.com/your-org/skills.git
 # 查看可用技能
 skill-hub list
 
-# 启用技能并设置目标工具
-skill-hub use golang-best-practices --target cursor
+# 设置项目目标环境
+skill-hub set-target cursor
+
+# 启用技能
+skill-hub use golang-best-practices
 
 # 应用技能到项目
 skill-hub apply
 
 # 检查技能状态
 skill-hub status
+
+# 显示详细信息
+skill-hub list --verbose
+
+# 按目标环境过滤技能列表
+skill-hub list --target cursor
 ```
 
 #### 技能反馈和更新
@@ -238,11 +252,17 @@ skill-hub status
 # 反馈手动修改
 skill-hub feedback golang-best-practices
 
-# 反馈并归档验证通过的技能
-skill-hub feedback golang-best-practices --archive
+# 演习模式查看将要同步的差异
+skill-hub feedback golang-best-practices --dry-run
 
-# 更新技能仓库
-skill-hub update
+# 从远程仓库拉取最新技能
+skill-hub pull
+
+# 检查可用更新但不实际执行拉取
+skill-hub pull --check
+
+# 推送本地更改到远程仓库
+skill-hub push --message "修复技能描述"
 
 # 移除不再需要的技能
 skill-hub remove golang-best-practices
@@ -252,6 +272,9 @@ skill-hub remove golang-best-practices
 ```bash
 # 从当前项目创建新技能模板
 skill-hub create my-new-skill
+
+# 创建兼容 OpenCode 的技能
+skill-hub create my-new-skill --target open_code
 
 # 在本地项目中验证技能有效性
 skill-hub validate my-new-skill
@@ -343,14 +366,23 @@ skill-hub 支持多种AI开发工具，可以将技能同步到不同的工具�
 ### 多工具同步示例
 
 ```bash
-# 启用技能并同步到多个工具
-skill-hub use git-expert --target opencode
+# 设置项目目标环境
+skill-hub set-target open_code
 
-# 应用技能到所有配置
+# 启用技能
+skill-hub use git-expert
+
+# 应用技能到项目
 skill-hub apply
+
+# 演习模式查看将要进行的变更
+skill-hub apply --dry-run
 
 # 检查各工具的配置状态
 skill-hub status
+
+# 显示详细差异信息
+skill-hub status --verbose
 ```
 
 ## 故障排除
@@ -388,8 +420,11 @@ export PATH="$HOME/.local/bin:$PATH"
 ```bash
 # 检查目标工具是否安装
 # 检查配置文件权限
-# 使用--dry-run预览更改
+# 使用演习模式预览更改
 skill-hub apply --dry-run
+
+# 强制应用，即使检测到冲突也继续执行
+skill-hub apply --force
 ```
 
 ### 获取帮助
@@ -402,6 +437,9 @@ skill-hub --help
 skill-hub init --help
 skill-hub use --help
 skill-hub apply --help
+skill-hub feedback --help
+skill-hub pull --help
+skill-hub push --help
 
 # 查看版本信息
 skill-hub --version
