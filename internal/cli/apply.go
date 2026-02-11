@@ -8,6 +8,7 @@ import (
 	"skill-hub/internal/adapter"
 	"skill-hub/internal/config"
 	"skill-hub/internal/state"
+	"skill-hub/pkg/errors"
 	"skill-hub/pkg/spec"
 
 	"github.com/spf13/cobra"
@@ -43,29 +44,30 @@ func runApply(dryRun bool, force bool) error {
 	// 获取当前目录
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("获取当前目录失败: %w", err)
+		return errors.WrapWithCode(err, "runApply", errors.ErrSystem, "获取当前目录失败")
 	}
 
 	// 检查项目工作区状态（规范4.10：检查当前目录是否存在于state.json中）
 	_, err = EnsureProjectWorkspace(cwd, "")
 	if err != nil {
-		return fmt.Errorf("检查项目工作区失败: %w", err)
+		return errors.Wrap(err, "runApply: 检查项目工作区失败")
 	}
 
 	// 创建状态管理器
 	stateMgr, err := state.NewStateManager()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "runApply: 创建状态管理器失败")
 	}
 
 	// 获取项目状态
 	projectState, err := stateMgr.FindProjectByPath(cwd)
 	if err != nil {
-		return fmt.Errorf("查找项目状态失败: %w", err)
+		return errors.WrapWithCode(err, "runApply", errors.ErrSystem, "查找项目状态失败")
 	}
 
 	if projectState == nil || projectState.PreferredTarget == "" {
-		return fmt.Errorf("项目未设置目标环境，请先使用 'skill-hub set-target <value>' 设置目标环境")
+		return errors.NewWithCode("runApply", errors.ErrProjectInvalid,
+			"项目未设置目标环境，请先使用 'skill-hub set-target <value>' 设置目标环境")
 	}
 
 	target := spec.NormalizeTarget(projectState.PreferredTarget)
@@ -75,7 +77,7 @@ func runApply(dryRun bool, force bool) error {
 	// 获取项目启用的技能
 	skills, err := stateMgr.GetProjectSkills(cwd)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "runApply: 获取项目技能失败")
 	}
 
 	if len(skills) == 0 {
@@ -94,7 +96,7 @@ func runApply(dryRun bool, force bool) error {
 	// 根据目标环境应用技能
 	adapter, err := adapter.GetAdapterForTarget(target)
 	if err != nil {
-		return fmt.Errorf("获取适配器失败: %w", err)
+		return errors.WrapWithCode(err, "runApply", errors.ErrSystem, "获取适配器失败")
 	}
 
 	// 设置为项目模式

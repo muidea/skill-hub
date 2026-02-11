@@ -88,7 +88,7 @@ class TestScenario2StateActivation:
         result = self.cmd.run("use", ["non-existent-skill"], cwd=str(temp_dir))
         # 应该失败，因为技能不存在
         assert not result.success, f"use should fail when skill doesn't exist"
-        assert "不存在" in result.stderr or "not found" in result.stderr.lower(), \
+        assert "不存在" in result.stderr or "未找到" in result.stderr or "not found" in result.stderr.lower(), \
             f"Should indicate skill doesn't exist"
         
         print(f"✓ use command dependency check passed (skill doesn't exist)")

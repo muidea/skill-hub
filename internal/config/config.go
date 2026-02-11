@@ -1,10 +1,11 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"skill-hub/pkg/errors"
 
 	"github.com/spf13/viper"
 )
@@ -41,7 +42,7 @@ func LoadConfig() error {
 	if configDir == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("获取用户主目录失败: %w", err)
+			return errors.WrapWithCode(err, "LoadConfig", errors.ErrSystem, "获取用户主目录失败")
 		}
 		configDir = filepath.Join(homeDir, ".skill-hub")
 	}
@@ -50,7 +51,7 @@ func LoadConfig() error {
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		return fmt.Errorf("配置文件不存在，请先运行 'skill-hub init'")
+		return errors.ConfigNotFound("LoadConfig", configFile)
 	}
 
 	viper.SetConfigFile(configFile)
@@ -62,7 +63,7 @@ func LoadConfig() error {
 	// 获取用户主目录用于其他路径
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("获取用户主目录失败: %w", err)
+		return errors.WrapWithCode(err, "LoadConfig", errors.ErrSystem, "获取用户主目录失败")
 	}
 
 	viper.SetDefault("claude_config_path", filepath.Join(homeDir, ".claude", "config.json"))
@@ -73,12 +74,12 @@ func LoadConfig() error {
 	viper.SetDefault("git_branch", "main")
 
 	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("读取配置文件失败: %w", err)
+		return errors.WrapWithCode(err, "LoadConfig", errors.ErrConfigInvalid, "读取配置文件失败")
 	}
 
 	globalConfig = &Config{}
 	if err := viper.Unmarshal(globalConfig); err != nil {
-		return fmt.Errorf("解析配置文件失败: %w", err)
+		return errors.WrapWithCode(err, "LoadConfig", errors.ErrConfigInvalid, "解析配置文件失败")
 	}
 
 	configLoaded = true
@@ -89,7 +90,7 @@ func LoadConfig() error {
 func GetRepoPath() (string, error) {
 	cfg, err := GetConfig()
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "GetRepoPath: 获取配置失败")
 	}
 	return expandPath(cfg.RepoPath), nil
 }
@@ -122,7 +123,7 @@ func GetRootDir() (string, error) {
 	if configDir == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return "", fmt.Errorf("获取用户主目录失败: %w", err)
+			return "", errors.WrapWithCode(err, "GetRootDir", errors.ErrSystem, "获取用户主目录失败")
 		}
 		configDir = filepath.Join(homeDir, ".skill-hub")
 	}

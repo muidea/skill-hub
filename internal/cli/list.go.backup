@@ -6,14 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 	"skill-hub/internal/config"
 	"skill-hub/internal/engine"
 	"skill-hub/pkg/errors"
-	"skill-hub/pkg/logging"
 	"skill-hub/pkg/spec"
 )
 
@@ -87,8 +85,106 @@ func runList(target string, verbose bool) error {
 		} else {
 			fmt.Println("ℹ️  未找到任何技能")
 		}
-		return nil
+	return nil
+}
+
+// parseSkillMetadataFromFile 从SKILL.md文件解析技能元数据
+func parseSkillMetadataFromFile(mdPath, skillID string) (*spec.SkillMetadata, error) {
+	content, err := os.ReadFile(mdPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取SKILL.md失败: %w", err)
 	}
+
+	// 解析frontmatter
+	lines := strings.Split(string(content), "\n")
+	if len(lines) < 2 || lines[0] != "---" {
+		return nil, fmt.Errorf("无效的SKILL.md格式: 缺少frontmatter")
+	}
+
+	var frontmatterLines []string
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" {
+			break
+		}
+		frontmatterLines = append(frontmatterLines, lines[i])
+	}
+
+	frontmatter := strings.Join(frontmatterLines, "\n")
+
+	// 解析YAML frontmatter
+	var skillData map[string]interface{}
+	if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err != nil {
+		return nil, fmt.Errorf("解析frontmatter失败: %w", err)
+	}
+
+	// 创建技能元数据对象
+	skillMeta := &spec.SkillMetadata{
+		ID: skillID,
+	}
+
+	// 设置名称
+	if name, ok := skillData["name"].(string); ok {
+		skillMeta.Name = name
+	} else {
+		skillMeta.Name = skillID
+	}
+
+	// 设置描述
+	if desc, ok := skillData["description"].(string); ok {
+		skillMeta.Description = desc
+	}
+
+	// 设置版本
+	skillMeta.Version = "1.0.0"
+	if version, ok := skillData["version"].(string); ok {
+		skillMeta.Version = version
+	}
+
+	// 设置作者
+	if author, ok := skillData["author"].(string); ok {
+		skillMeta.Author = author
+	} else if source, ok := skillData["source"].(string); ok {
+		skillMeta.Author = source
+	} else {
+		skillMeta.Author = "unknown"
+	}
+
+	// 设置标签
+	if tagsStr, ok := skillData["tags"].(string); ok {
+		skillMeta.Tags = strings.Split(tagsStr, ",")
+		for i, tag := range skillMeta.Tags {
+			skillMeta.Tags[i] = strings.TrimSpace(tag)
+		}
+	}
+
+	// 设置兼容性
+	if compatData, ok := skillData["compatibility"]; ok {
+		switch v := compatData.(type) {
+		case string:
+			skillMeta.Compatibility = v
+		case map[string]interface{}:
+			// 向后兼容：将对象格式转换为字符串
+			var compatList []string
+			if cursorVal, ok := v["cursor"].(bool); ok && cursorVal {
+				compatList = append(compatList, "Cursor")
+			}
+			if claudeVal, ok := v["claude_code"].(bool); ok && claudeVal {
+				compatList = append(compatList, "Claude Code")
+			}
+			if openCodeVal, ok := v["open_code"].(bool); ok && openCodeVal {
+				compatList = append(compatList, "OpenCode")
+			}
+			if shellVal, ok := v["shell"].(bool); ok && shellVal {
+				compatList = append(compatList, "Shell")
+			}
+			if len(compatList) > 0 {
+				skillMeta.Compatibility = "Designed for " + strings.Join(compatList, ", ") + " (or similar AI coding assistants)"
+			}
+		}
+	}
+
+	return skillMeta, nil
+}
 
 	if verbose {
 		// 详细模式显示
@@ -159,10 +255,6 @@ func runList(target string, verbose bool) error {
 
 // refreshRegistry 刷新技能索引，确保registry.json与skills目录同步
 func refreshRegistry() error {
-	// 获取日志记录器
-	logger := logging.GetGlobalLogger().WithOperation("refreshRegistry")
-	startTime := time.Now()
-
 	// 获取repo目录
 	repoPath, err := config.GetRepoPath()
 	if err != nil {
@@ -184,25 +276,16 @@ func refreshRegistry() error {
   "version": "1.0.0",
   "skills": []
 }`
-		if err := os.WriteFile(registryPath, []byte(registryContent), 0644); err != nil {
-			return errors.Wrap(err, "refreshRegistry: 创建空registry.json失败")
-		}
-		logger.Info("创建空registry.json", "registry_path", registryPath)
-		return nil
+		return os.WriteFile(registryPath, []byte(registryContent), 0644)
 	}
 
 	// 扫描skills目录下的所有子目录
 	entries, err := os.ReadDir(skillsDir)
 	if err != nil {
-		return errors.Wrap(err, "refreshRegistry: 读取skills目录失败")
+		return fmt.Errorf("读取skills目录失败: %w", err)
 	}
 
-	logger.Debug("开始扫描skills目录", "skills_dir", skillsDir, "entry_count", len(entries))
-
 	var skills []spec.SkillMetadata
-	validCount := 0
-	invalidCount := 0
-
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -214,25 +297,18 @@ func refreshRegistry() error {
 
 		// 检查是否存在SKILL.md文件
 		if _, err := os.Stat(skillMdPath); os.IsNotExist(err) {
-			logger.Debug("跳过无SKILL.md文件的技能目录", "skill_id", skillID)
-			invalidCount++
 			continue
 		}
 
+		// 解析SKILL.md文件
 		skillMeta, err := parseSkillMetadataFromFile(skillMdPath, skillID)
 		if err != nil {
 			// 不输出错误，继续处理其他技能
-			logger.Debug("解析技能元数据失败", "skill_id", skillID, "error", err.Error())
-			invalidCount++
 			continue
 		}
 
 		skills = append(skills, *skillMeta)
-		validCount++
-		logger.Debug("成功解析技能", "skill_id", skillID, "name", skillMeta.Name, "version", skillMeta.Version)
 	}
-
-	logger.Info("技能扫描完成", "total_entries", len(entries), "valid_skills", validCount, "invalid_entries", invalidCount)
 
 	// 创建registry对象
 	registry := spec.Registry{
@@ -243,117 +319,13 @@ func refreshRegistry() error {
 	// 转换为JSON
 	registryJSON, err := json.MarshalIndent(registry, "", "  ")
 	if err != nil {
-		return errors.Wrap(err, "refreshRegistry: 序列化registry失败")
+		return fmt.Errorf("序列化registry失败: %w", err)
 	}
 
 	// 写入文件
 	if err := os.WriteFile(registryPath, registryJSON, 0644); err != nil {
-		return errors.Wrap(err, "refreshRegistry: 写入registry.json失败")
+		return fmt.Errorf("写入registry.json失败: %w", err)
 	}
-
-	// 记录成功日志
-	logger.Info("registry.json刷新成功",
-		"registry_path", registryPath,
-		"skill_count", len(skills),
-		"duration_ms", time.Since(startTime).Milliseconds())
 
 	return nil
-}
-
-// parseSkillMetadataFromFile 从SKILL.md文件解析技能元数据
-func parseSkillMetadataFromFile(mdPath, skillID string) (*spec.SkillMetadata, error) {
-	content, err := os.ReadFile(mdPath)
-	if err != nil {
-		return nil, errors.Wrap(err, "parseSkillMetadataFromFile: 读取SKILL.md失败")
-	}
-
-	// 解析frontmatter
-	lines := strings.Split(string(content), "\n")
-	if len(lines) < 2 || lines[0] != "---" {
-		return nil, errors.New("parseSkillMetadataFromFile: 无效的SKILL.md格式: 缺少frontmatter")
-	}
-
-	var frontmatterLines []string
-	for i := 1; i < len(lines); i++ {
-		if lines[i] == "---" {
-			break
-		}
-		frontmatterLines = append(frontmatterLines, lines[i])
-	}
-
-	frontmatter := strings.Join(frontmatterLines, "\n")
-
-	// 解析YAML frontmatter
-	var skillData map[string]interface{}
-	if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err != nil {
-		return nil, errors.Wrap(err, "parseSkillMetadataFromFile: 解析frontmatter失败")
-	}
-
-	// 创建技能元数据对象
-	skillMeta := &spec.SkillMetadata{
-		ID: skillID,
-	}
-
-	// 设置名称
-	if name, ok := skillData["name"].(string); ok {
-		skillMeta.Name = name
-	} else {
-		skillMeta.Name = skillID
-	}
-
-	// 设置描述
-	if desc, ok := skillData["description"].(string); ok {
-		skillMeta.Description = desc
-	}
-
-	// 设置版本
-	skillMeta.Version = "1.0.0"
-	if version, ok := skillData["version"].(string); ok {
-		skillMeta.Version = version
-	}
-
-	// 设置作者
-	if author, ok := skillData["author"].(string); ok {
-		skillMeta.Author = author
-	} else if source, ok := skillData["source"].(string); ok {
-		skillMeta.Author = source
-	} else {
-		skillMeta.Author = "unknown"
-	}
-
-	// 设置标签
-	if tagsStr, ok := skillData["tags"].(string); ok {
-		skillMeta.Tags = strings.Split(tagsStr, ",")
-		for i, tag := range skillMeta.Tags {
-			skillMeta.Tags[i] = strings.TrimSpace(tag)
-		}
-	}
-
-	// 设置兼容性
-	if compatData, ok := skillData["compatibility"]; ok {
-		switch v := compatData.(type) {
-		case string:
-			skillMeta.Compatibility = v
-		case map[string]interface{}:
-			// 向后兼容：将对象格式转换为字符串
-			var compatList []string
-			if cursorVal, ok := v["cursor"].(bool); ok && cursorVal {
-				compatList = append(compatList, "Cursor")
-			}
-			if claudeVal, ok := v["claude_code"].(bool); ok && claudeVal {
-				compatList = append(compatList, "Claude Code")
-			}
-			if openCodeVal, ok := v["open_code"].(bool); ok && openCodeVal {
-				compatList = append(compatList, "OpenCode")
-			}
-			if shellVal, ok := v["shell"].(bool); ok && shellVal {
-				compatList = append(compatList, "Shell")
-			}
-			if len(compatList) > 0 {
-				skillMeta.Compatibility = "Designed for " + strings.Join(compatList, ", ") + " (or similar AI coding assistants)"
-			}
-		}
-	}
-
-	return skillMeta, nil
 }

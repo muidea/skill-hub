@@ -10,6 +10,7 @@ import (
 	"skill-hub/internal/config"
 	"skill-hub/internal/engine"
 	"skill-hub/internal/state"
+	"skill-hub/pkg/errors"
 	"skill-hub/pkg/spec"
 )
 
@@ -19,7 +20,7 @@ func CheckInitDependency() error {
 	// 尝试加载配置，如果失败说明未初始化
 	_, err := config.GetConfig()
 	if err != nil {
-		return fmt.Errorf("本地仓库未初始化，请先运行 'skill-hub init'")
+		return errors.NewWithCode("CheckInitDependency", errors.ErrConfigNotFound, "本地仓库未初始化，请先运行 'skill-hub init'")
 	}
 	return nil
 }
@@ -29,12 +30,12 @@ func CheckInitDependency() error {
 func CheckProjectWorkspace(cwd string) (*spec.ProjectState, error) {
 	stateManager, err := state.NewStateManager()
 	if err != nil {
-		return nil, fmt.Errorf("创建状态管理器失败: %w", err)
+		return nil, errors.WrapWithCode(err, "CheckProjectWorkspace", errors.ErrSystem, "创建状态管理器失败")
 	}
 
 	projectState, err := stateManager.LoadProjectState(cwd)
 	if err != nil {
-		return nil, fmt.Errorf("加载项目状态失败: %w", err)
+		return nil, errors.WrapWithCode(err, "CheckProjectWorkspace", errors.ErrSystem, "加载项目状态失败")
 	}
 
 	return projectState, nil
@@ -45,13 +46,13 @@ func CheckProjectWorkspace(cwd string) (*spec.ProjectState, error) {
 func EnsureProjectWorkspace(cwd, target string) (*spec.ProjectState, error) {
 	stateManager, err := state.NewStateManager()
 	if err != nil {
-		return nil, fmt.Errorf("创建状态管理器失败: %w", err)
+		return nil, errors.WrapWithCode(err, "EnsureProjectWorkspace", errors.ErrSystem, "创建状态管理器失败")
 	}
 
 	// 检查项目是否真正存在于状态文件中
 	projectState, err := stateManager.FindProjectByPath(cwd)
 	if err != nil {
-		return nil, fmt.Errorf("查找项目失败: %w", err)
+		return nil, errors.WrapWithCode(err, "EnsureProjectWorkspace", errors.ErrSystem, "查找项目失败")
 	}
 
 	// 如果项目不存在于状态文件中，需要初始化
@@ -67,7 +68,7 @@ func EnsureProjectWorkspace(cwd, target string) (*spec.ProjectState, error) {
 			// 创建项目工作区
 			return createNewProjectWorkspace(cwd, target, stateManager)
 		} else {
-			return nil, fmt.Errorf("操作取消")
+			return nil, errors.NewWithCode("EnsureProjectWorkspace", errors.ErrUserCancel, "操作取消")
 		}
 	}
 
@@ -86,12 +87,13 @@ func createNewProjectWorkspace(cwd, target string, stateManager *state.StateMana
 	// 验证目标值
 	normalizedTarget := spec.NormalizeTarget(target)
 	if normalizedTarget != spec.TargetCursor && normalizedTarget != spec.TargetClaudeCode && normalizedTarget != spec.TargetOpenCode {
-		return nil, fmt.Errorf("无效的目标值: %s，可用选项: cursor, claude, open_code", target)
+		return nil, errors.NewWithCode("createNewProjectWorkspace", errors.ErrInvalidInput,
+			fmt.Sprintf("无效的目标值: %s，可用选项: cursor, claude, open_code", target))
 	}
 
 	// 根据target初始化对应的文件和目录
 	if err := initializeTargetFiles(cwd, normalizedTarget); err != nil {
-		return nil, fmt.Errorf("初始化目标文件失败: %w", err)
+		return nil, errors.WrapWithCode(err, "createNewProjectWorkspace", errors.ErrFileOperation, "初始化目标文件失败")
 	}
 
 	// 创建项目状态
@@ -103,7 +105,7 @@ func createNewProjectWorkspace(cwd, target string, stateManager *state.StateMana
 
 	// 保存项目状态
 	if err := stateManager.SaveProjectState(projectState); err != nil {
-		return nil, fmt.Errorf("保存项目状态失败: %w", err)
+		return nil, errors.WrapWithCode(err, "createNewProjectWorkspace", errors.ErrSystem, "保存项目状态失败")
 	}
 
 	fmt.Printf("✅ 已创建项目工作区，目标环境: %s\n", normalizedTarget)
@@ -117,13 +119,13 @@ func initializeTargetFiles(cwd, target string) error {
 		// 创建.agents目录结构
 		agentsDir := filepath.Join(cwd, ".agents")
 		if err := os.MkdirAll(agentsDir, 0755); err != nil {
-			return fmt.Errorf("创建.agents目录失败: %w", err)
+			return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建.agents目录失败")
 		}
 		fmt.Printf("✓ 创建目录: %s\n", agentsDir)
 
 		skillsDir := filepath.Join(agentsDir, "skills")
 		if err := os.MkdirAll(skillsDir, 0755); err != nil {
-			return fmt.Errorf("创建skills目录失败: %w", err)
+			return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建skills目录失败")
 		}
 		fmt.Printf("✓ 创建目录: %s\n", skillsDir)
 
@@ -131,7 +133,7 @@ func initializeTargetFiles(cwd, target string) error {
 		// 创建.claude目录
 		claudeDir := filepath.Join(cwd, ".claude")
 		if err := os.MkdirAll(claudeDir, 0755); err != nil {
-			return fmt.Errorf("创建.claude目录失败: %w", err)
+			return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建.claude目录失败")
 		}
 		fmt.Printf("✓ 创建目录: %s\n", claudeDir)
 
@@ -141,7 +143,7 @@ func initializeTargetFiles(cwd, target string) error {
   "skills": {}
 }`
 		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-			return fmt.Errorf("创建config.json失败: %w", err)
+			return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建config.json失败")
 		}
 		fmt.Printf("✓ 创建文件: %s\n", configPath)
 
@@ -153,12 +155,13 @@ func initializeTargetFiles(cwd, target string) error {
 
 # Available skills will be injected here`
 		if err := os.WriteFile(cursorRulesPath, []byte(cursorRulesContent), 0644); err != nil {
-			return fmt.Errorf("创建.cursorrules文件失败: %w", err)
+			return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建.cursorrules文件失败")
 		}
 		fmt.Printf("✓ 创建文件: %s\n", cursorRulesPath)
 
 	default:
-		return fmt.Errorf("不支持的目标环境: %s", target)
+		return errors.NewWithCode("initializeTargetFiles", errors.ErrInvalidInput,
+			fmt.Sprintf("不支持的目标环境: %s", target))
 	}
 
 	return nil
@@ -174,12 +177,12 @@ func CheckSkillExists(skillID string) error {
 	// 创建技能管理器
 	manager, err := engine.NewSkillManager()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "CheckSkillExists: 创建技能管理器失败")
 	}
 
 	// 检查技能是否存在
 	if !manager.SkillExists(skillID) {
-		return fmt.Errorf("技能 '%s' 不存在，使用 'skill-hub list' 查看可用技能", skillID)
+		return errors.SkillNotFound("CheckSkillExists", skillID)
 	}
 
 	return nil
@@ -189,7 +192,7 @@ func CheckSkillExists(skillID string) error {
 func CheckSkillInProject(cwd, skillID string) (bool, error) {
 	stateManager, err := state.NewStateManager()
 	if err != nil {
-		return false, err
+		return false, errors.Wrap(err, "CheckSkillInProject: 创建状态管理器失败")
 	}
 
 	return stateManager.ProjectHasSkill(cwd, skillID)

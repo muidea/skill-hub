@@ -15,7 +15,8 @@ func TestWrap(t *testing.T) {
 		t.Fatal("Wrap 应该返回错误")
 	}
 
-	expectedMsg := "操作失败: 原始错误"
+	// 新的错误消息格式包含错误代码
+	expectedMsg := "操作失败: SYSTEM_ERROR - 原始错误 (原始错误)"
 	if wrappedErr.Error() != expectedMsg {
 		t.Errorf("错误消息不匹配: 期望 %q, 得到 %q", expectedMsg, wrappedErr.Error())
 	}
@@ -36,7 +37,8 @@ func TestWrapf(t *testing.T) {
 		t.Fatal("Wrapf 应该返回错误")
 	}
 
-	expectedMsg := "操作 测试 失败: 原始错误"
+	// 新的错误消息格式包含错误代码
+	expectedMsg := "操作 测试 失败: SYSTEM_ERROR - 原始错误 (原始错误)"
 	if wrappedErr.Error() != expectedMsg {
 		t.Errorf("错误消息不匹配: 期望 %q, 得到 %q", expectedMsg, wrappedErr.Error())
 	}

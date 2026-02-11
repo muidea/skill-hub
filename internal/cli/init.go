@@ -12,6 +12,8 @@ import (
 	"skill-hub/internal/adapter"
 	"skill-hub/internal/git"
 	"skill-hub/internal/state"
+	"skill-hub/pkg/errors"
+	"skill-hub/pkg/logging"
 	"skill-hub/pkg/spec"
 	"skill-hub/pkg/utils"
 
@@ -38,12 +40,22 @@ func init() {
 }
 
 func runInit(args []string, target string) error {
+	// 获取日志记录器
+	logger := logging.GetGlobalLogger().WithOperation("runInit")
+
+	// 记录开始
+	startTime := time.Now()
+	logger.Info("开始初始化skill-hub",
+		"args", args,
+		"target", target,
+		"timestamp", startTime.Format(time.RFC3339))
+
 	// 支持通过环境变量指定skill-hub目录
 	skillHubDir := os.Getenv("SKILL_HUB_HOME")
 	if skillHubDir == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("获取用户主目录失败: %w", err)
+			return errors.WrapWithCode(err, "runInit", errors.ErrSystem, "获取用户主目录失败")
 		}
 		skillHubDir = filepath.Join(homeDir, ".skill-hub")
 	}
@@ -59,7 +71,7 @@ func runInit(args []string, target string) error {
 	// 检查是否已经初始化了相同的配置
 	alreadyInitialized, err := checkAlreadyInitialized(skillHubDir, gitURL)
 	if err != nil {
-		return fmt.Errorf("检查初始化状态失败: %w", err)
+		return errors.WrapWithCode(err, "runInit", errors.ErrSystem, "检查初始化状态失败")
 	}
 
 	// 如果gitURL为空，检查是否有现有的git仓库需要更新配置
@@ -80,6 +92,12 @@ func runInit(args []string, target string) error {
 			fmt.Println("远程仓库:", gitURL)
 		}
 		fmt.Println("\n使用 'skill-hub list' 查看可用技能")
+
+		// 记录初始化完成
+		logger.Info("skill-hub已经初始化完成",
+			"skill_hub_dir", skillHubDir,
+			"git_url", gitURL,
+			"already_initialized", true)
 		return nil
 	}
 
@@ -126,7 +144,7 @@ git_branch: "master"
 `, gitURL)
 
 		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-			return fmt.Errorf("创建配置文件失败: %w", err)
+			return errors.WrapWithCode(err, "runInit", errors.ErrFileOperation, "创建配置文件失败")
 		}
 		fmt.Printf("✓ 创建配置文件: %s\n", configPath)
 	} else {
@@ -141,7 +159,7 @@ git_branch: "master"
 		}
 
 		if err := updateConfigGitURL(configPath, gitURL); err != nil {
-			return fmt.Errorf("更新配置文件失败: %w", err)
+			return errors.WrapWithCode(err, "runInit", errors.ErrFileOperation, "更新配置文件失败")
 		}
 		fmt.Printf("✓ 更新配置文件: %s\n", configPath)
 	}
@@ -151,7 +169,7 @@ git_branch: "master"
 	if _, err := os.Stat(statePath); os.IsNotExist(err) {
 		initialState := `{}`
 		if err := os.WriteFile(statePath, []byte(initialState), 0644); err != nil {
-			return fmt.Errorf("创建状态文件失败: %w", err)
+			return errors.WrapWithCode(err, "runInit", errors.ErrFileOperation, "创建状态文件失败")
 		}
 		fmt.Printf("✓ 创建状态文件: %s\n", statePath)
 	} else {
@@ -175,7 +193,7 @@ git_branch: "master"
 				backupDir := repoDir + ".bak." + time.Now().Format("20060102-150405")
 				fmt.Printf("备份现有仓库到: %s\n", backupDir)
 				if err := os.Rename(repoDir, backupDir); err != nil {
-					return fmt.Errorf("备份失败: %w", err)
+					return errors.WrapWithCode(err, "runInit", errors.ErrFileOperation, "备份失败")
 				}
 				// 重新创建空目录
 				if err := utils.EnsureDir(repoDir); err != nil {
@@ -186,7 +204,7 @@ git_branch: "master"
 			// 创建临时Repository对象用于克隆
 			tempRepo, err := git.NewRepository(repoDir)
 			if err != nil {
-				return fmt.Errorf("创建仓库对象失败: %w", err)
+				return errors.WrapWithCode(err, "runInit", errors.ErrGitOperation, "创建仓库对象失败")
 			}
 
 			// 克隆远程仓库
@@ -256,8 +274,16 @@ git_branch: "master"
 	if gitURL != "" {
 		if err := adapter.CleanupTimestampedBackupDirs(repoDir); err != nil {
 			fmt.Printf("⚠️  清理备份目录失败: %v\n", err)
+			logger.Warn("清理备份目录失败", "error", err.Error())
 		}
 	}
+
+	// 记录初始化成功
+	logger.Info("skill-hub初始化成功完成",
+		"skill_hub_dir", skillHubDir,
+		"git_url", gitURL,
+		"repo_dir", repoDir,
+		"duration_ms", time.Since(startTime).Milliseconds())
 
 	return nil
 }
@@ -308,14 +334,14 @@ func initLocalEmptyRepository(repoDir, skillHubDir string) error {
 	// 初始化git仓库（NewRepository会自动初始化如果不存在）
 	_, err := git.NewRepository(repoDir)
 	if err != nil {
-		return fmt.Errorf("初始化git仓库失败: %w", err)
+		return errors.WrapWithCode(err, "initLocalEmptyRepository", errors.ErrGitOperation, "初始化git仓库失败")
 	}
 	fmt.Println("✓ 初始化git仓库")
 
 	// 创建初始registry.json（空的技能索引）- 在根目录
 	registryPath := filepath.Join(skillHubDir, "registry.json")
 	if err := createInitialRegistry(registryPath); err != nil {
-		return fmt.Errorf("创建技能索引失败: %w", err)
+		return errors.WrapWithCode(err, "initLocalEmptyRepository", errors.ErrFileOperation, "创建技能索引失败")
 	}
 	fmt.Printf("✓ 创建技能索引: %s\n", registryPath)
 
@@ -337,13 +363,13 @@ func createInitialRegistry(registryPath string) error {
 func parseSkillMetadata(mdPath, skillID string) (*spec.SkillMetadata, error) {
 	content, err := os.ReadFile(mdPath)
 	if err != nil {
-		return nil, fmt.Errorf("读取SKILL.md失败: %w", err)
+		return nil, errors.WrapWithCode(err, "parseSkillMetadata", errors.ErrFileOperation, "读取SKILL.md失败")
 	}
 
 	// 解析frontmatter
 	lines := strings.Split(string(content), "\n")
 	if len(lines) < 2 || lines[0] != "---" {
-		return nil, fmt.Errorf("无效的SKILL.md格式: 缺少frontmatter")
+		return nil, errors.NewWithCode("parseSkillMetadata", errors.ErrSkillInvalid, "无效的SKILL.md格式: 缺少frontmatter")
 	}
 
 	var frontmatterLines []string
@@ -359,7 +385,7 @@ func parseSkillMetadata(mdPath, skillID string) (*spec.SkillMetadata, error) {
 	// 解析YAML frontmatter
 	var skillData map[string]interface{}
 	if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err != nil {
-		return nil, fmt.Errorf("解析frontmatter失败: %w", err)
+		return nil, errors.WrapWithCode(err, "parseSkillMetadata", errors.ErrSkillInvalid, "解析frontmatter失败")
 	}
 
 	// 创建技能元数据对象
@@ -557,7 +583,7 @@ func checkAlreadyInitialized(skillHubDir, gitURL string) (bool, error) {
 	// 读取配置文件
 	configContent, err := os.ReadFile(configPath)
 	if err != nil {
-		return false, fmt.Errorf("读取配置文件失败: %w", err)
+		return false, errors.WrapWithCode(err, "checkAlreadyInitialized", errors.ErrFileOperation, "读取配置文件失败")
 	}
 
 	// 解析配置文件中的git_remote_url
