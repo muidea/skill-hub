@@ -494,10 +494,3 @@ func TestInitializeTargetFiles(t *testing.T) {
 		})
 	}
 }
-
-// resetConfig 重置配置缓存，确保测试使用新配置
-func resetConfig() {
-	// 使用反射重置包级变量
-	// 由于config包没有导出重置函数，我们通过设置环境变量并希望它重新加载
-	// 在实际项目中，应该为config包添加ResetForTesting函数
-}
