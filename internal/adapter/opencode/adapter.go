@@ -121,16 +121,15 @@ func (a *OpenCodeAdapter) copySkillFromRepository(skillID, targetDir string) err
 	// 获取配置
 	cfg, err := config.GetConfig()
 	if err != nil {
-		// 在测试环境中，配置文件可能不存在，静默返回
-		// 在实际使用中，这个错误会在其他地方被捕获
-		return nil
+		// 在测试环境中，配置文件可能不存在，创建基本技能
+		return a.createBasicSkill(skillID, targetDir)
 	}
 
 	// 展开repo路径中的~符号
 	repoPath := cfg.RepoPath
 	if repoPath == "" {
-		// 仓库路径未配置，静默返回
-		return nil
+		// 仓库路径未配置，创建基本技能
+		return a.createBasicSkill(skillID, targetDir)
 	}
 
 	// 处理~符号
