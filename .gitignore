@@ -19,7 +19,7 @@ profile.cov
 
 __pycache__
 
-.agents
+.agents/*
 .agents_bk
 
 bin
@@ -32,6 +32,9 @@ validate
 !cmd/validate
 
 !docs/Skill-Hub命令规范.md
+
+!.agents/skills/go-refactor-pro
+!.agents/skills/project-integrity-guardian
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
