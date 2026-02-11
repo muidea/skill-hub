@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -31,14 +30,19 @@ func init() {
 }
 
 func runUse(skillID string, target string) error {
-	// 检查技能是否存在
-	manager, err := engine.NewSkillManager()
-	if err != nil {
+	// 检查init依赖（规范4.8：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
 		return err
 	}
 
-	if !manager.SkillExists(skillID) {
-		return fmt.Errorf("技能 '%s' 不存在，使用 'skill-hub list' 查看可用技能", skillID)
+	// 检查技能是否存在
+	if err := CheckSkillExists(skillID); err != nil {
+		return err
+	}
+
+	manager, err := engine.NewSkillManager()
+	if err != nil {
+		return err
 	}
 
 	// 加载技能详情
@@ -60,10 +64,11 @@ func runUse(skillID string, target string) error {
 		return fmt.Errorf("获取当前目录失败: %w", err)
 	}
 
-	// 检查项目是否已初始化（检查.agents目录）
-	agentsDir := filepath.Join(cwd, ".agents")
-	_, err = os.Stat(agentsDir)
-	projectInitialized := err == nil
+	// 检查项目工作区状态（规范4.8：检查当前目录是否存在于state.json中）
+	_, err = EnsureProjectWorkspace(cwd, target)
+	if err != nil {
+		return fmt.Errorf("检查项目工作区失败: %w", err)
+	}
 
 	// 检查项目是否已启用该技能
 	stateManager, err := state.NewStateManager()
@@ -71,21 +76,9 @@ func runUse(skillID string, target string) error {
 		return err
 	}
 
-	hasSkill := false
-	if projectInitialized {
-		// 只有项目已初始化时才检查state.json
-		hasSkill, err = stateManager.ProjectHasSkill(cwd, skillID)
-		if err != nil {
-			return err
-		}
-	} else {
-		// 项目未初始化，创建.agents目录
-		fmt.Println("ℹ️  项目未初始化，正在创建项目结构...")
-		if err := os.MkdirAll(agentsDir, 0755); err != nil {
-			return fmt.Errorf("创建项目目录失败: %w", err)
-		}
-		fmt.Printf("✓ 创建项目目录: %s\n", agentsDir)
-		projectInitialized = true
+	hasSkill, err := stateManager.ProjectHasSkill(cwd, skillID)
+	if err != nil {
+		return err
 	}
 
 	if hasSkill {

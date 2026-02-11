@@ -30,6 +30,11 @@ func init() {
 }
 
 func runPull() error {
+	// 检查init依赖（规范4.12：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	if pullCheck {
 		fmt.Println("检查远程仓库可用的更新...")
 		// 这里可以实现检查逻辑，显示可用的更新数量

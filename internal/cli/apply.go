@@ -33,12 +33,23 @@ func init() {
 }
 
 func runApply(dryRun bool, force bool) error {
+	// 检查init依赖（规范4.10：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	fmt.Println("正在应用技能到项目...")
 
 	// 获取当前目录
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("获取当前目录失败: %w", err)
+	}
+
+	// 检查项目工作区状态（规范4.10：检查当前目录是否存在于state.json中）
+	_, err = EnsureProjectWorkspace(cwd, "")
+	if err != nil {
+		return fmt.Errorf("检查项目工作区失败: %w", err)
 	}
 
 	// 创建状态管理器

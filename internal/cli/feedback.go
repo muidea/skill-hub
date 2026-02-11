@@ -6,10 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"skill-hub/internal/config"
 	"skill-hub/internal/engine"
 	"skill-hub/internal/state"
+	"skill-hub/pkg/spec"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -42,12 +45,23 @@ func init() {
 }
 
 func runFeedback(skillID string) error {
+	// 检查init依赖（规范4.11：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	fmt.Printf("收集技能 '%s' 的反馈...\n", skillID)
 
 	// 获取当前目录
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("获取当前目录失败: %w", err)
+	}
+
+	// 检查项目工作区状态（规范4.11：检查当前目录是否存在于state.json中）
+	_, err = EnsureProjectWorkspace(cwd, "")
+	if err != nil {
+		return fmt.Errorf("检查项目工作区失败: %w", err)
 	}
 
 	// 检查技能是否在项目工作区中启用
@@ -242,9 +256,70 @@ func updateRegistryVersion(skillID string) error {
 		return fmt.Errorf("加载技能失败: %w", err)
 	}
 
-	// 更新registry.json
-	// 这里简化实现，实际应该更新registry.json文件
-	fmt.Printf("技能 '%s' 版本信息已更新: %s\n", skillID, skill.Version)
+	// 获取registry.json路径
+	registryPath, err := config.GetRegistryPath()
+	if err != nil {
+		return fmt.Errorf("获取注册表路径失败: %w", err)
+	}
+
+	// 读取现有的registry.json
+	var registry spec.Registry
+	registryData, err := os.ReadFile(registryPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// 如果文件不存在，创建新的注册表
+			registry = spec.Registry{
+				Version: "1.0.0",
+				Skills:  []spec.SkillMetadata{},
+			}
+		} else {
+			return fmt.Errorf("读取注册表失败: %w", err)
+		}
+	} else {
+		// 解析现有的注册表
+		if err := yaml.Unmarshal(registryData, &registry); err != nil {
+			return fmt.Errorf("解析注册表失败: %w", err)
+		}
+	}
+
+	// 创建技能元数据
+	metadata := spec.SkillMetadata{
+		ID:            skill.ID,
+		Name:          skill.Name,
+		Version:       skill.Version,
+		Author:        skill.Author,
+		Description:   skill.Description,
+		Tags:          skill.Tags,
+		Compatibility: skill.Compatibility,
+	}
+
+	// 检查技能是否已经在注册表中
+	found := false
+	for i, existing := range registry.Skills {
+		if existing.ID == skillID {
+			// 更新现有的技能元数据
+			registry.Skills[i] = metadata
+			found = true
+			break
+		}
+	}
+
+	// 如果没找到，添加到注册表
+	if !found {
+		registry.Skills = append(registry.Skills, metadata)
+	}
+
+	// 保存更新后的注册表
+	updatedData, err := yaml.Marshal(registry)
+	if err != nil {
+		return fmt.Errorf("序列化注册表失败: %w", err)
+	}
+
+	if err := os.WriteFile(registryPath, updatedData, 0644); err != nil {
+		return fmt.Errorf("保存注册表失败: %w", err)
+	}
+
+	fmt.Printf("技能 '%s' 已添加到注册表: %s\n", skillID, skill.Version)
 	return nil
 }
 

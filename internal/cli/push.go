@@ -35,6 +35,11 @@ func init() {
 }
 
 func runPush() error {
+	// 检查init依赖（规范4.13：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	// 初始化技能仓库
 	repo, err := git.NewSkillRepository()
 	if err != nil {

@@ -30,6 +30,11 @@ var setTargetCmd = &cobra.Command{
 }
 
 func runSetTarget(target string) error {
+	// 检查init依赖（规范4.2：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	// 获取当前目录
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -42,6 +47,12 @@ func runSetTarget(target string) error {
 		return fmt.Errorf("无效的目标值: %s，可用选项: cursor, claude, open_code", target)
 	}
 
+	// 检查项目工作区状态（规范4.2：检查当前目录是否存在于state.json中）
+	_, err = EnsureProjectWorkspace(cwd, normalizedTarget)
+	if err != nil {
+		return fmt.Errorf("检查项目工作区失败: %w", err)
+	}
+
 	// 创建状态管理器
 	stateManager, err := state.NewStateManager()
 	if err != nil {
@@ -52,6 +63,9 @@ func runSetTarget(target string) error {
 	if err := stateManager.SetPreferredTarget(cwd, normalizedTarget); err != nil {
 		return fmt.Errorf("设置首选目标失败: %w", err)
 	}
+
+	// 如果项目是新创建的，需要根据target初始化对应的文件和目录
+	// 这个逻辑已经在EnsureProjectWorkspace中处理了
 
 	// 显示结果
 	fmt.Printf("✅ 已将项目 '%s' 的首选目标设置为: %s\n", filepath.Base(cwd), normalizedTarget)

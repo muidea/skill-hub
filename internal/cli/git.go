@@ -92,6 +92,11 @@ func init() {
 }
 
 func runGitClone(url string) error {
+	// 检查init依赖（规范4.14：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	repo, err := git.NewSkillRepository()
 	if err != nil {
 		return err
@@ -101,6 +106,11 @@ func runGitClone(url string) error {
 }
 
 func runGitSync() error {
+	// 检查init依赖（规范4.14：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	repo, err := git.NewSkillRepository()
 	if err != nil {
 		return err
@@ -110,6 +120,11 @@ func runGitSync() error {
 }
 
 func runGitStatus() error {
+	// 检查init依赖（规范4.14：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	repo, err := git.NewSkillRepository()
 	if err != nil {
 		return fmt.Errorf("创建技能仓库失败: %w", err)
@@ -125,6 +140,11 @@ func runGitStatus() error {
 }
 
 func runGitCommit() error {
+	// 检查init依赖（规范4.14：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	repo, err := git.NewSkillRepository()
 	if err != nil {
 		return err
@@ -144,6 +164,11 @@ func runGitCommit() error {
 }
 
 func runGitPush() error {
+	// 检查init依赖（规范4.14：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	repo, err := git.NewSkillRepository()
 	if err != nil {
 		return err
@@ -179,6 +204,11 @@ func runGitPush() error {
 }
 
 func runGitPull() error {
+	// 检查init依赖（规范4.14：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	repo, err := git.NewSkillRepository()
 	if err != nil {
 		return err
@@ -188,6 +218,11 @@ func runGitPull() error {
 }
 
 func runGitRemote(url string) error {
+	// 检查init依赖（规范4.14：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	repo, err := git.NewSkillsRepository()
 	if err != nil {
 		return err

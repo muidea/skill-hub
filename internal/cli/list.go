@@ -26,6 +26,11 @@ func init() {
 }
 
 func runList(target string, verbose bool) error {
+	// 检查init依赖（规范4.3：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	manager, err := engine.NewSkillManager()
 	if err != nil {
 		return err

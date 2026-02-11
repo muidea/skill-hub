@@ -36,6 +36,11 @@ func init() {
 }
 
 func runCreate(skillID string, target string) error {
+	// 检查init依赖（规范4.5：该命令依赖init命令）
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
 	// 验证技能ID格式
 	if !isValidSkillName(skillID) {
 		return fmt.Errorf("技能ID '%s' 格式无效。应使用小写字母、数字和连字符，例如：my-logic-skill", skillID)
@@ -45,6 +50,12 @@ func runCreate(skillID string, target string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("获取当前目录失败: %w", err)
+	}
+
+	// 检查项目工作区状态（规范4.5：检查当前目录是否存在于state.json中）
+	_, err = EnsureProjectWorkspace(cwd, target)
+	if err != nil {
+		return fmt.Errorf("检查项目工作区失败: %w", err)
 	}
 
 	// 检查.agents目录是否存在，如果不存在则创建

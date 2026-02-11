@@ -1,0 +1,47 @@
+# Configuration for multi-file-skill
+
+# Skill settings
+skill:
+  name: "multi-file-skill"
+  version: "1.0.0"
+  description: "A skill with multiple files for testing"
+  
+# File handling settings
+files:
+  # Maximum file size (in bytes)
+  max_size: 10485760  # 10MB
+  
+  # Allowed file extensions
+  allowed_extensions:
+    - .md
+    - .yaml
+    - .yml
+    - .json
+    - .py
+    - .sh
+    - .j2
+    - .txt
+    
+  # Excluded patterns
+  exclude_patterns:
+    - "*.tmp"
+    - "*.log"
+    - ".git/*"
+    - "__pycache__/*"
+
+# Template settings
+templates:
+  default_engine: "jinja2"
+  variables:
+    project_name: "test-project"
+    author: "Test User"
+    
+# Script settings
+scripts:
+  setup_timeout: 300  # seconds
+  permissions: 755
+  
+# Test settings
+tests:
+  timeout: 60  # seconds
+  coverage_threshold: 80  # percentage

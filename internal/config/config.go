@@ -117,11 +117,16 @@ func GetSkillsDir() (string, error) {
 
 // GetRootDir 获取Skill Hub根目录
 func GetRootDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("获取用户主目录失败: %w", err)
+	// 支持通过环境变量指定skill-hub目录
+	configDir := os.Getenv("SKILL_HUB_HOME")
+	if configDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("获取用户主目录失败: %w", err)
+		}
+		configDir = filepath.Join(homeDir, ".skill-hub")
 	}
-	return filepath.Join(homeDir, ".skill-hub"), nil
+	return configDir, nil
 }
 
 // GetRegistryPath 获取索引文件路径

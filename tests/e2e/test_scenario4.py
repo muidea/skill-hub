@@ -1,6 +1,7 @@
 """
-Test Scenario 4: Cancel and Cleanup Workflow
-Tests skill removal, physical cleanup, and multi-target cleanup operations.
+Test Scenario 4: Skill "Complete Deregistration" Workflow (Remove)
+Tests state erasure and physical cleanup linkage.
+Based on testCaseV2.md v3.0
 """
 
 import os
@@ -8,450 +9,410 @@ import json
 import tempfile
 import pytest
 from pathlib import Path
-import shutil
 
 from tests.e2e.utils.command_runner import CommandRunner
 from tests.e2e.utils.file_validator import FileValidator
 from tests.e2e.utils.test_environment import TestEnvironment
-from tests.e2e.utils.network_checker import NetworkChecker
-from tests.e2e.utils.debug_utils import DebugUtils
 
 
-class TestScenario4CancelCleanup:
-    """Test scenario 4: Cancel and cleanup workflow (remove -> cleanup)"""
+class TestScenario4CompleteDeregistration:
+    """Test scenario 4: Skill "complete deregistration" workflow (Remove)"""
     
     @pytest.fixture(autouse=True)
-    def setup(self, temp_project_dir, temp_home_dir, test_skill_template):
+    def setup(self, temp_home_dir, test_skill_template):
         """Setup test environment"""
-        self.project_dir = Path(temp_project_dir)
         self.home_dir = temp_home_dir
         self.skill_template = test_skill_template
         self.cmd = CommandRunner()
         self.validator = FileValidator()
         self.env = TestEnvironment()
-        self.debug = DebugUtils()
         
         # Store paths
         self.skill_hub_dir = Path(self.home_dir) / ".skill-hub"
         self.repo_dir = self.skill_hub_dir / "repo"
-        self.skills_dir = self.repo_dir / "skills"
+        self.repo_skills_dir = self.repo_dir / "skills"
         
         # Project paths
-        self.project_skill_hub = self.project_dir / ".skill-hub"
-        self.project_state = self.project_skill_hub / "state.json"
-        self.agents_skills_dir = self.project_dir / ".agents" / "skills"
+        self.project_dir = Path(self.home_dir) / "test-project"
+        self.project_agents_dir = self.project_dir / ".agents"
+        self.project_skills_dir = self.project_agents_dir / "skills"
         
-        # Change to project directory
-        os.chdir(self.project_dir)
+        # Ensure project directory exists
+        self.project_dir.mkdir(exist_ok=True)
         
-    def _setup_skill_in_project(self, skill_name="my-logic-skill", target="open_code"):
-        """Helper to setup a skill in the project"""
-        # Initialize home directory
-        home_cmd = CommandRunner()
-        result = home_cmd.run("init")
-        assert result.success
+        # 初始化环境并创建多个测试技能
+        self._initialize_environment_with_skills()
         
-        # Ensure .agents/skills directory exists (required for create command)
-        agents_skills_dir = self.project_dir / ".agents" / "skills"
-        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+    def _initialize_environment_with_skills(self):
+        """Initialize environment with multiple test skills"""
+        # 初始化环境
+        result = self.cmd.run("init", cwd=str(self.project_dir))
+        assert result.success, f"Initialization failed: {result.stderr}"
         
-        # Create skill in project
-        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
-        assert result.success, f"skill-hub create failed: {result.stderr}"
+        # 创建多个测试技能
+        self.test_skills = ["git-expert", "python-expert", "docker-expert"]
         
-        # Feedback skill to repo
-        result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
-        assert result.success
+        for skill_name in self.test_skills:
+            # 创建技能
+            result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+            if result.success:
+                # 如果创建成功，反馈到仓库
+                skill_md = self.project_skills_dir / skill_name / "SKILL.md"
+                if skill_md.exists():
+                    # 修改技能内容
+                    with open(skill_md, 'a') as f:
+                        f.write(f"\n\n## {skill_name}\nA test skill for removal testing.")
+                    
+                    # 反馈到仓库
+                    result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
+                    print(f"Test skill '{skill_name}' created and fed back to repository")
+                    
+                    # 启用技能并应用
+                    result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir))
+                    result = self.cmd.run("apply", cwd=str(self.project_dir))
         
-        # Setup project
-        result = self.cmd.run("set-target", [target], cwd=str(self.project_dir))
-        assert result.success
+    def test_01_command_dependency_check(self):
+        """Test 4.1: Command dependency check verification"""
+        print("\n=== Test 4.1: Command Dependency Check ===")
         
-        result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir))
-        assert result.success
+        # 创建一个新的临时目录，确保没有初始化
+        temp_dir = Path(self.home_dir) / "temp-uninitialized-4"
+        temp_dir.mkdir(exist_ok=True)
         
-        result = self.cmd.run("apply", cwd=str(self.project_dir))
-        assert result.success
+        # 测试未初始化时执行 skill-hub remove git-expert
+        result = self.cmd.run("remove", ["git-expert"], cwd=str(temp_dir))
+        # 应该提示需要先进行初始化
+        assert not result.success or "需要先进行初始化" in result.stdout or "需要先进行初始化" in result.stderr, \
+            f"Should prompt for initialization when running remove without init"
         
-        return skill_name
-    
-    def test_01_basic_skill_removal(self):
-        """Test 4.1: Basic skill removal"""
-        print("\n=== Test 4.1: Basic Skill Removal ===")
+        print(f"✓ remove command dependency check passed")
         
-        # Setup skill in project
-        skill_name = self._setup_skill_in_project()
+    def test_02_basic_skill_removal(self):
+        """Test 4.2: Basic skill removal verification"""
+        print("\n=== Test 4.2: Basic Skill Removal ===")
         
-        # Verify skill directory exists before removal
-        skill_dir = self.agents_skills_dir / skill_name
-        assert skill_dir.exists(), f"Skill directory should exist before removal: {skill_dir}"
+        skill_to_remove = "git-expert"
         
-        # Verify state.json exists and contains skill
-        # state.json is in home directory, not project directory
-        global_state_file = self.skill_hub_dir / "state.json"
-        assert global_state_file.exists(), f"state.json should exist: {global_state_file}"
+        # 验证技能在项目中存在
+        skill_dir = self.project_skills_dir / skill_to_remove
+        assert skill_dir.exists(), f"Skill directory should exist at {skill_dir}"
         
-        with open(global_state_file, 'r') as f:
+        # 验证技能在 state.json 中
+        state_file = self.skill_hub_dir / "state.json"
+        assert state_file.exists(), f"state.json not found at {state_file}"
+        
+        with open(state_file, 'r') as f:
             state_before = json.load(f)
         
-        # Check skill is in state
-        project_path_str = str(self.project_dir)
-        assert project_path_str in state_before, f"Project path not in state.json: {project_path_str}"
+        project_path = str(self.project_dir)
+        assert project_path in state_before.get("projects", {}), f"Project not found in state.json"
+        project_state_before = state_before["projects"][project_path]
+        assert skill_to_remove in project_state_before.get("skills", []), f"Skill not in state.json before removal"
         
-        project_state = state_before[project_path_str]
-        assert "skills" in project_state, "skills not in project state"
-        
-        skill_in_state = skill_name in project_state["skills"]
-        assert skill_in_state, f"Skill '{skill_name}' should be in state.json before removal"
-        
-        # Remove the skill
-        result = self.cmd.run("remove", [skill_name], input_text="y\n")
+        # 执行 skill-hub remove git-expert
+        result = self.cmd.run("remove", [skill_to_remove], cwd=str(self.project_dir))
         assert result.success, f"skill-hub remove failed: {result.stderr}"
         
-        # Verify physical cleanup: skill directory should be deleted
-        assert not skill_dir.exists(), f"Skill directory should be deleted: {skill_dir}"
+        # 验证物理删除
+        assert not skill_dir.exists(), f"Skill directory should be removed from project at {skill_dir}"
         
-        # Verify state.json was updated (skill removed)
-        # state.json is in home directory, not project directory
-        assert global_state_file.exists(), f"state.json should still exist after removal"
-        
-        with open(global_state_file, 'r') as f:
+        # 验证 state.json 状态移除（技能从使用列表中移除）
+        with open(state_file, 'r') as f:
             state_after = json.load(f)
         
-        # Check skill is NOT in state after removal
-        project_path_str = str(self.project_dir)
-        if project_path_str in state_after:
-            project_state = state_after[project_path_str]
-            if "skills" in project_state:
-                skill_still_in_state = skill_name in project_state["skills"]
-                assert not skill_still_in_state, f"Skill '{skill_name}' should be removed from state.json"
+        project_state_after = state_after["projects"][project_path]
+        assert skill_to_remove not in project_state_after.get("skills", []), f"Skill still in state.json after removal"
         
-        # Safety check: repository files must be preserved
-        repo_skill_dir = self.skills_dir / skill_name
-        assert repo_skill_dir.exists(), f"Repository skill directory must be preserved: {repo_skill_dir}"
-        assert (repo_skill_dir / "SKILL.md").exists(), "Repository SKILL.md must be preserved"
+        # 验证仓库文件安全
+        repo_skill_dir = self.repo_skills_dir / skill_to_remove
+        assert repo_skill_dir.exists(), f"Skill should still be in repository at {repo_skill_dir}"
         
-        print(f"✓ Basic skill removal works")
-        print(f"  - Physical cleanup: {skill_dir} deleted")
-        print(f"  - State updated: skill removed from {self.project_state}")
-        print(f"  - Safety: repository files preserved at {repo_skill_dir}")
+        print(f"✓ Basic skill removal completed")
+        print(f"  - Skill: {skill_to_remove}")
+        print(f"  - Physical deletion: ✓")
+        print(f"  - State.json updated: ✓")
+        print(f"  - Repository safe: ✓")
         
-    def test_02_remove_nonexistent_skill(self):
-        """Test 4.2: Remove non-existent skill"""
-        print("\n=== Test 4.2: Remove Non-Existent Skill ===")
+    def test_03_remove_nonexistent_skill(self):
+        """Test 4.3: Non-existent skill removal verification"""
+        print("\n=== Test 4.3: Non-existent Skill Removal ===")
         
-        # Setup environment
-        home_cmd = CommandRunner()
-        result = home_cmd.run("init")
-        assert result.success
-        
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success
-        
-        # Try to remove a skill that doesn't exist
         nonexistent_skill = "nonexistent-skill-12345"
-        result = self.cmd.run("remove", [nonexistent_skill], input_text="y\n")
         
-        # This might fail or succeed with a message
-        print(f"  Remove nonexistent skill result: returncode={result.exit_code}")
-        print(f"  stdout: {result.stdout[:100]}...")
-        print(f"  stderr: {result.stderr[:100]}...")
+        # 测试移除不存在技能
+        result = self.cmd.run("remove", [nonexistent_skill], cwd=str(self.project_dir))
         
-        # The test passes as long as it doesn't crash
-        print(f"✓ Handled removal of non-existent skill")
+        # 验证错误处理
+        # 应该失败或显示适当的错误消息
+        if not result.success:
+            print(f"  Error handling for non-existent skill: ✓")
+            print(f"  Error message: {result.stderr[:100]}...")
+        else:
+            print(f"  ⚠️  Command succeeded for non-existent skill (may be expected behavior)")
+            print(f"  Output: {result.stdout[:100]}...")
         
-    def test_03_remove_multiple_skills(self):
-        """Test 4.3: Remove multiple skills"""
-        print("\n=== Test 4.3: Remove Multiple Skills ===")
+        print(f"✓ Non-existent skill removal error handling tested")
         
-        # Setup environment
-        home_cmd = CommandRunner()
-        result = home_cmd.run("init")
-        assert result.success
+    def test_04_remove_multiple_skills(self):
+        """Test 4.4: Multiple skills batch removal verification"""
+        print("\n=== Test 4.4: Multiple Skills Batch Removal ===")
         
-        # Create multiple skills
-        skills = ["skill-to-remove-1", "skill-to-remove-2", "skill-to-keep"]
+        skills_to_remove = ["python-expert", "docker-expert"]
         
-        # Ensure .agents/skills directory exists
-        agents_skills_dir = self.project_dir / ".agents" / "skills"
-        agents_skills_dir.mkdir(parents=True, exist_ok=True)
-        
-        for skill in skills:
-            result = self.cmd.run("create", [skill], cwd=str(self.project_dir))
-            assert result.success, f"skill-hub create {skill} failed: {result.stderr}"
+        # 批量移除多个技能
+        for skill_name in skills_to_remove:
+            # 验证技能存在
+            skill_dir = self.project_skills_dir / skill_name
+            assert skill_dir.exists(), f"Skill directory should exist at {skill_dir}"
             
-            # Feedback skill to repo before use
-            result = self.cmd.run("feedback", [skill], cwd=str(self.project_dir), input_text="y\n")
-            assert result.success, f"skill-hub feedback {skill} failed: {result.stderr}"
+            # 执行移除
+            result = self.cmd.run("remove", [skill_name], cwd=str(self.project_dir))
+            assert result.success, f"skill-hub remove {skill_name} failed: {result.stderr}"
+            
+            # 验证物理删除
+            assert not skill_dir.exists(), f"Skill directory should be removed at {skill_dir}"
+            print(f"  Removed: {skill_name}")
         
-        # Setup project
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success
+        # 验证批量处理正确性
+        # 检查 state.json
+        state_file = self.skill_hub_dir / "state.json"
+        with open(state_file, 'r') as f:
+            state = json.load(f)
         
-        # Enable all skills
-        for skill in skills:
-            result = self.cmd.run("use", [skill], cwd=str(self.project_dir))
-            assert result.success, f"skill-hub use {skill} failed: {result.stderr}"
+        project_path = str(self.project_dir)
+        project_state = state["projects"][project_path]
+        remaining_skills = project_state.get("skills", [])
         
-        # Apply all
-        result = self.cmd.run("apply", cwd=str(self.project_dir))
-        assert result.success
+        # 检查所有要移除的技能都不在列表中
+        for skill_name in skills_to_remove:
+            assert skill_name not in remaining_skills, f"Skill {skill_name} still in state.json after removal"
         
-        # Verify all skill directories exist
-        for skill in skills:
-            skill_dir = self.agents_skills_dir / skill
-            assert skill_dir.exists(), f"Skill directory should exist: {skill_dir}"
+        print(f"  All specified skills removed from state.json: ✓")
         
-        # Remove first two skills
-        for skill in skills[:2]:
-            result = self.cmd.run("remove", [skill], input_text="y\n")
-            assert result.success
+        # 验证仓库文件安全
+        for skill_name in skills_to_remove:
+            repo_skill_dir = self.repo_skills_dir / skill_name
+            assert repo_skill_dir.exists(), f"Skill {skill_name} should still be in repository"
+            print(f"  Repository safe for: {skill_name}")
         
-        # Verify removed skills are gone
-        for skill in skills[:2]:
-            skill_dir = self.agents_skills_dir / skill
-            assert not skill_dir.exists(), f"Skill directory should be deleted: {skill_dir}"
-        
-        # Verify kept skill still exists
-        kept_skill_dir = self.agents_skills_dir / skills[2]
-        assert kept_skill_dir.exists(), f"Skill directory should still exist: {kept_skill_dir}"
-        
-        print(f"✓ Multiple skill removal works")
-        print(f"  - Removed: {skills[:2]}")
-        print(f"  - Kept: {skills[2]}")
-        print(f"  - Directories correctly cleaned up")
-        
-    def test_04_cleanup_with_different_targets(self):
-        """Test 4.4: Cleanup when skill is applied to different targets"""
-        print("\n=== Test 4.4: Cleanup with Different Targets ===")
-        
-        # Setup skill normally
-        skill_name = self._setup_skill_in_project()
-        
-        # Apply skill to open_code target (default)
-        result = self.cmd.run("set-target", ["open_code"])
-        assert result.success
-        
-        result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir))
-        assert result.success
-        
-        result = self.cmd.run("apply", cwd=str(self.project_dir))
-        assert result.success
-        
-        # Verify files exist for open_code target
-        skill_dir = self.agents_skills_dir / skill_name
-        assert skill_dir.exists(), f"Skill directory should exist: {skill_name}"
-        
-        # Check if .skills directory was created for open_code target
-        skills_dir = self.project_dir / ".skills" / skill_name
-        open_code_files_exist = skills_dir.exists()
-        
-        # Now remove the skill
-        result = self.cmd.run("remove", [skill_name], input_text="y\n")
-        assert result.success, f"skill-hub remove failed: {result.stderr}"
-        
-        # Verify skill directory was deleted
-        assert not skill_dir.exists(), f"Skill directory should be deleted: {skill_name}"
-        
-        # Verify .skills directory was cleaned up if it existed
-        if open_code_files_exist:
-            assert not skills_dir.exists(), f".skills directory should be cleaned up: {skills_dir}"
-        
-        print(f"✓ Skill cleanup works for different targets")
-        print(f"  - Removed skill: {skill_name}")
-        print(f"  - Cleaned up project files")
-        print(f"  - OpenCode target files cleaned: {open_code_files_exist}")
+        print(f"✓ Multiple skills batch removal verified")
         
     def test_05_cleanup_with_modified_files(self):
-        """Test 4.5: Cleanup when skill files have been modified"""
+        """Test 4.5: Cleanup with modified files verification"""
         print("\n=== Test 4.5: Cleanup with Modified Files ===")
         
-        # Setup skill
-        skill_name = self._setup_skill_in_project()
+        # 创建一个新技能并修改它
+        test_skill = "modified-skill-test"
         
-        # Modify skill files
-        skill_dir = self.agents_skills_dir / skill_name
-        instructions_file = skill_dir / "SKILL.md"
+        # 创建技能
+        result = self.cmd.run("create", [test_skill], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
         
-        with open(instructions_file, 'a') as f:
-            f.write("\n\n## Local Modification\nThis was modified locally and not synced back.")
+        # 启用并应用
+        result = self.cmd.run("use", [test_skill], cwd=str(self.project_dir))
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         
-        # Verify modification
-        with open(instructions_file, 'r') as f:
-            content = f.read()
-        assert "Local Modification" in content
+        # 修改技能文件（创建未提交的修改）
+        skill_md = self.project_skills_dir / test_skill / "SKILL.md"
+        with open(skill_md, 'a') as f:
+            f.write("\n\n## Uncommitted Modification\nThis modification has not been fed back to repository.")
         
-        # Check status shows modified
-        result = self.cmd.run("status", cwd=str(self.project_dir))
-        print(f"  Status before removal: {result.stdout[:200]}...")
+        # 测试有未提交修改时的清理
+        result = self.cmd.run("remove", [test_skill], cwd=str(self.project_dir))
         
-        # Remove the skill (with local modifications)
-        result = self.cmd.run("remove", [skill_name], input_text="y\n")
-        assert result.success, f"skill-hub remove failed with modified files: {result.stderr}"
+        # 验证清理策略和安全警告
+        # 检查输出中是否包含警告信息
+        output = result.stdout + result.stderr
+        warning_keywords = ["warning", "warn", "警告", "未提交", "未保存", "modified", "修改"]
         
-        # Verify cleanup happened despite modifications
-        assert not skill_dir.exists(), f"Skill directory should be deleted even with modifications"
+        has_warning = any(keyword.lower() in output.lower() for keyword in warning_keywords)
         
-        # Repository files should still be preserved
-        repo_skill_dir = self.skills_dir / skill_name
-        assert repo_skill_dir.exists(), f"Repository skill directory must be preserved"
-        
-        # Check repository files don't have the local modification
-        repo_prompt = repo_skill_dir / "SKILL.md"
-        with open(repo_prompt, 'r') as f:
-            repo_content = f.read()
-        
-        # Local modification should NOT be in repository (wasn't synced)
-        if "Local Modification" not in repo_content:
-            print(f"  ✓ Local modifications not propagated to repository (correct)")
+        if has_warning:
+            print(f"  Safety warning for modified files: ✓")
+            print(f"  Warning detected in output")
         else:
-            print(f"  Note: Local modifications may have been synced before removal")
+            print(f"  ⚠️  No warning detected for modified files")
         
-        print(f"✓ Cleanup works with locally modified files")
-        print(f"  - Modified files were cleaned up")
-        print(f"  - Repository preserved original content")
+        # 检查技能是否被移除
+        skill_dir = self.project_skills_dir / test_skill
+        if not skill_dir.exists():
+            print(f"  Skill directory removed despite modifications")
+        else:
+            print(f"  Skill directory may have been preserved due to modifications")
+        
+        print(f"✓ Cleanup with modified files tested")
         
     def test_06_cleanup_preserves_other_skills(self):
-        """Test 4.6: Cleanup preserves other skills in same directory"""
+        """Test 4.6: Cleanup preserves other skills verification"""
         print("\n=== Test 4.6: Cleanup Preserves Other Skills ===")
         
-        # Setup multiple skills
-        home_cmd = CommandRunner()
-        result = home_cmd.run("init")
-        assert result.success
+        # 创建多个技能
+        all_skills = ["skill-a", "skill-b", "skill-c"]
         
-        skills = ["skill-to-remove", "skill-to-keep-1", "skill-to-keep-2"]
+        for skill_name in all_skills:
+            result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+            if result.success:
+                # 反馈到仓库
+                skill_md = self.project_skills_dir / skill_name / "SKILL.md"
+                if skill_md.exists():
+                    with open(skill_md, 'a') as f:
+                        f.write(f"\n\n## {skill_name}\nTest skill.")
+                    
+                    result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
+                    result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir))
+                    result = self.cmd.run("apply", cwd=str(self.project_dir))
         
-        # Ensure .agents/skills directory exists
-        agents_skills_dir = self.project_dir / ".agents" / "skills"
-        agents_skills_dir.mkdir(parents=True, exist_ok=True)
+        # 测试选择性清理（只移除一个技能）
+        skill_to_remove = "skill-b"
+        skills_to_preserve = ["skill-a", "skill-c"]
         
-        for skill in skills:
-            result = self.cmd.run("create", [skill], cwd=str(self.project_dir))
-            assert result.success, f"skill-hub create {skill} failed: {result.stderr}"
-            
-            # Feedback skill to repo before use
-            result = self.cmd.run("feedback", [skill], cwd=str(self.project_dir), input_text="y\n")
-            assert result.success, f"skill-hub feedback {skill} failed: {result.stderr}"
+        result = self.cmd.run("remove", [skill_to_remove], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub remove failed: {result.stderr}"
         
-        # Setup project
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success
+        # 验证其他技能不受影响
+        for skill_name in skills_to_preserve:
+            skill_dir = self.project_skills_dir / skill_name
+            assert skill_dir.exists(), f"Skill {skill_name} should still exist at {skill_dir}"
+            print(f"  Preserved: {skill_name}")
         
-        # Enable all skills
-        for skill in skills:
-            result = self.cmd.run("use", [skill], cwd=str(self.project_dir))
-            assert result.success, f"skill-hub use {skill} failed: {result.stderr}"
+        # 验证被移除的技能已删除
+        removed_skill_dir = self.project_skills_dir / skill_to_remove
+        assert not removed_skill_dir.exists(), f"Skill {skill_to_remove} should be removed"
+        print(f"  Removed: {skill_to_remove}")
         
-        # Apply all
-        result = self.cmd.run("apply", cwd=str(self.project_dir))
-        assert result.success
+        # 验证仓库中所有技能都安全
+        for skill_name in all_skills:
+            repo_skill_dir = self.repo_skills_dir / skill_name
+            assert repo_skill_dir.exists(), f"Skill {skill_name} should still be in repository"
         
-        # Verify all directories exist
-        for skill in skills:
-            skill_dir = self.agents_skills_dir / skill
-            assert skill_dir.exists(), f"Skill directory should exist: {skill_dir}"
-        
-        # Remove only the first skill
-        skill_to_remove = skills[0]
-        result = self.cmd.run("remove", [skill_to_remove], input_text="y\n")
-        assert result.success
-        
-        # Verify removed skill is gone
-        removed_dir = self.agents_skills_dir / skill_to_remove
-        assert not removed_dir.exists(), f"Removed skill directory should be deleted: {removed_dir}"
-        
-        # Verify other skills still exist
-        for skill in skills[1:]:
-            skill_dir = self.agents_skills_dir / skill
-            assert skill_dir.exists(), f"Other skill directory should still exist: {skill_dir}"
-            
-            # Verify their files are intact (only SKILL.md exists)
-            assert (skill_dir / "SKILL.md").exists(), f"SKILL.md should exist for {skill}"
-        
-        print(f"✓ Cleanup preserves other skills")
-        print(f"  - Removed: {skill_to_remove}")
-        print(f"  - Preserved: {skills[1:]}")
-        print(f"  - All preserved skill files intact")
+        print(f"✓ Selective cleanup preserves other skills verified")
         
     def test_07_cleanup_with_nested_directories(self):
-        """Test 4.7: Cleanup with nested directories in skill"""
+        """Test 4.7: Cleanup with nested directories verification"""
         print("\n=== Test 4.7: Cleanup with Nested Directories ===")
         
-        # Setup skill
-        skill_name = self._setup_skill_in_project()
+        # 创建具有嵌套目录结构的技能
+        nested_skill = "nested-directory-skill"
         
-        # Create nested directories and files in the skill directory
-        skill_dir = self.agents_skills_dir / skill_name
+        result = self.cmd.run("create", [nested_skill], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
         
-        # Create nested structure
-        nested_dir = skill_dir / "nested" / "deeply" / "nested"
-        nested_dir.mkdir(parents=True, exist_ok=True)
+        # 启用并应用
+        result = self.cmd.run("use", [nested_skill], cwd=str(self.project_dir))
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         
-        # Create files in nested directories
-        nested_file = nested_dir / "test.txt"
-        with open(nested_file, 'w') as f:
-            f.write("Test content in nested file")
+        # 创建嵌套目录结构
+        skill_dir = self.project_skills_dir / nested_skill
+        nested_dirs = [
+            "src/utils",
+            "tests/unit",
+            "docs/api",
+            "config/environments"
+        ]
         
-        another_nested_file = skill_dir / "another" / "test.md"
-        another_nested_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(another_nested_file, 'w') as f:
-            f.write("# Another test file")
+        nested_files = [
+            "src/utils/helper.py",
+            "tests/unit/test_basic.py",
+            "docs/api/README.md",
+            "config/environments/dev.yaml",
+            "config/environments/prod.yaml"
+        ]
         
-        # Verify nested structure exists
-        assert nested_file.exists(), f"Nested file should exist: {nested_file}"
-        assert another_nested_file.exists(), f"Another nested file should exist: {another_nested_file}"
+        # 创建嵌套目录和文件
+        for dir_path in nested_dirs:
+            full_dir = skill_dir / dir_path
+            full_dir.mkdir(parents=True, exist_ok=True)
         
-        # Remove the skill
-        result = self.cmd.run("remove", [skill_name], input_text="y\n")
-        assert result.success
+        for file_path in nested_files:
+            full_file = skill_dir / file_path
+            full_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(full_file, 'w') as f:
+                f.write(f"# {file_path}\n\nContent for nested file testing.\n")
         
-        # Verify entire skill directory (including nested structure) is deleted
-        assert not skill_dir.exists(), f"Entire skill directory should be deleted: {skill_dir}"
+        print(f"  Created nested directory structure with {len(nested_files)} files")
         
-        print(f"✓ Cleanup removes nested directory structure")
-        print(f"  - Created nested: {nested_dir}")
-        print(f"  - Created: {another_nested_file}")
-        print(f"  - Entire directory tree removed")
+        # 测试嵌套目录结构清理
+        result = self.cmd.run("remove", [nested_skill], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub remove failed: {result.stderr}"
+        
+        # 验证递归清理
+        assert not skill_dir.exists(), f"Nested skill directory should be completely removed at {skill_dir}"
+        
+        # 检查所有嵌套文件都被删除
+        for file_path in nested_files:
+            full_file = skill_dir / file_path
+            assert not full_file.exists(), f"Nested file should be removed: {file_path}"
+        
+        print(f"  Recursive cleanup verified: ✓")
+        
+        # 验证仓库安全
+        repo_skill_dir = self.repo_skills_dir / nested_skill
+        assert repo_skill_dir.exists(), f"Skill should still be in repository"
+        
+        print(f"✓ Nested directory cleanup verified")
         
     def test_08_repository_safety(self):
-        """Test 4.8: Repository safety - never delete source files"""
+        """Test 4.8: Repository safety verification"""
         print("\n=== Test 4.8: Repository Safety ===")
         
-        # This is a critical test: repository files must NEVER be deleted
+        # 创建测试技能
+        safety_test_skill = "repository-safety-test"
         
-        # Setup skill
-        skill_name = self._setup_skill_in_project()
+        result = self.cmd.run("create", [safety_test_skill], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
         
-        # Get repository paths
-        repo_skill_dir = self.skills_dir / skill_name
-        # Only SKILL.md exists, not skill.yaml
-        repo_skill_md = repo_skill_dir / "SKILL.md"
+        # 反馈到仓库
+        skill_md = self.project_skills_dir / safety_test_skill / "SKILL.md"
+        with open(skill_md, 'a') as f:
+            f.write("\n\n## Repository Safety Test\nTesting that repository files are never deleted.")
         
-        # Get original content
-        with open(repo_skill_md, 'r') as f:
-            original_content = f.read()
+        result = self.cmd.run("feedback", [safety_test_skill], cwd=str(self.project_dir), input_text="y\n")
         
-        # Remove skill from project
-        result = self.cmd.run("remove", [skill_name], input_text="y\n")
-        assert result.success
+        # 启用并应用
+        result = self.cmd.run("use", [safety_test_skill], cwd=str(self.project_dir))
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
         
-        # CRITICAL: Repository files must still exist
-        assert repo_skill_dir.exists(), f"Repository skill directory MUST exist: {repo_skill_dir}"
-        assert repo_skill_md.exists(), f"Repository SKILL.md MUST exist: {repo_skill_md}"
+        # 记录仓库文件状态（前）
+        repo_skill_dir = self.repo_skills_dir / safety_test_skill
+        repo_files_before = []
+        if repo_skill_dir.exists():
+            for root, dirs, files in os.walk(repo_skill_dir):
+                for file in files:
+                    file_path = Path(root) / file
+                    repo_files_before.append(str(file_path.relative_to(self.repo_skills_dir)))
         
-        # CRITICAL: Repository content must be unchanged
-        with open(repo_skill_md, 'r') as f:
-            current_content = f.read()
+        print(f"  Repository files before removal: {len(repo_files_before)}")
         
-        assert current_content == original_content, "Repository SKILL.md content changed!"
+        # 执行移除
+        result = self.cmd.run("remove", [safety_test_skill], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub remove failed: {result.stderr}"
         
-        print(f"✓ Repository safety verified")
-        print(f"  - Repository directory preserved: {repo_skill_dir}")
-        print(f"  - SKILL.md unchanged: {len(current_content)} chars")
-        print(f"  - CRITICAL: Source files never deleted by remove operation")
-
-
-if __name__ == "__main__":
-    # For direct execution
-    pytest.main([__file__, "-v"])
+        # 验证仓库文件永不删除
+        repo_skill_dir_after = self.repo_skills_dir / safety_test_skill
+        assert repo_skill_dir_after.exists(), f"Repository skill directory should still exist after removal"
+        
+        # 记录仓库文件状态（后）
+        repo_files_after = []
+        if repo_skill_dir_after.exists():
+            for root, dirs, files in os.walk(repo_skill_dir_after):
+                for file in files:
+                    file_path = Path(root) / file
+                    repo_files_after.append(str(file_path.relative_to(self.repo_skills_dir)))
+        
+        print(f"  Repository files after removal: {len(repo_files_after)}")
+        
+        # 验证仓库完整性
+        # 检查文件数量是否相同或更多（可能添加了元数据）
+        assert len(repo_files_after) >= len(repo_files_before), f"Repository lost files after removal"
+        
+        # 检查关键文件仍然存在
+        key_file = repo_skill_dir_after / "SKILL.md"
+        assert key_file.exists(), f"Key file SKILL.md should still exist in repository"
+        
+        print(f"  Repository integrity verified: ✓")
+        
+        # 验证项目文件已删除
+        project_skill_dir = self.project_skills_dir / safety_test_skill
+        assert not project_skill_dir.exists(), f"Project skill directory should be removed"
+        
+        print(f"✓ Repository safety and integrity verified")

@@ -87,9 +87,13 @@ test-e2e-clean:
 	@echo "Cleaning Python test temporary files..."
 	cd tests/e2e && ~/codespace/venv/bin/python3 run_tests.py --cleanup
 
-# Install to /usr/local/bin
+# Install to ~/.local/bin (user directory, no sudo needed)
 install: build
-	sudo cp bin/skill-hub /usr/local/bin/
+	@echo "Installing skill-hub to ~/.local/bin/"
+	@mkdir -p ~/.local/bin
+	cp bin/skill-hub ~/.local/bin/
+	@echo "✅ skill-hub installed to ~/.local/bin/skill-hub"
+	@echo "Make sure ~/.local/bin is in your PATH:"
 
 # Create release packages for all platforms (tar.gz + sha256)
 release-all: clean

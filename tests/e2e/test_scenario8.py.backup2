@@ -88,25 +88,9 @@ class TestScenario8RemoteSkillSearch:
             if not result.success:
                 print(f"Warning: Failed to feedback {skill['name']}: {result.stderr}")
     
-    def test_01_command_dependency_check(self):
-        """Test 8.1: Command dependency check verification"""
-        print("\n=== Test 8.1: Command Dependency Check ===")
-        
-        # 创建一个新的临时目录，确保没有初始化
-        temp_dir = Path(self.home_dir) / "temp-uninitialized-8"
-        temp_dir.mkdir(exist_ok=True)
-        
-        # 测试未初始化时执行 skill-hub search git
-        result = self.cmd.run("search", ["git"], cwd=str(temp_dir))
-        # 应该提示需要先进行初始化
-        assert not result.success or "需要先进行初始化" in result.stdout or "需要先进行初始化" in result.stderr, \
-            f"Should prompt for initialization when running search without init"
-        
-        print(f"✓ search command dependency check passed")
-        
-    def test_02_basic_search_functionality(self):
-        """Test 8.2: Basic search for skills"""
-        print("\n=== Test 8.2: Basic Skill Search ===")
+    def test_01_basic_search_functionality(self):
+        """Test 8.1: Basic search for skills"""
+        print("\n=== Test 8.1: Basic Skill Search ===")
         
         # Setup test skills
         self._setup_test_skills()
@@ -123,8 +107,8 @@ class TestScenario8RemoteSkillSearch:
         
         print(f"✓ Basic search results: {result.stdout[:150]}...")
     
-    def test_03_target_filtered_search(self):
-        """Test 8.3: Search filtered by target"""
+    def test_02_target_filtered_search(self):
+        """Test 8.2: Search filtered by target"""
         print("\n=== Test 8.2: Target Filtered Search ===")
         
         # Setup test skills
@@ -149,8 +133,8 @@ class TestScenario8RemoteSkillSearch:
         
         print(f"✓ Python search with open_code target: {result.stdout[:150]}...")
     
-    def test_04_search_result_limit(self):
-        """Test 8.4: Search with result limit"""
+    def test_03_search_result_limit(self):
+        """Test 8.3: Search with result limit"""
         print("\n=== Test 8.3: Search Result Limit ===")
         
         # Setup test skills
@@ -178,8 +162,8 @@ class TestScenario8RemoteSkillSearch:
         
         print(f"✓ Search with limit 5 returned {len(skill_lines)} results")
     
-    def test_05_empty_search_results(self):
-        """Test 8.5: Search with no results"""
+    def test_04_empty_search_results(self):
+        """Test 8.4: Search with no results"""
         print("\n=== Test 8.4: Empty Search Results ===")
         
         # Setup test skills
@@ -194,8 +178,8 @@ class TestScenario8RemoteSkillSearch:
         # Should indicate no results or empty result
         print(f"✓ Empty search results handled: {result.stdout[:100]}...")
     
-    def test_06_search_with_special_characters(self):
-        """Test 8.6: Search with special characters"""
+    def test_05_search_with_special_characters(self):
+        """Test 8.5: Search with special characters"""
         print("\n=== Test 8.5: Search with Special Characters ===")
         
         # Setup test skills
@@ -219,9 +203,9 @@ class TestScenario8RemoteSkillSearch:
         
         print(f"✓ Partial word search: {result.stdout[:100]}...")
     
-    def test_07_search_integration_with_use_command(self):
-        """Test 8.7: Search integration with use command"""
-        print("\n=== Test 8.7: Search and Use Integration ===")
+    def test_06_search_integration_with_use_command(self):
+        """Test 8.6: Search integration with use command"""
+        print("\n=== Test 8.6: Search and Use Integration ===")
         
         # Setup test skills
         self._setup_test_skills()

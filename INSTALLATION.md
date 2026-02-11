@@ -200,7 +200,7 @@ skill-hub 提供了一系列命令来管理技能和项目。
 | `set-target` | 设置项目首选目标 | `skill-hub set-target open_code` |
 | `apply` | 将技能应用到项目 | `skill-hub apply --dry-run` |
 | `status` | 检查技能状态 | `skill-hub status` |
-| `feedback` | 反馈手动修改 | `skill-hub feedback git-expert --archive` |
+| `feedback` | 反馈手动修改 | `skill-hub feedback git-expert` |
 | `update` | 更新技能仓库 | `skill-hub update` |
 | `remove` | 从项目移除技能 | `skill-hub remove git-expert` |
 | `git` | Git仓库操作 | `skill-hub git --help` |

@@ -1,0 +1,74 @@
+# Template 2: API Client Configuration
+
+API Configuration for {{ project_name }}
+
+## Base Configuration
+
+```yaml
+api:
+  base_url: "https://api.example.com"
+  version: "v1"
+  timeout: 30
+  
+authentication:
+  type: "bearer_token"
+  token_env_var: "API_TOKEN"
+  
+endpoints:
+  users: "/users"
+  projects: "/projects"
+  tasks: "/tasks"
+```
+
+## Client Code
+
+```python
+import requests
+import os
+from typing import Dict, Any
+
+class APIClient:
+    def __init__(self, base_url: str = None, token: str = None):
+        self.base_url = base_url or "{{ api.base_url }}"
+        self.token = token or os.getenv("{{ authentication.token_env_var }}")
+        self.session = requests.Session()
+        
+        if self.token:
+            self.session.headers.update({
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json"
+            })
+    
+    def get_users(self) -> Dict[str, Any]:
+        """Get list of users"""
+        response = self.session.get(f"{self.base_url}{{ endpoints.users }}")
+        response.raise_for_status()
+        return response.json()
+    
+    def create_project(self, project_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new project"""
+        response = self.session.post(
+            f"{self.base_url}{{ endpoints.projects }}",
+            json=project_data
+        )
+        response.raise_for_status()
+        return response.json()
+```
+
+## Usage Example
+
+```python
+# Initialize client
+client = APIClient()
+
+# Get users
+users = client.get_users()
+print(f"Found {len(users)} users")
+
+# Create project
+project = client.create_project({
+    "name": "New Project",
+    "description": "Created via API"
+})
+print(f"Created project: {project['id']}")
+```

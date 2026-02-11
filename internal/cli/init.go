@@ -9,13 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	"skill-hub/internal/adapter"
 	"skill-hub/internal/git"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/spec"
 	"skill-hub/pkg/utils"
+
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var initCmd = &cobra.Command{
@@ -121,7 +122,7 @@ cursor_config_path: "~/.cursor/rules"
 default_tool: "open_code"
 git_remote_url: "%s"
 git_token: ""
-git_branch: "main"
+git_branch: "master"
 `, gitURL)
 
 		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -482,26 +483,46 @@ func updateConfigGitURL(configPath, gitURL string) error {
 	}
 
 	lines := strings.Split(string(configContent), "\n")
-	updated := false
+	foundIndex := -1
+	foundCount := 0
 
-	// 更新git_remote_url字段
+	// 首先查找所有git_remote_url行并统计数量
 	for i, line := range lines {
 		if strings.HasPrefix(line, "git_remote_url:") {
-			// 检查当前值是否与要设置的值相同
-			currentValue := strings.TrimSpace(strings.TrimPrefix(line, "git_remote_url:"))
-			// 移除可能的引号
-			currentValue = strings.Trim(currentValue, `"' `)
-
-			if currentValue != gitURL {
-				lines[i] = fmt.Sprintf(`git_remote_url: "%s"`, gitURL)
-				updated = true
+			foundCount++
+			if foundIndex == -1 {
+				foundIndex = i
 			}
-			break
 		}
 	}
 
-	// 如果没有找到git_remote_url字段，添加它
-	if !updated {
+	// 处理重复的git_remote_url行
+	if foundCount > 1 {
+		// 有重复行，需要清理
+		newLines := make([]string, 0, len(lines))
+		firstFound := false
+		for _, line := range lines {
+			if strings.HasPrefix(line, "git_remote_url:") {
+				if !firstFound {
+					// 保留第一个，但更新其值
+					newLines = append(newLines, fmt.Sprintf(`git_remote_url: "%s"`, gitURL))
+					firstFound = true
+				}
+				// 跳过其他重复行
+			} else {
+				newLines = append(newLines, line)
+			}
+		}
+		lines = newLines
+	} else if foundCount == 1 {
+		// 只有一个git_remote_url行，更新它
+		currentValue := strings.TrimSpace(strings.TrimPrefix(lines[foundIndex], "git_remote_url:"))
+		currentValue = strings.Trim(currentValue, `"' `)
+		if currentValue != gitURL {
+			lines[foundIndex] = fmt.Sprintf(`git_remote_url: "%s"`, gitURL)
+		}
+	} else {
+		// 没有找到git_remote_url字段，添加它
 		// 找到合适的位置插入（在default_tool之后）
 		for i, line := range lines {
 			if strings.HasPrefix(line, "default_tool:") {
@@ -511,7 +532,6 @@ func updateConfigGitURL(configPath, gitURL string) error {
 				newLines = append(newLines, fmt.Sprintf(`git_remote_url: "%s"`, gitURL))
 				newLines = append(newLines, lines[i+1:]...)
 				lines = newLines
-				updated = true
 				break
 			}
 		}
@@ -554,7 +574,10 @@ func checkAlreadyInitialized(skillHubDir, gitURL string) (bool, error) {
 				// 去除可能的引号
 				currentGitURL = strings.Trim(urlPart, `"`)
 			}
-			break
+			// 只取第一个有效的git_remote_url值，忽略重复行
+			if currentGitURL != "" {
+				break
+			}
 		}
 	}
 
