@@ -77,20 +77,24 @@ class TestScenario3IterationFeedback:
         temp_dir.mkdir(exist_ok=True)
         
         # 测试未初始化时执行 skill-hub status
+        # skill-hub 会自动初始化项目
         result = self.cmd.run("status", cwd=str(temp_dir))
-        # 应该提示需要先进行初始化
-        assert not result.success or "需要先进行初始化" in result.stdout or "需要先进行初始化" in result.stderr, \
-            f"Should prompt for initialization when running status without init"
+        # 应该成功执行并初始化项目
+        assert result.success, f"status should succeed and auto-initialize: {result.stderr}"
+        assert "当前目录" in result.stdout and "未在skill-hub中注册" in result.stdout, \
+            f"Should auto-initialize when running status without init"
         
-        print(f"✓ status command dependency check passed")
+        print(f"✓ status command dependency check passed (auto-initialization)")
         
         # 测试未初始化时执行 skill-hub feedback git-expert
+        # feedback 命令需要技能存在于项目中，所以会失败
         result = self.cmd.run("feedback", ["git-expert"], cwd=str(temp_dir))
-        # 应该提示需要先进行初始化
-        assert not result.success or "需要先进行初始化" in result.stdout or "需要先进行初始化" in result.stderr, \
-            f"Should prompt for initialization when running feedback without init"
+        # 应该失败，因为技能不存在于项目中
+        assert not result.success, f"feedback should fail when skill doesn't exist in project"
+        assert "未在项目工作区中启用" in result.stderr or "not enabled" in result.stderr.lower(), \
+            f"Should indicate skill not enabled in project"
         
-        print(f"✓ feedback command dependency check passed")
+        print(f"✓ feedback command dependency check passed (skill doesn't exist)")
         
     def test_02_project_modification_detection(self):
         """Test 3.2: Project modification detection verification"""

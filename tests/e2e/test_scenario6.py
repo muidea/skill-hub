@@ -165,7 +165,7 @@ class TestScenario6RemoteSynchronization:
         print("\n=== Test 6.5: Pull Updates from Remote ===")
         
         # 检查网络连接
-        if self.network.has_network():
+        if self.network.is_network_available():
             print(f"  Network available, testing pull from remote...")
             
             # 执行 skill-hub pull
@@ -224,7 +224,7 @@ class TestScenario6RemoteSynchronization:
         result = self.cmd.run("init", cwd=str(device_b_dir))
         if result.success:
             # 如果有网络，尝试pull
-            if self.network.has_network():
+            if self.network.is_network_available():
                 result = self.cmd.run("pull", cwd=str(device_b_dir))
                 print(f"    Device B pulled updates")
             

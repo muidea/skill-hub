@@ -148,7 +148,7 @@ class TestScenario7GitOperations:
         print("\n=== Test 7.4: Git Sync Command ===")
         
         # 检查网络连接
-        if self.network.has_network():
+        if self.network.is_network_available():
             print(f"  Network available, testing git sync...")
             
             # 执行 skill-hub git sync
@@ -172,7 +172,7 @@ class TestScenario7GitOperations:
         print("\n=== Test 7.5: Git Clone Command ===")
         
         # 检查网络连接
-        if self.network.has_network():
+        if self.network.is_network_available():
             print(f"  Network available, testing git clone...")
             
             # 创建一个临时目录用于克隆
@@ -195,7 +195,7 @@ class TestScenario7GitOperations:
         print("\n=== Test 7.6: Git Remote Command ===")
         
         # 检查网络连接
-        if self.network.has_network():
+        if self.network.is_network_available():
             print(f"  Network available, testing git remote...")
             
             # 执行 skill-hub git remote <repo-url>
@@ -220,7 +220,7 @@ class TestScenario7GitOperations:
         print("\n=== Test 7.7: Git Push Command ===")
         
         # 检查网络连接
-        if self.network.has_network():
+        if self.network.is_network_available():
             print(f"  Network available, testing git push...")
             
             # 首先确保有提交可以推送
@@ -254,7 +254,7 @@ class TestScenario7GitOperations:
         print("\n=== Test 7.8: Git Pull Command ===")
         
         # 检查网络连接
-        if self.network.has_network():
+        if self.network.is_network_available():
             print(f"  Network available, testing git pull...")
             
             # 执行 skill-hub git pull

@@ -105,9 +105,9 @@ class TestScenario5TargetPriority:
                 state = json.load(f)
             
             project_path = str(self.project_dir)
-            if project_path in state.get("projects", {}):
-                project_state = state["projects"][project_path]
-                target = project_state.get("target")
+            if project_path in state:
+                project_state = state[project_path]
+                target = project_state.get("preferred_target")
                 if target:
                     print(f"  Project target in state.json: {target}")
                 else:
@@ -139,10 +139,10 @@ class TestScenario5TargetPriority:
             state = json.load(f)
         
         project_path = str(self.project_dir)
-        assert project_path in state.get("projects", {}), f"Project not found in state.json"
+        assert project_path in state, f"Project not found in state.json"
         
-        project_state = state["projects"][project_path]
-        assert project_state.get("target") == "cursor", f"Target not set to 'cursor' in state.json"
+        project_state = state[project_path]
+        assert project_state.get("preferred_target") == "cursor", f"Target not set to 'cursor' in state.json"
         
         print(f"  Project target set to 'cursor' in state.json: ✓")
         
@@ -195,8 +195,8 @@ class TestScenario5TargetPriority:
                 state = json.load(f)
             
             project_path = str(self.project_dir)
-            if project_path in state.get("projects", {}):
-                project_state = state["projects"][project_path]
+            if project_path in state:
+                project_state = state[project_path]
                 print(f"  Current project target: {project_state.get('target')}")
         
         print(f"✓ Command line target override verification completed")
@@ -220,9 +220,9 @@ class TestScenario5TargetPriority:
                     state = json.load(f)
                 
                 project_path = str(self.project_dir)
-                if project_path in state.get("projects", {}):
-                    project_state = state["projects"][project_path]
-                    current_target = project_state.get("target")
+                if project_path in state:
+                    project_state = state[project_path]
+                    current_target = project_state.get("preferred_target")
                     print(f"  Using project target: {current_target}")
         
         # 测试项目无target时使用全局默认
@@ -377,9 +377,9 @@ class TestScenario5TargetPriority:
                 state = json.load(f)
             
             project_path = str(self.project_dir)
-            if project_path in state.get("projects", {}):
-                project_state = state["projects"][project_path]
-                final_target = project_state.get("target")
+            if project_path in state:
+                project_state = state[project_path]
+                final_target = project_state.get("preferred_target")
                 print(f"  Final target in state.json: {final_target}")
         
         print(f"✓ Target consistency across commands verification completed")
