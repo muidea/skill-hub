@@ -112,15 +112,31 @@ func convertToOpenCodeFormat(content string, skillID string) (string, error) {
 		}
 	}
 
-	// 添加metadata字段
-	metadata := make(map[string]string)
+	// 处理metadata字段
+	var metadata map[string]interface{}
+
+	// 检查原始数据中是否有metadata字段
+	if existingMetadata, ok := originalData["metadata"].(map[string]interface{}); ok {
+		// 使用现有的metadata
+		metadata = existingMetadata
+	} else {
+		// 创建新的metadata
+		metadata = make(map[string]interface{})
+	}
+
+	// 添加source字段
 	metadata["source"] = "skill-hub"
+
+	// 如果根级别有version字段，添加到metadata
 	if version, ok := originalData["version"].(string); ok {
 		metadata["version"] = version
 	}
+
+	// 如果根级别有author字段，添加到metadata
 	if author, ok := originalData["author"].(string); ok {
 		metadata["author"] = author
 	}
+
 	openCodeData["metadata"] = metadata
 
 	// 生成YAML frontmatter
@@ -147,7 +163,7 @@ func createBasicOpenCodeFormat(content string, skillID string) (string, error) {
 	frontmatter := map[string]interface{}{
 		"name":        skillID,
 		"description": fmt.Sprintf("Skill: %s", skillID),
-		"metadata": map[string]string{
+		"metadata": map[string]interface{}{
 			"source": "skill-hub",
 		},
 	}

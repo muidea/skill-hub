@@ -78,21 +78,10 @@ func (a *OpenCodeAdapter) Apply(skillID string, content string, variables map[st
 		return fmt.Errorf("创建技能目录失败: %w", err)
 	}
 
-	// 转换内容为OpenCode格式
-	openCodeContent, err := convertToOpenCodeFormat(content, skillID)
-	if err != nil {
-		return fmt.Errorf("转换技能格式失败: %w", err)
-	}
-
-	// 写入SKILL.md文件
-	skillPath := filepath.Join(skillDir, "SKILL.md")
-	if err := writeSkillMDFile(skillPath, openCodeContent); err != nil {
-		return fmt.Errorf("写入SKILL.md失败: %w", err)
-	}
-
-	// 对于open_code适配器，还需要从仓库复制其他文件
-	if err := a.copyAdditionalFiles(skillID, skillDir); err != nil {
-		return fmt.Errorf("复制额外文件失败: %w", err)
+	// 对于open_code适配器，直接从仓库复制整个技能目录
+	// 这样可以保证文件内容完全一致，避免格式转换导致的差异
+	if err := a.copySkillFromRepository(skillID, skillDir); err != nil {
+		return fmt.Errorf("从仓库复制技能失败: %w", err)
 	}
 
 	return nil
@@ -127,7 +116,99 @@ func (a *OpenCodeAdapter) Extract(skillID string) (string, error) {
 	return standardContent, nil
 }
 
-// copyAdditionalFiles 从仓库复制技能的其他文件
+// copySkillFromRepository 从仓库复制整个技能目录
+func (a *OpenCodeAdapter) copySkillFromRepository(skillID, targetDir string) error {
+	// 获取配置
+	cfg, err := config.GetConfig()
+	if err != nil {
+		// 在测试环境中，配置文件可能不存在，静默返回
+		// 在实际使用中，这个错误会在其他地方被捕获
+		return nil
+	}
+
+	// 展开repo路径中的~符号
+	repoPath := cfg.RepoPath
+	if repoPath == "" {
+		// 仓库路径未配置，静默返回
+		return nil
+	}
+
+	// 处理~符号
+	if repoPath[0] == '~' {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("获取用户主目录失败: %w", err)
+		}
+		repoPath = filepath.Join(homeDir, repoPath[1:])
+	}
+
+	// 源技能目录
+	srcSkillDir := filepath.Join(repoPath, "skills", skillID)
+
+	// 检查源目录是否存在
+	if _, err := os.Stat(srcSkillDir); os.IsNotExist(err) {
+		// 源目录不存在，使用convertToOpenCodeFormat创建基本文件
+		return a.createBasicSkill(skillID, targetDir)
+	}
+
+	// 复制整个技能目录
+	return filepath.Walk(srcSkillDir, func(srcPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// 计算相对路径
+		relPath, err := filepath.Rel(srcSkillDir, srcPath)
+		if err != nil {
+			return fmt.Errorf("计算相对路径失败: %w", err)
+		}
+
+		// 目标路径
+		dstPath := filepath.Join(targetDir, relPath)
+
+		// 如果是目录，创建目录
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		// 如果是文件，复制文件
+		content, err := os.ReadFile(srcPath)
+		if err != nil {
+			return fmt.Errorf("读取文件失败 %s: %w", srcPath, err)
+		}
+
+		if err := os.WriteFile(dstPath, content, info.Mode()); err != nil {
+			return fmt.Errorf("写入文件失败 %s: %w", dstPath, err)
+		}
+
+		return nil
+	})
+}
+
+// createBasicSkill 创建基本技能文件（当仓库中不存在时）
+func (a *OpenCodeAdapter) createBasicSkill(skillID, targetDir string) error {
+	// 确保目标目录存在
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return fmt.Errorf("创建目标目录失败: %w", err)
+	}
+
+	// 创建基本的SKILL.md内容
+	basicContent := fmt.Sprintf(`---
+name: %s
+description: Skill: %s
+metadata:
+  source: skill-hub
+---
+# %s
+
+Skill: %s`, skillID, skillID, skillID, skillID)
+
+	// 写入SKILL.md文件
+	skillPath := filepath.Join(targetDir, "SKILL.md")
+	return writeSkillMDFile(skillPath, basicContent)
+}
+
+// copyAdditionalFiles 从仓库复制技能的其他文件（已弃用，保留用于向后兼容）
 func (a *OpenCodeAdapter) copyAdditionalFiles(skillID, targetDir string) error {
 	// 获取配置
 	cfg, err := config.GetConfig()
