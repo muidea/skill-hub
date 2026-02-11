@@ -96,8 +96,22 @@ func (e *AppError) WithDetails(details map[string]interface{}) *AppError {
 	return e
 }
 
-// Is 检查错误代码是否匹配
-func (e *AppError) Is(code ErrorCode) bool {
+// Is 检查错误是否匹配（实现errors.Is接口）
+func (e *AppError) Is(target error) bool {
+	if target == nil {
+		return false
+	}
+
+	// 检查是否是相同类型的错误
+	if other, ok := target.(*AppError); ok {
+		return e.Code == other.Code
+	}
+
+	return false
+}
+
+// IsCode 检查错误代码是否匹配（向后兼容）
+func (e *AppError) IsCode(code ErrorCode) bool {
 	return e.Code == code
 }
 

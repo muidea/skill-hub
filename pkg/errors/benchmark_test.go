@@ -128,9 +128,9 @@ func BenchmarkAppErrorMethods(b *testing.B) {
 		}
 	})
 
-	b.Run("Is", func(b *testing.B) {
+	b.Run("IsCode", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_ = err.Is(ErrValidation)
+			_ = err.IsCode(ErrValidation)
 		}
 	})
 
