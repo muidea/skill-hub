@@ -117,12 +117,6 @@ skill-hub feedback my-new-skill
 
 ## 📋 其他信息
 
-### CI/CD状态
-
-[![CI](https://github.com/muidea/skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/ci.yml)
-[![Tests](https://github.com/muidea/skill-hub/actions/workflows/test.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/test.yml)
-[![Release](https://github.com/muidea/skill-hub/actions/workflows/release.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/release.yml)
-
 ### 许可证
 
 MIT License - 详见 [LICENSE](LICENSE) 文件
