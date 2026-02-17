@@ -30,13 +30,26 @@ class CommandRunner:
     
     def _verify_installation(self):
         """验证skill-hub已安装"""
-        if not shutil.which("skill-hub"):
-            raise RuntimeError("skill-hub未安装或不在PATH中")
+        # 首先检查环境变量指定的二进制
+        self.skill_hub_bin = os.environ.get("SKILL_HUB_BIN")
+        if self.skill_hub_bin:
+            if not os.path.exists(self.skill_hub_bin):
+                raise RuntimeError(f"SKILL_HUB_BIN环境变量指定的二进制不存在: {self.skill_hub_bin}")
+        else:
+            # 检查项目目录中的二进制
+            project_bin = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "skill-hub")
+            if os.path.exists(project_bin):
+                self.skill_hub_bin = project_bin
+            else:
+                # 回退到PATH中的二进制
+                self.skill_hub_bin = shutil.which("skill-hub")
+                if not self.skill_hub_bin:
+                    raise RuntimeError("skill-hub未安装或不在PATH中")
         
         # 记录版本信息用于调试
         try:
             result = subprocess.run(
-                ["skill-hub", "--version"],
+                [self.skill_hub_bin, "--version"],
                 capture_output=True, text=True, timeout=5
             )
             if self.debug and result.returncode == 0:
@@ -69,7 +82,7 @@ class CommandRunner:
             RuntimeError: 命令执行失败
         """
         # 构建完整命令
-        cmd = ["skill-hub", command]
+        cmd = [self.skill_hub_bin, command]
         if args:
             if isinstance(args, str):
                 cmd.extend(args.split())
@@ -86,6 +99,8 @@ class CommandRunner:
             print(f"执行命令: {' '.join(cmd)}")
             if cwd:
                 print(f"工作目录: {cwd}")
+            print(f"HOME环境变量: {exec_env.get('HOME')}")
+            print(f"使用二进制: {self.skill_hub_bin}")
         
         # 执行命令
         try:

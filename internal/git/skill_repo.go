@@ -118,35 +118,23 @@ func (sr *SkillRepository) CloneRemote(url string) error {
 		return fmt.Errorf("克隆失败: %w", err)
 	}
 
-	// 更新配置中的远程URL
+	// 更新配置中的远程URL（多仓库模式）
 	cfg, err := config.GetConfig()
 	if err != nil {
 		return err
 	}
 
-	// 保存配置
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
+	// 保存配置 - 更新默认仓库的URL
+	if cfg.MultiRepo != nil {
+		if defaultRepo, exists := cfg.MultiRepo.Repositories[cfg.MultiRepo.DefaultRepo]; exists {
+			defaultRepo.URL = url
+			cfg.MultiRepo.Repositories[cfg.MultiRepo.DefaultRepo] = defaultRepo
 
-	configFile := filepath.Join(homeDir, ".skill-hub", "config.yaml")
-	configData := map[string]interface{}{
-		"repo_path":          cfg.RepoPath,
-		"claude_config_path": cfg.ClaudeConfigPath,
-		"default_tool":       cfg.DefaultTool,
-		"git_remote_url":     url,
-		"git_token":          cfg.GitToken,
-		"git_branch":         cfg.GitBranch,
-	}
-
-	yamlData, err := yaml.Marshal(configData)
-	if err != nil {
-		return fmt.Errorf("序列化配置失败: %w", err)
-	}
-
-	if err := os.WriteFile(configFile, yamlData, 0644); err != nil {
-		return fmt.Errorf("保存配置失败: %w", err)
+			// 保存更新后的配置
+			if err := config.SaveConfig(cfg); err != nil {
+				return fmt.Errorf("保存配置失败: %w", err)
+			}
+		}
 	}
 
 	fmt.Println("✅ 远程技能仓库克隆完成")

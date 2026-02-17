@@ -12,6 +12,11 @@ type Skill struct {
 	Variables     []Variable    `yaml:"variables" json:"variables"`
 	Dependencies  []string      `yaml:"dependencies" json:"dependencies"`
 	Claude        *ClaudeConfig `yaml:"claude,omitempty" json:"claude,omitempty"`
+
+	// 多仓库扩展字段
+	Repository       string `yaml:"repository,omitempty" json:"repository,omitempty"`               // 源仓库名称
+	RepositoryPath   string `yaml:"repository_path,omitempty" json:"repository_path,omitempty"`     // 仓库内路径
+	RepositoryCommit string `yaml:"repository_commit,omitempty" json:"repository_commit,omitempty"` // 仓库提交哈希
 }
 
 // ClaudeConfig Claude专项配置
@@ -38,13 +43,16 @@ type Variable struct {
 
 // SkillMetadata 用于技能索引的简化信息
 type SkillMetadata struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Version       string   `json:"version"`
-	Author        string   `json:"author"`
-	Description   string   `json:"description"`
-	Tags          []string `json:"tags"`
-	Compatibility string   `json:"compatibility,omitempty"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Version          string   `json:"version"`
+	Author           string   `json:"author"`
+	Description      string   `json:"description"`
+	Tags             []string `json:"tags"`
+	Compatibility    string   `json:"compatibility,omitempty"`
+	Repository       string   `json:"repository,omitempty"`        // 源仓库名称
+	RepositoryPath   string   `json:"repository_path,omitempty"`   // 仓库内路径
+	RepositoryCommit string   `json:"repository_commit,omitempty"` // 仓库提交哈希
 }
 
 // Registry 表示技能仓库的索引
@@ -127,4 +135,26 @@ type ArchiveInfo struct {
 	SkillID    string `json:"skill_id"`
 	Version    string `json:"version"`
 	ArchivedAt string `json:"archived_at"`
+}
+
+// ConflictResolution 冲突解决记录
+type ConflictResolution struct {
+	SkillID    string `json:"skill_id"`
+	Repository string `json:"selected_repo"` // 用户选择的仓库
+	Timestamp  string `json:"timestamp"`
+	UserChoice bool   `json:"user_choice"` // 是否为用户选择
+}
+
+// Conflict 冲突检测结果
+type Conflict struct {
+	SkillID      string         `json:"skill_id"`
+	SkillName    string         `json:"skill_name"`
+	Repositories []ConflictRepo `json:"repositories"` // 包含此技能的仓库列表
+}
+
+// ConflictRepo 冲突仓库信息
+type ConflictRepo struct {
+	Repository string `json:"repository"` // 仓库名称
+	Version    string `json:"version"`    // 技能版本
+	Commit     string `json:"commit"`     // 提交哈希
 }

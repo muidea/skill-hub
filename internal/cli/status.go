@@ -232,11 +232,16 @@ func getRepoSkillInfo(skillID string) (string, string, error) {
 		return "", "", fmt.Errorf("获取配置失败: %w", err)
 	}
 
-	// 展开repo路径中的~符号
-	repoPath := cfg.RepoPath
-	if strings.HasPrefix(repoPath, "~/") {
-		homeDir, _ := os.UserHomeDir()
-		repoPath = strings.Replace(repoPath, "~", homeDir, 1)
+	// 多仓库模式：获取默认仓库路径
+	var repoPath string
+	if cfg.MultiRepo != nil {
+		rootDir, err := config.GetRootDir()
+		if err != nil {
+			return "", "", fmt.Errorf("获取根目录失败: %w", err)
+		}
+		repoPath = filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo)
+	} else {
+		return "", "", fmt.Errorf("多仓库配置未初始化")
 	}
 
 	// 检查仓库中是否存在该技能

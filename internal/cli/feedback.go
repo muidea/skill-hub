@@ -7,12 +7,10 @@ import (
 	"strings"
 
 	"skill-hub/internal/config"
-	"skill-hub/internal/engine"
+	"skill-hub/internal/multirepo"
 	"skill-hub/internal/state"
-	"skill-hub/pkg/spec"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -93,21 +91,35 @@ func runFeedback(skillID string) error {
 		return fmt.Errorf("读取项目工作区文件失败: %w", err)
 	}
 
-	// 检查技能是否在本地仓库中存在
-	skillManager, err := engine.NewSkillManager()
+	// 创建多仓库管理器
+	repoManager, err := multirepo.NewManager()
 	if err != nil {
-		return fmt.Errorf("初始化技能管理器失败: %w", err)
+		return fmt.Errorf("初始化多仓库管理器失败: %w", err)
 	}
 
-	skillExists := skillManager.SkillExists(skillID)
-
-	// 获取技能目录
-	skillsDir, err := engine.GetSkillsDir()
+	// 检查技能是否在默认仓库中存在
+	skillExists, err := repoManager.CheckSkillInDefaultRepository(skillID)
 	if err != nil {
-		return fmt.Errorf("获取技能目录失败: %w", err)
+		return fmt.Errorf("检查技能存在状态失败: %w", err)
 	}
 
-	repoSkillDir := filepath.Join(skillsDir, skillID)
+	// 获取默认仓库路径
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return fmt.Errorf("获取配置失败: %w", err)
+	}
+
+	defaultRepo, err := cfg.GetArchiveRepository()
+	if err != nil {
+		return fmt.Errorf("获取默认仓库失败: %w", err)
+	}
+
+	repoDir, err := config.GetRepositoryPath(defaultRepo.Name)
+	if err != nil {
+		return fmt.Errorf("获取仓库路径失败: %w", err)
+	}
+
+	repoSkillDir := filepath.Join(repoDir, "skills", skillID)
 	repoSkillPath := filepath.Join(repoSkillDir, "SKILL.md")
 
 	var repoContent []byte
@@ -228,98 +240,14 @@ func runFeedback(skillID string) error {
 
 	fmt.Println("✓ 更新本地仓库文件")
 
-	// 更新registry.json中的版本信息
-	if err := updateRegistryVersion(skillID); err != nil {
-		fmt.Printf("⚠️  更新registry.json失败: %v\n", err)
-		fmt.Println("本地仓库文件已更新，但registry.json未更新")
-	} else {
-		fmt.Println("✓ 更新registry.json版本信息")
-	}
+	// 在多仓库模式下，不再更新registry.json
+	// 技能已归档到默认仓库
+	fmt.Println("✓ 技能已归档到默认仓库")
 
 	fmt.Println("\n✅ 反馈完成！")
+	fmt.Printf("技能 '%s' 已保存到默认仓库: %s\n", skillID, defaultRepo.Name)
 	fmt.Println("使用 'skill-hub push' 同步到远程仓库")
 
-	return nil
-}
-
-// updateRegistryVersion 更新registry.json中的版本信息
-func updateRegistryVersion(skillID string) error {
-	// 获取技能管理器
-	skillManager, err := engine.NewSkillManager()
-	if err != nil {
-		return fmt.Errorf("初始化技能管理器失败: %w", err)
-	}
-
-	// 加载技能详情
-	skill, err := skillManager.LoadSkill(skillID)
-	if err != nil {
-		return fmt.Errorf("加载技能失败: %w", err)
-	}
-
-	// 获取registry.json路径
-	registryPath, err := config.GetRegistryPath()
-	if err != nil {
-		return fmt.Errorf("获取注册表路径失败: %w", err)
-	}
-
-	// 读取现有的registry.json
-	var registry spec.Registry
-	registryData, err := os.ReadFile(registryPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// 如果文件不存在，创建新的注册表
-			registry = spec.Registry{
-				Version: "1.0.0",
-				Skills:  []spec.SkillMetadata{},
-			}
-		} else {
-			return fmt.Errorf("读取注册表失败: %w", err)
-		}
-	} else {
-		// 解析现有的注册表
-		if err := yaml.Unmarshal(registryData, &registry); err != nil {
-			return fmt.Errorf("解析注册表失败: %w", err)
-		}
-	}
-
-	// 创建技能元数据
-	metadata := spec.SkillMetadata{
-		ID:            skill.ID,
-		Name:          skill.Name,
-		Version:       skill.Version,
-		Author:        skill.Author,
-		Description:   skill.Description,
-		Tags:          skill.Tags,
-		Compatibility: skill.Compatibility,
-	}
-
-	// 检查技能是否已经在注册表中
-	found := false
-	for i, existing := range registry.Skills {
-		if existing.ID == skillID {
-			// 更新现有的技能元数据
-			registry.Skills[i] = metadata
-			found = true
-			break
-		}
-	}
-
-	// 如果没找到，添加到注册表
-	if !found {
-		registry.Skills = append(registry.Skills, metadata)
-	}
-
-	// 保存更新后的注册表
-	updatedData, err := yaml.Marshal(registry)
-	if err != nil {
-		return fmt.Errorf("序列化注册表失败: %w", err)
-	}
-
-	if err := os.WriteFile(registryPath, updatedData, 0644); err != nil {
-		return fmt.Errorf("保存注册表失败: %w", err)
-	}
-
-	fmt.Printf("技能 '%s' 已添加到注册表: %s\n", skillID, skill.Version)
 	return nil
 }
 

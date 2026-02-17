@@ -57,4 +57,5 @@ func init() {
 	rootCmd.AddCommand(pullCmd)
 	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(gitCmd)
+	rootCmd.AddCommand(repoCmd)
 }

@@ -143,19 +143,16 @@ func getSkillContent(skillID string) (string, error) {
 		return "", fmt.Errorf("获取配置失败: %w", err)
 	}
 
-	// 展开repo路径中的~符号
-	repoPath := cfg.RepoPath
-	if repoPath == "" {
-		return "", fmt.Errorf("仓库路径未配置")
-	}
-
-	// 处理~符号
-	if repoPath[0] == '~' {
-		homeDir, err := os.UserHomeDir()
+	// 多仓库模式：获取默认仓库路径
+	var repoPath string
+	if cfg.MultiRepo != nil {
+		rootDir, err := config.GetRootDir()
 		if err != nil {
-			return "", fmt.Errorf("获取用户主目录失败: %w", err)
+			return "", fmt.Errorf("获取根目录失败: %w", err)
 		}
-		repoPath = filepath.Join(homeDir, repoPath[1:])
+		repoPath = filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo)
+	} else {
+		return "", fmt.Errorf("多仓库配置未初始化")
 	}
 
 	// 构建源文件路径

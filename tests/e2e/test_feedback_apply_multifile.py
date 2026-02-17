@@ -11,11 +11,10 @@ from pathlib import Path
 import shutil
 import hashlib
 
-from tests.e2e.utils.command_runner import CommandRunner
-from tests.e2e.utils.file_validator import FileValidator
-from tests.e2e.utils.test_environment import TestEnvironment
-from tests.e2e.utils.debug_utils import DebugUtils
-
+from utils.command_runner import CommandRunner
+from utils.file_validator import FileValidator
+from utils.test_environment import TestEnvironment
+from utils.debug_utils import DebugUtils
 
 class TestFeedbackApplyMultiFile:
     """Test feedback and apply commands with multi-file skills"""
@@ -33,8 +32,10 @@ class TestFeedbackApplyMultiFile:
         
         # Store paths
         self.skill_hub_dir = self.home_dir / ".skill-hub"
-        self.repo_dir = self.skill_hub_dir / "repo"
-        self.repo_skills_dir = self.repo_dir / "skills"
+        
+        self.repositories_dir = self.skill_hub_dir / "repositories"
+        self.main_repo_dir = self.repositories_dir / "main"
+        self.repo_skills_dir = self.main_repo_dir / "skills"  # 新结构：repositories/main/skills
         
         # Project paths
         self.project_skill_hub = self.project_dir / ".skill-hub"
@@ -219,6 +220,10 @@ class TestFeedbackApplyMultiFile:
         agents_skills_dir = self.project_dir / ".agents" / "skills"
         agents_skills_dir.mkdir(parents=True, exist_ok=True)
         
+        # Setup project first
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub set-target failed: {result.stderr}"
+        
         # Create skill using skill-hub create
         result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
         assert result.success, f"skill-hub create failed: {result.stderr}"
@@ -226,19 +231,7 @@ class TestFeedbackApplyMultiFile:
         # Copy our multi-file content
         project_skill_dir, project_files = self._copy_multi_file_skill_to_project(skill_name)
         
-        # Setup project
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"skill-hub set-target failed: {result.stderr}"
-        
-        # Use the skill (it exists locally)
-        result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir), input_text="\n")
-        assert result.success, f"skill-hub use failed: {result.stderr}"
-        
-        # Apply the skill
-        result = self.cmd.run("apply", cwd=str(self.project_dir))
-        assert result.success, f"skill-hub apply failed: {result.stderr}"
-        
-        # Now feedback to repository (skill is now enabled)
+        # Feedback the skill to repository first (it exists locally)
         result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
         assert result.success, f"skill-hub feedback failed: {result.stderr}"
         
@@ -309,8 +302,16 @@ class TestFeedbackApplyMultiFile:
         result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success, f"skill-hub init failed: {result.stderr}"
         
-        # Copy skill to project
+        # Setup project
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub set-target failed: {result.stderr}"
+        
+        # Create skill
         skill_name = "roundtrip-test-skill"
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
+        
+        # Copy skill content to project
         project_skill_dir, original_files = self._copy_multi_file_skill_to_project(skill_name)
         
         # Step 1: Initial feedback
@@ -408,10 +409,17 @@ class TestFeedbackApplyMultiFile:
         result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
-        # Create skill with deeply nested structure
+        # Setup project
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub set-target failed: {result.stderr}"
+        
+        # Create skill
         skill_name = "nested-test-skill"
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
+        
+        # Get skill directory
         skill_dir = self.project_agents_skills_dir / skill_name
-        skill_dir.mkdir(parents=True, exist_ok=True)
         
         # Create nested directory structure
         nested_paths = [
@@ -446,8 +454,10 @@ class TestFeedbackApplyMultiFile:
         for root, dirs, files in os.walk(repo_skill_dir):
             for file in files:
                 file_path = Path(root) / file
-                rel_path = file_path.relative_to(repo_skill_dir)
-                repo_nested_paths.append(str(rel_path))
+                repo_nested_paths.append(str(file_path.relative_to(repo_skill_dir)))
+        
+        # Filter out SKILL.md which is created by 'create' command
+        repo_nested_paths = [p for p in repo_nested_paths if p != "SKILL.md"]
         
         # Check all paths are present
         missing_paths = set(nested_paths) - set(repo_nested_paths)
@@ -481,15 +491,22 @@ class TestFeedbackApplyMultiFile:
         result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
-        # Create skill with different file permissions
+        # Setup project
+        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub set-target failed: {result.stderr}"
+        
+        # Create skill
         skill_name = "permission-test-skill"
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
+        
+        # Get skill directory
         skill_dir = self.project_agents_skills_dir / skill_name
-        skill_dir.mkdir(parents=True, exist_ok=True)
         
         # Create files with different permissions
+        # Note: We don't test write-only (0o222) because skill-hub needs to read files
         files = {
-            "read_only.txt": 0o444,
-            "write_only.txt": 0o222,
+            "read_only.txt": 0o444,  # Read-only but readable
             "executable.sh": 0o755,
             "normal.txt": 0o644,
         }
@@ -530,16 +547,20 @@ class TestFeedbackApplyMultiFile:
         """Test 6: Handling large number of files"""
         print("\n=== Test 6: Large Number of Files ===")
         
-        # Initialize
-        result = self.cmd.run("init", cwd=str(self.home_dir))
-        assert result.success
+        # Initialize project directory
+        result = self.cmd.run("init", cwd=str(self.project_dir))
+        assert result.success, f"skill-hub init failed: {result.stderr}"
         
-        # Create skill with many files
+        # Create skill using skill-hub create command
         skill_name = "many-files-test-skill"
-        skill_dir = self.project_agents_skills_dir / skill_name
-        skill_dir.mkdir(parents=True, exist_ok=True)
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
         
-        # Create many small files
+        # Get the created skill directory
+        skill_dir = self.project_agents_skills_dir / skill_name
+        assert skill_dir.exists(), f"Skill directory not created at {skill_dir}"
+        
+        # Create many small files in the skill directory
         file_count = 50  # Reasonable number for testing
         created_files = []
         
@@ -558,6 +579,9 @@ class TestFeedbackApplyMultiFile:
             file_path = subdir / filename
             file_path.write_text(f"# Subfile {i}\n\nContent here.")
             created_files.append(f"subdir/{filename}")
+        
+        # Include the SKILL.md file created by 'create' command
+        created_files.append("SKILL.md")
         
         total_files = len(created_files)
         print(f"  Created skill with {total_files} files")
@@ -590,14 +614,18 @@ class TestFeedbackApplyMultiFile:
         """Test 7: Mixed file types and extensions"""
         print("\n=== Test 7: Mixed File Types ===")
         
-        # Initialize
-        result = self.cmd.run("init", cwd=str(self.home_dir))
-        assert result.success
+        # Initialize project directory
+        result = self.cmd.run("init", cwd=str(self.project_dir))
+        assert result.success, f"skill-hub init failed: {result.stderr}"
         
-        # Create skill with various file types
+        # Create skill using skill-hub create command
         skill_name = "mixed-files-test-skill"
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
+        
+        # Get the created skill directory
         skill_dir = self.project_agents_skills_dir / skill_name
-        skill_dir.mkdir(parents=True, exist_ok=True)
+        assert skill_dir.exists(), f"Skill directory not created at {skill_dir}"
         
         # Different file types
         file_types = {
@@ -623,7 +651,7 @@ class TestFeedbackApplyMultiFile:
         
         # Feedback
         result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
-        assert result.success
+        assert result.success, f"Feedback failed: {result.stderr}"
         
         # Verify
         repo_skill_dir = self.repo_skills_dir / skill_name
@@ -649,17 +677,21 @@ class TestFeedbackApplyMultiFile:
         """Test 8: State tracking for multiple files"""
         print("\n=== Test 8: State Tracking for Multiple Files ===")
         
-        # Initialize
-        result = self.cmd.run("init", cwd=str(self.home_dir))
-        assert result.success
+        # Initialize project directory
+        result = self.cmd.run("init", cwd=str(self.project_dir))
+        assert result.success, f"skill-hub init failed: {result.stderr}"
         
-        # Copy multi-file skill
+        # First create the skill using skill-hub create
         skill_name = "state-tracking-skill"
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
+        
+        # Now copy our multi-file skill content over the created skill
         project_skill_dir, project_files = self._copy_multi_file_skill_to_project(skill_name)
         
         # Feedback
         result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
-        assert result.success
+        assert result.success, f"Feedback failed: {result.stderr}"
         
         # Check state file
         state_file = self.skill_hub_dir / "state.json"
@@ -728,12 +760,16 @@ class TestFeedbackApplyMultiFile:
         """Test 10: Comprehensive multi-file workflow test"""
         print("\n=== Test 10: Comprehensive Multi-File Workflow ===")
         
-        # This test combines multiple aspects
-        result = self.cmd.run("init", cwd=str(self.home_dir))
-        assert result.success
+        # Initialize project directory
+        result = self.cmd.run("init", cwd=str(self.project_dir))
+        assert result.success, f"skill-hub init failed: {result.stderr}"
         
-        # Use the pre-built multi-file-skill
+        # First create the skill using skill-hub create
         skill_name = "multi-file-skill"
+        result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
+        
+        # Now copy our multi-file skill content over the created skill
         project_skill_dir, project_files = self._copy_multi_file_skill_to_project(skill_name)
         
         print(f"  Starting with {len(project_files)} files")
@@ -780,7 +816,6 @@ class TestFeedbackApplyMultiFile:
         print(f"  - Apply: ✓")
         print(f"  - Status check: ✓")
         print(f"  - File integrity: ✓")
-
 
 if __name__ == "__main__":
     # For direct execution

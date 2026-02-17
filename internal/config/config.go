@@ -3,21 +3,36 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"skill-hub/pkg/errors"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
+type RepositoryConfig struct {
+	Name        string `mapstructure:"name" yaml:"name" json:"name"`                      // 仓库名称
+	URL         string `mapstructure:"url" yaml:"url" json:"url"`                         // Git远程URL
+	Branch      string `mapstructure:"branch" yaml:"branch" json:"branch"`                // 默认分支
+	Enabled     bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`             // 是否启用
+	Description string `mapstructure:"description" yaml:"description" json:"description"` // 描述
+	Type        string `mapstructure:"type" yaml:"type" json:"type"`                      // 类型：user/community/official
+	IsArchive   bool   `mapstructure:"is_archive" yaml:"is_archive" json:"is_archive"`    // 是否为归档仓库
+	LastSync    string `mapstructure:"last_sync,omitempty" yaml:"last_sync,omitempty" json:"last_sync,omitempty"`
+}
+
+type MultiRepoConfig struct {
+	Enabled      bool                        `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	DefaultRepo  string                      `mapstructure:"default_repo" yaml:"default_repo" json:"default_repo"` // 默认仓库（同时是归档仓库）
+	Repositories map[string]RepositoryConfig `mapstructure:"repositories" yaml:"repositories" json:"repositories"`
+}
+
 type Config struct {
-	RepoPath         string `mapstructure:"repo_path"`
-	ClaudeConfigPath string `mapstructure:"claude_config_path"`
-	CursorConfigPath string `mapstructure:"cursor_config_path"`
-	DefaultTool      string `mapstructure:"default_tool"`
-	GitRemoteURL     string `mapstructure:"git_remote_url"`
-	GitToken         string `mapstructure:"git_token"`
-	GitBranch        string `mapstructure:"git_branch"`
+	ClaudeConfigPath string           `mapstructure:"claude_config_path"`
+	CursorConfigPath string           `mapstructure:"cursor_config_path"`
+	DefaultTool      string           `mapstructure:"default_tool"`
+	GitToken         string           `mapstructure:"git_token"`
+	MultiRepo        *MultiRepoConfig `mapstructure:"multi_repo" yaml:"multi_repo" json:"multi_repo"`
 }
 
 var (
@@ -57,21 +72,21 @@ func LoadConfig() error {
 	viper.SetConfigFile(configFile)
 	viper.SetConfigType("yaml")
 
-	// 设置默认值
-	viper.SetDefault("repo_path", filepath.Join(configDir, "repo"))
-
 	// 获取用户主目录用于其他路径
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return errors.WrapWithCode(err, "LoadConfig", errors.ErrSystem, "获取用户主目录失败")
 	}
 
+	// 设置默认值
 	viper.SetDefault("claude_config_path", filepath.Join(homeDir, ".claude", "config.json"))
 	viper.SetDefault("cursor_config_path", filepath.Join(homeDir, ".cursor", "rules"))
 	viper.SetDefault("default_tool", "cursor")
-	viper.SetDefault("git_remote_url", "")
 	viper.SetDefault("git_token", "")
-	viper.SetDefault("git_branch", "main")
+
+	// 多仓库配置默认值 - 强制启用多仓库模式
+	viper.SetDefault("multi_repo.enabled", true)
+	viper.SetDefault("multi_repo.default_repo", "main")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return errors.WrapWithCode(err, "LoadConfig", errors.ErrConfigInvalid, "读取配置文件失败")
@@ -86,25 +101,24 @@ func LoadConfig() error {
 	return nil
 }
 
-// GetRepoPath 获取仓库路径
+// GetRepoPath 获取默认仓库路径（多仓库模式）
 func GetRepoPath() (string, error) {
 	cfg, err := GetConfig()
 	if err != nil {
 		return "", errors.Wrap(err, "GetRepoPath: 获取配置失败")
 	}
-	return expandPath(cfg.RepoPath), nil
-}
 
-// expandPath 展开路径中的~为用户主目录
-func expandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(homeDir, path[2:])
+	// 多仓库模式：获取默认仓库路径
+	if cfg.MultiRepo == nil {
+		return "", errors.NewWithCode("GetRepoPath", errors.ErrConfigInvalid, "多仓库配置未初始化")
 	}
-	return path
+
+	rootDir, err := GetRootDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo), nil
 }
 
 // GetSkillsDir 获取技能目录路径
@@ -146,4 +160,70 @@ func GetStatePath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(rootDir, "state.json"), nil
+}
+
+// GetArchiveRepository 获取归档仓库配置
+func (c *Config) GetArchiveRepository() (*RepositoryConfig, error) {
+	// 只支持多仓库模式，默认仓库即为归档仓库
+	if c.MultiRepo == nil {
+		return nil, errors.NewWithCode("GetArchiveRepository", errors.ErrConfigInvalid, "多仓库配置未初始化")
+	}
+
+	repo, exists := c.MultiRepo.Repositories[c.MultiRepo.DefaultRepo]
+	if !exists {
+		return nil, errors.NewWithCodef("GetArchiveRepository", errors.ErrConfigInvalid, "默认仓库 '%s' 不存在", c.MultiRepo.DefaultRepo)
+	}
+
+	// 确保默认仓库标记为归档仓库
+	repo.IsArchive = true
+	return &repo, nil
+}
+
+// IsArchiveRepo 检查是否为归档仓库
+func (rc *RepositoryConfig) IsArchiveRepo() bool {
+	return rc.IsArchive
+}
+
+// GetRepositoryPath 获取指定仓库的路径
+func GetRepositoryPath(repoName string) (string, error) {
+	rootDir, err := GetRootDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(rootDir, "repositories", repoName), nil
+}
+
+// GetRepositoriesDir 获取所有仓库的目录
+func GetRepositoriesDir() (string, error) {
+	rootDir, err := GetRootDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(rootDir, "repositories"), nil
+}
+
+// SaveConfig 保存配置到文件
+func SaveConfig(cfg *Config) error {
+	configDir, err := GetRootDir()
+	if err != nil {
+		return errors.Wrap(err, "SaveConfig: 获取配置目录失败")
+	}
+
+	configFile := filepath.Join(configDir, "config.yaml")
+
+	// 使用yaml库序列化配置
+	yamlData, err := yaml.Marshal(cfg)
+	if err != nil {
+		return errors.WrapWithCode(err, "SaveConfig", errors.ErrFileOperation, "序列化配置失败")
+	}
+
+	if err := os.WriteFile(configFile, yamlData, 0644); err != nil {
+		return errors.WrapWithCode(err, "SaveConfig", errors.ErrFileOperation, "写入配置文件失败")
+	}
+
+	// 更新全局配置
+	globalConfig = cfg
+	configLoaded = true
+
+	return nil
 }

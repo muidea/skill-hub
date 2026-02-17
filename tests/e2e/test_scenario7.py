@@ -12,11 +12,10 @@ from pathlib import Path
 import subprocess
 import shutil
 
-from tests.e2e.utils.command_runner import CommandRunner
-from tests.e2e.utils.file_validator import FileValidator
-from tests.e2e.utils.test_environment import TestEnvironment
-from tests.e2e.utils.network_checker import NetworkChecker
-
+from utils.command_runner import CommandRunner
+from utils.file_validator import FileValidator
+from utils.test_environment import TestEnvironment
+from utils.network_checker import NetworkChecker
 
 class TestScenario7GitOperations:
     """Test scenario 7: Git repository basic operations"""
@@ -33,8 +32,10 @@ class TestScenario7GitOperations:
         
         # Store paths
         self.skill_hub_dir = Path(self.home_dir) / ".skill-hub"
-        self.repo_dir = self.skill_hub_dir / "repo"
-        self.repo_skills_dir = self.repo_dir / "skills"
+        
+        self.repositories_dir = self.skill_hub_dir / "repositories"
+        self.main_repo_dir = self.repositories_dir / "main"
+        self.repo_skills_dir = self.main_repo_dir / "skills"  # 新结构：repositories/main/skills
         
         # Project paths
         self.project_dir = Path(self.home_dir) / "test-project"
@@ -54,12 +55,12 @@ class TestScenario7GitOperations:
         assert result.success, f"skill-hub init failed: {result.stderr}"
         
         # 初始化git仓库
-        if not (self.repo_dir / ".git").exists():
-            subprocess.run(["git", "init"], cwd=self.repo_dir, capture_output=True)
+        if not (self.main_repo_dir / ".git").exists():
+            subprocess.run(["git", "init"], cwd=self.main_repo_dir, capture_output=True)
             subprocess.run(["git", "config", "user.email", "test@example.com"], 
-                         cwd=self.repo_dir, capture_output=True)
+                         cwd=self.main_repo_dir, capture_output=True)
             subprocess.run(["git", "config", "user.name", "Test User"], 
-                         cwd=self.repo_dir, capture_output=True)
+                         cwd=self.main_repo_dir, capture_output=True)
         
         # 创建测试技能
         self.test_skill_name = "git-test-skill"
@@ -83,10 +84,10 @@ class TestScenario7GitOperations:
         temp_dir.mkdir(exist_ok=True)
         
         # 测试未初始化时执行 skill-hub git status
+        # 在多仓库模式下，git命令可以在任何目录下运行
         result = self.cmd.run("git", ["status"], cwd=str(temp_dir))
-        # 应该提示需要先进行初始化
-        assert not result.success or "需要先进行初始化" in result.stdout or "需要先进行初始化" in result.stderr, \
-            f"Should prompt for initialization when running git status without init"
+        # git status应该成功，显示默认仓库状态
+        assert result.success, f"git status should work even without project initialization: {result.stderr}"
         
         print(f"✓ git status command dependency check passed")
         
@@ -126,7 +127,7 @@ class TestScenario7GitOperations:
                 f.write("\n\n## Modification for Git Commit Test\n")
             
             # 添加到git暂存区
-            subprocess.run(["git", "add", "."], cwd=self.repo_dir, capture_output=True)
+            subprocess.run(["git", "add", "."], cwd=self.main_repo_dir, capture_output=True)
             
             # 执行 skill-hub git commit
             result = self.cmd.run("git", ["commit", "-m", "Test commit from skill-hub"], cwd=str(self.project_dir))
@@ -230,8 +231,8 @@ class TestScenario7GitOperations:
                 with open(repo_skill_md, 'a') as f:
                     f.write("\n\n## Modification for push test\n")
                 
-                subprocess.run(["git", "add", "."], cwd=self.repo_dir, capture_output=True)
-                subprocess.run(["git", "commit", "-m", "Test commit for push"], cwd=self.repo_dir, capture_output=True)
+                subprocess.run(["git", "add", "."], cwd=self.main_repo_dir, capture_output=True)
+                subprocess.run(["git", "commit", "-m", "Test commit for push"], cwd=self.main_repo_dir, capture_output=True)
             
             # 执行 skill-hub git push
             result = self.cmd.run("git", ["push"], cwd=str(self.project_dir))
@@ -291,7 +292,7 @@ class TestScenario7GitOperations:
                 f.write("\n\n## Integration test modification\n")
             
             # 3. 添加到暂存区（通过原生git）
-            subprocess.run(["git", "add", "."], cwd=self.repo_dir, capture_output=True)
+            subprocess.run(["git", "add", "."], cwd=self.main_repo_dir, capture_output=True)
             print(f"  2. Modification created and staged")
             
             # 4. 尝试提交（通过skill-hub git）

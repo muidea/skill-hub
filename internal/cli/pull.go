@@ -17,7 +17,7 @@ var pullCmd = &cobra.Command{
 	Short: "从远程仓库拉取最新技能",
 	Long: `从远程技能仓库拉取最新更改到本地仓库，并更新技能注册表。
 
-此命令仅同步仓库层（~/.skill-hub/repo/），不涉及项目工作目录的更新。
+此命令仅同步仓库层（~/.skill-hub/repositories/），不涉及项目工作目录的更新。
 使用 --check 选项可以检查可用更新但不实际执行拉取操作。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runPull()

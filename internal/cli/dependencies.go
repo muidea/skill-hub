@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"skill-hub/internal/config"
-	"skill-hub/internal/engine"
+	"skill-hub/internal/multirepo"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/errors"
 	"skill-hub/pkg/spec"
@@ -174,14 +174,20 @@ func CheckSkillExists(skillID string) error {
 		return err
 	}
 
-	// 创建技能管理器
-	manager, err := engine.NewSkillManager()
+	// 创建多仓库管理器
+	repoManager, err := multirepo.NewManager()
 	if err != nil {
-		return errors.Wrap(err, "CheckSkillExists: 创建技能管理器失败")
+		return errors.Wrap(err, "CheckSkillExists: 创建多仓库管理器失败")
 	}
 
-	// 检查技能是否存在
-	if !manager.SkillExists(skillID) {
+	// 在所有仓库中查找技能
+	skills, err := repoManager.FindSkill(skillID)
+	if err != nil {
+		return errors.Wrap(err, "CheckSkillExists: 查找技能失败")
+	}
+
+	// 如果没有找到任何技能
+	if len(skills) == 0 {
 		return errors.SkillNotFound("CheckSkillExists", skillID)
 	}
 

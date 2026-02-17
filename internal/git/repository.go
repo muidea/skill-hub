@@ -76,11 +76,14 @@ func NewSkillsRepository() (*Repository, error) {
 		return nil, err
 	}
 
-	// 设置远程仓库URL
-	if cfg.GitRemoteURL != "" {
-		repo.remoteURL = cfg.GitRemoteURL
-		if err := repo.SetRemote(cfg.GitRemoteURL); err != nil {
-			return nil, fmt.Errorf("设置远程仓库失败: %w", err)
+	// 多仓库模式：从默认仓库配置获取远程URL
+	if cfg.MultiRepo != nil {
+		defaultRepo, exists := cfg.MultiRepo.Repositories[cfg.MultiRepo.DefaultRepo]
+		if exists && defaultRepo.URL != "" {
+			repo.remoteURL = defaultRepo.URL
+			if err := repo.SetRemote(defaultRepo.URL); err != nil {
+				return nil, fmt.Errorf("设置远程仓库失败: %w", err)
+			}
 		}
 	}
 

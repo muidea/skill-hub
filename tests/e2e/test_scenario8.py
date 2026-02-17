@@ -10,11 +10,10 @@ import pytest
 from pathlib import Path
 import subprocess
 
-from tests.e2e.utils.command_runner import CommandRunner
-from tests.e2e.utils.file_validator import FileValidator
-from tests.e2e.utils.test_environment import TestEnvironment
-from tests.e2e.utils.debug_utils import DebugUtils
-
+from utils.command_runner import CommandRunner
+from utils.file_validator import FileValidator
+from utils.test_environment import TestEnvironment
+from utils.debug_utils import DebugUtils
 
 class TestScenario8RemoteSkillSearch:
     """Test scenario 8: Remote skill search functionality"""
@@ -32,8 +31,10 @@ class TestScenario8RemoteSkillSearch:
         
         # Store paths
         self.skill_hub_dir = self.home_dir / ".skill-hub"
-        self.repo_dir = self.skill_hub_dir / "repo"
-        self.repo_skills_dir = self.repo_dir / "skills"
+        
+        self.repositories_dir = self.skill_hub_dir / "repositories"
+        self.main_repo_dir = self.repositories_dir / "main"
+        self.repo_skills_dir = self.main_repo_dir / "skills"  # 新结构：repositories/main/skills
         
         # Project paths
         self.project_skill_hub = self.project_dir / ".skill-hub"

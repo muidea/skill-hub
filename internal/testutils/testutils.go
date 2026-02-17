@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"skill-hub/pkg/logging"
@@ -101,8 +102,33 @@ func CreateTestConfig(t *testing.T, configDir string, repoPath string) string {
 	t.Helper()
 
 	configPath := filepath.Join(configDir, "config.yaml")
-	configContent := `repo_path: ` + repoPath + `
+	// 提取仓库名称
+	repoName := "main"
+	if strings.Contains(repoPath, "/") {
+		parts := strings.Split(repoPath, "/")
+		if len(parts) > 0 {
+			lastPart := parts[len(parts)-1]
+			repoName = lastPart
+		}
+	}
+
+	configContent := `# skill-hub 配置文件（多仓库模式）
 skill_hub_home: ` + configDir + `
+git_token: ""
+
+# 多仓库配置（强制启用）
+multi_repo:
+  enabled: true
+  default_repo: "` + repoName + `"  # 默认仓库名称
+  repositories:
+    ` + repoName + `:
+      name: "` + repoName + `"
+      url: ""
+      branch: "master"
+      enabled: true
+      description: "测试仓库"
+      type: "user"
+      is_archive: true
 `
 
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {

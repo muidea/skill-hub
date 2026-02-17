@@ -10,10 +10,10 @@ import tempfile
 import pytest
 from pathlib import Path
 
-from tests.e2e.utils.command_runner import CommandRunner
-from tests.e2e.utils.file_validator import FileValidator
-from tests.e2e.utils.test_environment import TestEnvironment
-from tests.e2e.utils.network_checker import NetworkChecker
+from utils.command_runner import CommandRunner
+from utils.file_validator import FileValidator
+from utils.test_environment import TestEnvironment
+from utils.network_checker import NetworkChecker
 
 
 class TestScenario6RemoteSynchronization:
@@ -31,8 +31,9 @@ class TestScenario6RemoteSynchronization:
         
         # Store paths
         self.skill_hub_dir = Path(self.home_dir) / ".skill-hub"
-        self.repo_dir = self.skill_hub_dir / "repo"
-        self.repo_skills_dir = self.repo_dir / "skills"
+        self.repositories_dir = self.skill_hub_dir / "repositories"
+        self.main_repo_dir = self.repositories_dir / "main"
+        self.repo_skills_dir = self.main_repo_dir / "skills"  # 多仓库结构：repositories/main/skills
         
         # Project paths
         self.project_dir = Path(self.home_dir) / "test-project"

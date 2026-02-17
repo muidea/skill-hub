@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 	"skill-hub/internal/config"
-	"skill-hub/internal/engine"
+	"skill-hub/internal/multirepo"
 	"skill-hub/pkg/errors"
 	"skill-hub/pkg/logging"
 	"skill-hub/pkg/spec"
@@ -39,26 +39,22 @@ func runList(target string, verbose bool) error {
 		return err
 	}
 
-	// 刷新registry.json以确保与skills目录同步
-	if err := refreshRegistry(); err != nil {
-		fmt.Printf("⚠️  刷新技能索引失败: %v\n", err)
-		// 继续执行，使用现有的registry.json
+	// 创建多仓库管理器
+	repoManager, err := multirepo.NewManager()
+	if err != nil {
+		return fmt.Errorf("创建多仓库管理器失败: %w", err)
 	}
 
-	manager, err := engine.NewSkillManager()
+	// 获取所有技能
+	skillsMetadata, err := repoManager.ListSkills("")
 	if err != nil {
-		return err
-	}
-
-	skills, err := manager.LoadAllSkills()
-	if err != nil {
-		return err
+		return fmt.Errorf("获取技能列表失败: %w", err)
 	}
 
 	// 按目标环境过滤技能
-	var filteredSkills []*spec.Skill
+	var filteredSkills []spec.SkillMetadata
 	if target != "" {
-		for _, skill := range skills {
+		for _, skill := range skillsMetadata {
 			compatLower := strings.ToLower(skill.Compatibility)
 			targetLower := strings.ToLower(target)
 
@@ -78,10 +74,10 @@ func runList(target string, verbose bool) error {
 				filteredSkills = append(filteredSkills, skill)
 			}
 		}
-		skills = filteredSkills
+		skillsMetadata = filteredSkills
 	}
 
-	if len(skills) == 0 {
+	if len(skillsMetadata) == 0 {
 		if target != "" {
 			fmt.Printf("ℹ️  未找到兼容 %s 目标的技能\n", target)
 		} else {
@@ -94,10 +90,11 @@ func runList(target string, verbose bool) error {
 		// 详细模式显示
 		fmt.Println("可用技能列表 (详细模式):")
 		fmt.Println(strings.Repeat("=", 60))
-		for i, skill := range skills {
+		for i, skill := range skillsMetadata {
 			fmt.Printf("%d. ID: %s\n", i+1, skill.ID)
 			fmt.Printf("   名称: %s\n", skill.Name)
 			fmt.Printf("   版本: %s\n", skill.Version)
+			fmt.Printf("   仓库: %s\n", skill.Repository)
 			if skill.Description != "" {
 				fmt.Printf("   描述: %s\n", skill.Description)
 			}
@@ -115,10 +112,10 @@ func runList(target string, verbose bool) error {
 	} else {
 		// 简要模式显示
 		fmt.Println("可用技能列表:")
-		fmt.Println("ID          名称                版本      适用工具")
-		fmt.Println("--------------------------------------------------")
+		fmt.Println("ID          名称                版本      仓库          适用工具")
+		fmt.Println("---------------------------------------------------------------")
 
-		for _, skill := range skills {
+		for _, skill := range skillsMetadata {
 			tools := []string{}
 			compatLower := strings.ToLower(skill.Compatibility)
 			if strings.Contains(compatLower, "cursor") {
@@ -142,10 +139,17 @@ func runList(target string, verbose bool) error {
 				}
 			}
 
-			fmt.Printf("%-12s %-20s %-10s %s\n",
+			// 截断仓库名称，如果太长
+			repoName := skill.Repository
+			if len(repoName) > 10 {
+				repoName = repoName[:10] + "..."
+			}
+
+			fmt.Printf("%-12s %-20s %-10s %-12s %s\n",
 				skill.ID,
 				skill.Name,
 				skill.Version,
+				repoName,
 				toolsStr)
 		}
 	}

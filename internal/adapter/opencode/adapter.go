@@ -125,20 +125,17 @@ func (a *OpenCodeAdapter) copySkillFromRepository(skillID, targetDir string) err
 		return a.createBasicSkill(skillID, targetDir)
 	}
 
-	// 展开repo路径中的~符号
-	repoPath := cfg.RepoPath
-	if repoPath == "" {
-		// 仓库路径未配置，创建基本技能
-		return a.createBasicSkill(skillID, targetDir)
-	}
-
-	// 处理~符号
-	if repoPath[0] == '~' {
-		homeDir, err := os.UserHomeDir()
+	// 多仓库模式：获取默认仓库路径
+	var repoPath string
+	if cfg.MultiRepo != nil {
+		rootDir, err := config.GetRootDir()
 		if err != nil {
-			return fmt.Errorf("获取用户主目录失败: %w", err)
+			return a.createBasicSkill(skillID, targetDir)
 		}
-		repoPath = filepath.Join(homeDir, repoPath[1:])
+		repoPath = filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo)
+	} else {
+		// 多仓库配置未初始化，创建基本技能
+		return a.createBasicSkill(skillID, targetDir)
 	}
 
 	// 源技能目录

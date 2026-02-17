@@ -15,19 +15,36 @@ func TestRefreshRegistry_Disabled(t *testing.T) {
 		// 设置环境变量
 		t.Setenv("SKILL_HUB_HOME", tmpDir)
 
-		// 创建配置文件
+		// 创建配置文件（多仓库模式）
 		configPath := filepath.Join(tmpDir, "config.yaml")
-		configContent := `repo_path: "` + filepath.Join(tmpDir, "repo") + `"
-skill_hub_home: "` + tmpDir + `"`
+		configContent := `# skill-hub 配置文件（多仓库模式）
+skill_hub_home: "` + tmpDir + `"
+git_token: ""
+
+# 多仓库配置（强制启用）
+multi_repo:
+  enabled: true
+  default_repo: "main"  # 默认仓库名称
+  repositories:
+    main:
+      name: "main"
+      url: ""
+      branch: "master"
+      enabled: true
+      description: "测试仓库"
+      type: "user"
+      is_archive: true
+`
 
 		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 			t.Fatalf("创建配置文件失败: %v", err)
 		}
 
-		// 创建repo目录但不创建skills目录
-		repoDir := filepath.Join(tmpDir, "repo")
-		if err := os.MkdirAll(repoDir, 0755); err != nil {
-			t.Fatalf("创建repo目录失败: %v", err)
+		// 创建多仓库目录结构
+		repositoriesDir := filepath.Join(tmpDir, "repositories")
+		mainRepoDir := filepath.Join(repositoriesDir, "main")
+		if err := os.MkdirAll(mainRepoDir, 0755); err != nil {
+			t.Fatalf("创建仓库目录失败: %v", err)
 		}
 
 		// 调用refreshRegistry
@@ -62,18 +79,35 @@ skill_hub_home: "` + tmpDir + `"`
 		// 设置环境变量
 		t.Setenv("SKILL_HUB_HOME", tmpDir)
 
-		// 创建配置文件
+		// 创建配置文件（多仓库模式）
 		configPath := filepath.Join(tmpDir, "config.yaml")
-		configContent := `repo_path: "` + tmpDir + `/repo"
-skill_hub_home: "` + tmpDir + `"`
+		configContent := `# skill-hub 配置文件（多仓库模式）
+skill_hub_home: "` + tmpDir + `"
+git_token: ""
+
+# 多仓库配置（强制启用）
+multi_repo:
+  enabled: true
+  default_repo: "main"  # 默认仓库名称
+  repositories:
+    main:
+      name: "main"
+      url: ""
+      branch: "master"
+      enabled: true
+      description: "测试仓库"
+      type: "user"
+      is_archive: true
+`
 
 		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 			t.Fatalf("创建配置文件失败: %v", err)
 		}
 
 		// 创建完整的目录结构
-		repoDir := filepath.Join(tmpDir, "repo")
-		skillsDir := filepath.Join(repoDir, "skills")
+		repositoriesDir := filepath.Join(tmpDir, "repositories")
+		mainRepoDir := filepath.Join(repositoriesDir, "main")
+		skillsDir := filepath.Join(mainRepoDir, "skills")
 		testSkillDir := filepath.Join(skillsDir, "test-skill")
 
 		if err := os.MkdirAll(testSkillDir, 0755); err != nil {
@@ -117,13 +151,13 @@ This is a test skill for unit testing.`
 		}
 
 		// 检查是否包含技能信息
-		if !contains(string(content), "test-skill") {
+		if !strContains(string(content), "test-skill") {
 			t.Error("registry.json应该包含test-skill")
 		}
-		if !contains(string(content), "Test Skill") {
+		if !strContains(string(content), "Test Skill") {
 			t.Error("registry.json应该包含技能名称")
 		}
-		if !contains(string(content), "1.0.0") {
+		if !strContains(string(content), "1.0.0") {
 			t.Error("registry.json应该包含版本号")
 		}
 	})
@@ -134,18 +168,35 @@ This is a test skill for unit testing.`
 		// 设置环境变量
 		t.Setenv("SKILL_HUB_HOME", tmpDir)
 
-		// 创建配置文件
+		// 创建配置文件（多仓库模式）
 		configPath := filepath.Join(tmpDir, "config.yaml")
-		configContent := `repo_path: "` + tmpDir + `/repo"
-skill_hub_home: "` + tmpDir + `"`
+		configContent := `# skill-hub 配置文件（多仓库模式）
+skill_hub_home: "` + tmpDir + `"
+git_token: ""
+
+# 多仓库配置（强制启用）
+multi_repo:
+  enabled: true
+  default_repo: "main"  # 默认仓库名称
+  repositories:
+    main:
+      name: "main"
+      url: ""
+      branch: "master"
+      enabled: true
+      description: "测试仓库"
+      type: "user"
+      is_archive: true
+`
 
 		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 			t.Fatalf("创建配置文件失败: %v", err)
 		}
 
 		// 创建目录结构
-		repoDir := filepath.Join(tmpDir, "repo")
-		skillsDir := filepath.Join(repoDir, "skills")
+		repositoriesDir := filepath.Join(tmpDir, "repositories")
+		mainRepoDir := filepath.Join(repositoriesDir, "main")
+		skillsDir := filepath.Join(mainRepoDir, "skills")
 
 		// 创建有效技能目录
 		validSkillDir := filepath.Join(skillsDir, "valid-skill")

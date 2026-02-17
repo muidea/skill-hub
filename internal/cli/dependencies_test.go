@@ -203,10 +203,25 @@ func TestCheckSkillExists(t *testing.T) {
 				originalHome := os.Getenv("SKILL_HUB_HOME")
 				os.Setenv("SKILL_HUB_HOME", skillHubHome)
 
-				// 还需要设置配置文件的repo_path指向正确的目录
+				// 还需要设置配置文件为多仓库模式
 				configPath := filepath.Join(skillHubHome, "config.yaml")
-				configContent := `repo_path: ` + filepath.Join(skillHubHome, "repo") + `
+				configContent := `# skill-hub 配置文件（多仓库模式）
 skill_hub_home: ` + skillHubHome + `
+git_token: ""
+
+# 多仓库配置（强制启用）
+multi_repo:
+  enabled: true
+  default_repo: "main"  # 默认仓库名称
+  repositories:
+    main:
+      name: "main"
+      url: ""
+      branch: "master"
+      enabled: true
+      description: "测试仓库"
+      type: "user"
+      is_archive: true
 `
 				if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 					t.Fatalf("更新配置文件失败: %v", err)

@@ -21,7 +21,7 @@ var pushCmd = &cobra.Command{
 	Short: "推送本地更改到远程仓库",
 	Long: `自动检测并提交所有未提交的更改，然后推送到远程技能仓库。
 
-此命令将本地仓库（~/.skill-hub/repo/）中的更改同步到远程仓库，完成反馈闭环。
+此命令将本地仓库（~/.skill-hub/repositories/）中的更改同步到远程仓库，完成反馈闭环。
 使用 --dry-run 选项可以查看将要推送的更改而不实际执行。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runPush()
