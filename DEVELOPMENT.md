@@ -13,6 +13,7 @@ skill-hub/
 │   ├── cli/               # CLI命令实现
 │   ├── adapter/           # 适配器层（cursor, claude, opencode）
 │   ├── engine/            # 技能引擎
+│   ├── multirepo/         # 多仓库管理
 │   ├── state/             # 状态管理
 │   ├── config/            # 配置管理
 │   ├── template/          # 模板引擎
@@ -32,6 +33,7 @@ skill-hub/
    - 命令解析和路由
    - 用户交互和输出
    - 错误处理和日志
+   - 多仓库管理命令
 
 2. **适配器层** (`internal/adapter/`)
    - `cursor/`: Cursor工具适配器
@@ -43,8 +45,15 @@ skill-hub/
    - 技能加载和解析
    - 变量替换和模板渲染
    - 技能兼容性检查
+   - 多仓库技能搜索和加载
 
-4. **状态管理** (`internal/state/`)
+4. **多仓库管理** (`internal/multirepo/`)
+   - 多Git仓库管理
+   - 仓库同步和状态跟踪
+   - 默认仓库配置
+   - 技能跨仓库搜索
+
+5. **状态管理** (`internal/state/`)
    - 项目状态持久化
    - 技能启用状态跟踪
    - 配置同步管理

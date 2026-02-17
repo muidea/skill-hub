@@ -6,11 +6,13 @@
 
 ## 名词说明
 
-* 项目：对应OpenCode,Cursor,Claude的项目
+* **项目**：对应OpenCode,Cursor,Claude的项目
 
-* 工作区：项目所属的工作目录，OpenCode、Claude Code 和 Cursor 都会在工作区里创建管理 Skill 或行为规范的目录与文件，针对 OpenCode 来说对应的是 .agents 目录，针对 Claude (Claude Code) 来说对应 .claude 目录，针对 Cursor 来说对应 .cursorrules 文件。
+* **工作区**：项目所属的工作目录，OpenCode、Claude Code 和 Cursor 都会在工作区里创建管理 Skill 或行为规范的目录与文件，针对 OpenCode 来说对应的是 .agents 目录，针对 Claude (Claude Code) 来说对应 .claude 目录，针对 Cursor 来说对应 .cursorrules 文件。
 
-* 本地仓库：skill-hub使用的本地配置目录，其中包含一个repo目录，使用git来管理所有的skill，并且支持与远端git仓库进行关联，实现技能仓库的拉取、推送、同步等功能。
+* **本地仓库**：skill-hub使用的本地配置目录，采用多仓库架构，支持管理多个Git仓库。默认仓库为归档仓库，所有通过`feedback`命令修改的技能都会归档到默认仓库。
+
+* **多仓库架构**：skill-hub支持同时管理多个技能仓库，如个人仓库、社区仓库、官方仓库等。每个仓库可以独立启用、禁用、同步。
 
 
 ## 2. 命令语法约定
@@ -55,7 +57,18 @@
 | `apply` | 应用技能到项目 | `skill-hub apply [--dry-run] [--force]` |
 | `feedback` | 将项目工作区技能修改内容更新至到本地仓库 | `skill-hub feedback <id> [--dry-run] [--force]` |
 
-### 3.6. 本地仓库同步
+### 3.6. 多仓库管理
+| 命令 | 功能描述 | 语法 |
+|------|----------|------|
+| `repo add` | 添加新仓库 | `skill-hub repo add <name> <url> [--branch BRANCH] [--type TYPE] [--description DESC]` |
+| `repo list` | 列出所有仓库 | `skill-hub repo list` |
+| `repo remove` | 移除仓库 | `skill-hub repo remove <name>` |
+| `repo enable` | 启用仓库 | `skill-hub repo enable <name>` |
+| `repo disable` | 禁用仓库 | `skill-hub repo disable <name>` |
+| `repo default` | 设置默认仓库 | `skill-hub repo default <name>` |
+| `repo sync` | 同步仓库 | `skill-hub repo sync [name]` |
+
+### 3.7. 本地仓库同步
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `pull` | 从远程仓库拉取最新技能 | `skill-hub pull [--force] [--check]` |
@@ -74,7 +87,9 @@
 
 **功能描述**:
 
-创建 `~/.skill-hub` 目录结构，初始化全局配置。如提供了`git_url` 参数，则克隆远程技能仓库；否则仅进行本地管理。初始化后默认 target 为 `open_code`。
+创建 `~/.skill-hub` 目录结构，初始化全局配置。采用多仓库架构，默认创建名为"main"的本地仓库。
+
+如提供了`git_url` 参数，则克隆远程技能仓库到默认仓库；否则创建空的本地仓库。初始化后默认 target 为 `open_code`。
 
 完成本地仓库初始化后，`registry.json`根据实际仓库里管理的skill进行刷新，保持与仓库里管理的列表一致。
 
@@ -127,9 +142,11 @@ skill-hub set-target cursor
 
 **功能描述**:
 
-显示本地仓库中的所有技能，支持按目标环境过滤。默认显示简要列表，包含技能 ID、状态和版本信息。
+显示所有已启用仓库中的技能，支持按目标环境过滤。默认显示简要列表，包含技能 ID、状态、版本和所属仓库信息。
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
+
+**多仓库说明**：默认显示所有已启用仓库中的技能。技能列表会标注技能所属的仓库名称。
 
 **示例**:
 ```bash
@@ -353,6 +370,8 @@ skill-hub apply --dry-run
 3. 经用户确认后更新本地仓库文件
 4. 更新 `registry.json` 中的版本/哈希信息
 
+**多仓库说明**：技能会被归档到默认仓库（通过 `skill-hub repo default` 命令设置）。如果技能在默认仓库中不存在则新增，存在则覆盖更新。
+
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
 该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区，如果需要新建项目工作区，则需要同时根据`target`初始化对应的文件和目录，并刷新`state.json`
@@ -547,9 +566,150 @@ skill-hub validate my-new-skill
 skill-hub feedback my-new-skill
 ```
 
+## 7. 多仓库管理命令详细规范
+
+### 7.1 repo add - 添加新仓库
+
+**语法**: `skill-hub repo add <name> <url> [--branch BRANCH] [--type TYPE] [--description DESC]`
+
+**参数**:
+- `name` (必需): 仓库名称，用于标识仓库
+- `url` (必需): Git仓库URL，支持HTTP/HTTPS和SSH协议。如不提供URL，则创建本地空仓库
+
+**选项**:
+- `--branch BRANCH`: Git分支，默认为 "main"
+- `--type TYPE`: 仓库类型，支持 `user`（用户）、`community`（社区）、`official`（官方），默认为 "community"
+- `--description DESC`: 仓库描述信息
+
+**功能描述**:
+添加新的Git仓库到技能库。支持从多个来源获取技能，如个人仓库、社区仓库、官方仓库等。
+
+如果提供了URL，会克隆远程仓库到本地 `~/.skill-hub/repositories/<name>/` 目录。
+如果没有提供URL，会创建一个空的本地仓库。
+
+**示例**:
+```bash
+# 添加社区仓库
+skill-hub repo add community https://github.com/skill-hub-community/awesome-skills.git
+
+# 添加团队仓库，指定分支
+skill-hub repo add team git@github.com:company/skills.git --branch develop --type user
+
+# 创建本地空仓库
+skill-hub repo add local --type user
+```
+
+### 7.2 repo list - 列出所有仓库
+
+**语法**: `skill-hub repo list`
+
+**功能描述**:
+列出所有已配置的Git仓库，显示仓库状态和基本信息，包括：
+- 仓库名称
+- 类型（user/community/official）
+- 是否启用
+- 是否为默认仓库（归档仓库）
+- 描述信息
+
+**示例**:
+```bash
+# 列出所有仓库
+skill-hub repo list
+```
+
+### 7.3 repo remove - 移除仓库
+
+**语法**: `skill-hub repo remove <name>`
+
+**参数**:
+- `name` (必需): 要移除的仓库名称
+
+**功能描述**:
+从配置中移除指定的仓库。如果仓库是默认仓库，需要先设置其他仓库为默认仓库才能移除。
+
+**安全机制**: 会提示用户确认，防止误操作。
+
+**示例**:
+```bash
+# 移除名为test的仓库
+skill-hub repo remove test
+```
+
+### 7.4 repo enable - 启用仓库
+
+**语法**: `skill-hub repo enable <name>`
+
+**参数**:
+- `name` (必需): 要启用的仓库名称
+
+**功能描述**:
+启用指定的仓库。启用后，该仓库中的技能会出现在 `skill-hub list` 命令的结果中。
+
+**示例**:
+```bash
+# 启用名为community的仓库
+skill-hub repo enable community
+```
+
+### 7.5 repo disable - 禁用仓库
+
+**语法**: `skill-hub repo disable <name>`
+
+**参数**:
+- `name` (必需): 要禁用的仓库名称
+
+**功能描述**:
+禁用指定的仓库。禁用后，该仓库中的技能不会出现在 `skill-hub list` 命令的结果中，但仓库配置仍然保留。
+
+**示例**:
+```bash
+# 禁用名为test的仓库
+skill-hub repo disable test
+```
+
+### 7.6 repo default - 设置默认仓库
+
+**语法**: `skill-hub repo default <name>`
+
+**参数**:
+- `name` (必需): 要设置为默认仓库的仓库名称
+
+**功能描述**:
+设置默认仓库（归档仓库）。所有通过 `feedback` 命令修改的技能都会归档到默认仓库。
+如果技能在默认仓库中不存在则新增，存在则覆盖更新。
+
+默认仓库必须处于启用状态。
+
+**示例**:
+```bash
+# 设置main为默认仓库
+skill-hub repo default main
+```
+
+### 7.7 repo sync - 同步仓库
+
+**语法**: `skill-hub repo sync [name]`
+
+**参数**:
+- `name` (可选): 要同步的仓库名称。如未提供，同步所有启用的仓库
+
+**功能描述**:
+同步指定仓库或所有启用的仓库。对于远程仓库，会执行 `git pull` 获取最新内容。
+同步后会自动刷新技能索引。
+
+**示例**:
+```bash
+# 同步所有启用的仓库
+skill-hub repo sync
+
+# 同步特定仓库
+skill-hub repo sync community
+```
+
 ## 8. 更新记录
 
 | 版本 | 日期 | 更新说明 |
 |------|------|----------|
 | 1.0 | 2026-02-08 | 初始版本，统一所有设计文档中的命令定义 |
 | 1.1 | 2026-02-09 | 核对各个命令描述，增加依赖信息说明 |
+| 1.2 | 2026-02-17 | 添加多仓库管理命令，更新init命令描述以支持多仓库架构 |

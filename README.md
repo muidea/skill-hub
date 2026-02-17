@@ -11,6 +11,7 @@
 ### 核心理念
 
 - **Git 为中心**：所有技能存储在Git仓库中，作为单一可信源
+- **多仓库架构**：支持同时管理多个技能仓库（个人、社区、官方）
 - **一键分发**：将技能快速应用到不同的AI工具
 - **闭环反馈**：将项目中的手动修改反馈回技能仓库
 - **现代架构**：采用 Go 1.24+ 特性，遵循 Effective Go 最佳实践
@@ -41,18 +42,25 @@ curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/instal
 
 安装完成后，按照以下工作流程开始使用：
 
-#### 基础使用流程
+#### 多仓库初始化流程
 ```bash
-# 1. 初始化工作区
-skill-hub init
+# 1. 初始化多仓库工作区（可指定初始仓库URL）
+skill-hub init https://github.com/muidea/skill-hub-examples.git
 
-# 2. 设置项目目标环境
+# 2. 添加更多技能仓库（可选）
+skill-hub repo add community https://github.com/community/skills.git
+skill-hub repo add personal https://github.com/yourname/skills.git
+
+# 3. 设置默认归档仓库
+skill-hub repo default main
+
+# 4. 设置项目目标环境
 skill-hub set-target open_code
 
-# 3. 启用技能
+# 5. 启用技能
 skill-hub use git-expert
 
-# 4. 应用技能到项目
+# 6. 应用技能到项目
 skill-hub apply
 ```
 
@@ -64,15 +72,30 @@ skill-hub create my-new-skill
 # 2. 在本地项目中验证技能有效性
 skill-hub validate my-new-skill
 
-# 3. 反馈手动修改并归档技能
+# 3. 反馈手动修改并归档到默认仓库
 skill-hub feedback my-new-skill
+```
+
+#### 多仓库管理示例
+```bash
+# 查看所有仓库
+skill-hub repo list
+
+# 同步所有仓库
+skill-hub repo sync
+
+# 启用/禁用仓库
+skill-hub repo enable community
+skill-hub repo disable personal
 ```
 
 ## 🛠️ 命令参考
 
+### 核心命令
+
 | 命令 | 参数 | 功能说明 |
 |------|------|----------|
-| `init` | `[git_url] [--target <value>]` | 初始化本地仓库 |
+| `init` | `[git_url] [--target <value>]` | 初始化多仓库工作区 |
 | `set-target` | `<value>` | 设置项目目标环境 |
 | `list` | `[--target <value>] [--verbose]` | 列出可用技能 |
 | `search` | `<keyword> [--target <value>] [--limit <number>]` | 搜索远程技能 |
@@ -85,7 +108,18 @@ skill-hub feedback my-new-skill
 | `feedback` | `<id> [--dry-run] [--force]` | 反馈修改到仓库 |
 | `pull` | `[--force] [--check]` | 从远程拉取技能 |
 | `push` | `[--message MESSAGE] [--force] [--dry-run]` | 推送本地更改 |
-| `git` | `<subcommand>` | Git仓库操作 |
+
+### 多仓库管理命令
+
+| 命令 | 参数 | 功能说明 |
+|------|------|----------|
+| `repo add` | `<name> <git_url> [--default]` | 添加新技能仓库 |
+| `repo list` | `[--verbose]` | 列出所有技能仓库 |
+| `repo remove` | `<name>` | 移除技能仓库 |
+| `repo enable` | `<name>` | 启用技能仓库 |
+| `repo disable` | `<name>` | 禁用技能仓库 |
+| `repo default` | `<name>` | 设置默认（归档）仓库 |
+| `repo sync` | `[--force]` | 同步所有仓库 |
 
 **语法说明**：`<参数>`为必需参数，`[参数]`为可选参数
 

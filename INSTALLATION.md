@@ -207,17 +207,32 @@ skill-hub 提供了一系列命令来管理技能和项目。
 | `feedback` | 将项目工作区技能修改内容更新至到本地仓库 | `skill-hub feedback <id> [--dry-run] [--force]` |
 | `pull` | 从远程仓库拉取最新技能 | `skill-hub pull [--force] [--check]` |
 | `push` | 推送本地更改到远程仓库 | `skill-hub push [--message MESSAGE] [--force] [--dry-run]` |
-| `git` | Git仓库操作 | `skill-hub git <subcommand>` |
+
+### 多仓库管理命令
+
+| 命令 | 描述 | 示例 |
+|------|------|------|
+| `repo add` | 添加新技能仓库 | `skill-hub repo add <name> <git_url> [--default]` |
+| `repo list` | 列出所有技能仓库 | `skill-hub repo list [--verbose]` |
+| `repo remove` | 移除技能仓库 | `skill-hub repo remove <name>` |
+| `repo enable` | 启用技能仓库 | `skill-hub repo enable <name>` |
+| `repo disable` | 禁用技能仓库 | `skill-hub repo disable <name>` |
+| `repo default` | 设置默认（归档）仓库 | `skill-hub repo default <name>` |
+| `repo sync` | 同步所有仓库 | `skill-hub repo sync [--force]` |
 
 ### 常用工作流程
 
-#### 初始化新项目
+#### 初始化新项目（多仓库模式）
 ```bash
-# 在当前目录初始化（仅本地管理）
-skill-hub init
+# 初始化多仓库工作区（可指定初始仓库URL）
+skill-hub init https://github.com/muidea/skill-hub-examples.git
 
-# 使用自定义技能仓库初始化
-skill-hub init https://github.com/your-org/skills.git
+# 添加更多技能仓库（可选）
+skill-hub repo add community https://github.com/community/skills.git
+skill-hub repo add personal https://github.com/yourname/skills.git
+
+# 设置默认归档仓库
+skill-hub repo default main
 
 # 初始化并设置项目为 OpenCode 环境
 skill-hub init https://github.com/your-org/skills.git --target open_code
