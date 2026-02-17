@@ -23,7 +23,6 @@ __pycache__
 .agents_bk
 
 bin
-docs/*
 dist
 skill-hub
 validate
