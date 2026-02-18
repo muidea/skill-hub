@@ -110,47 +110,88 @@ func runList(target string, verbose bool) error {
 			fmt.Println()
 		}
 	} else {
-		// 简要模式显示
+		// 简要模式显示 - 使用动态列宽
 		fmt.Println("可用技能列表:")
-		fmt.Println("ID          名称                版本      仓库          适用工具")
-		fmt.Println("---------------------------------------------------------------")
 
+		// 计算动态列宽
+		widths := calculateColumnWidths(skillsMetadata)
+
+		// 手动格式化标题行
+		// 计算每个标题单元格需要的空格数
+		idTitleSpaces := widths.idMin - displayWidth("ID")
+		nameTitleSpaces := widths.nameMin - displayWidth("名称")
+		versionTitleSpaces := widths.versionMin - displayWidth("版本")
+		repoTitleSpaces := widths.repoMin - displayWidth("仓库")
+		toolsTitleSpaces := widths.toolsMin - displayWidth("适用工具")
+
+		// 确保空格数不为负
+		if idTitleSpaces < 0 {
+			idTitleSpaces = 0
+		}
+		if nameTitleSpaces < 0 {
+			nameTitleSpaces = 0
+		}
+		if versionTitleSpaces < 0 {
+			versionTitleSpaces = 0
+		}
+		if repoTitleSpaces < 0 {
+			repoTitleSpaces = 0
+		}
+		if toolsTitleSpaces < 0 {
+			toolsTitleSpaces = 0
+		}
+
+		fmt.Printf("%s%s %s%s %s%s %s%s %s%s\n",
+			"ID", strings.Repeat(" ", idTitleSpaces),
+			"名称", strings.Repeat(" ", nameTitleSpaces),
+			"版本", strings.Repeat(" ", versionTitleSpaces),
+			"仓库", strings.Repeat(" ", repoTitleSpaces),
+			"适用工具", strings.Repeat(" ", toolsTitleSpaces))
+
+		// 生成分隔线
+		totalWidth := widths.idMin + widths.nameMin + widths.versionMin + widths.repoMin + widths.toolsMin + 4 // 4个空格
+		separator := strings.Repeat("-", totalWidth)
+		fmt.Println(separator)
+
+		// 显示技能数据
 		for _, skill := range skillsMetadata {
-			tools := []string{}
-			compatLower := strings.ToLower(skill.Compatibility)
-			if strings.Contains(compatLower, "cursor") {
-				tools = append(tools, "cursor")
+			// 获取工具字符串
+			toolsStr := getToolsString(skill.Compatibility)
+
+			// 格式化仓库名称
+			repoName := formatRepoName(skill.Repository, widths.repoMin)
+
+			// 手动格式化以确保对齐
+			// 计算每个单元格需要的空格数
+			idSpaces := widths.idMin - displayWidth(skill.ID)
+			nameSpaces := widths.nameMin - displayWidth(skill.Name)
+			versionSpaces := widths.versionMin - displayWidth(skill.Version)
+			repoSpaces := widths.repoMin - displayWidth(repoName)
+			toolsSpaces := widths.toolsMin - displayWidth(toolsStr)
+
+			// 确保空格数不为负
+			if idSpaces < 0 {
+				idSpaces = 0
 			}
-			if strings.Contains(compatLower, "claude code") || strings.Contains(compatLower, "claude_code") {
-				tools = append(tools, "claude_code")
+			if nameSpaces < 0 {
+				nameSpaces = 0
 			}
-			if strings.Contains(compatLower, "shell") {
-				tools = append(tools, "shell")
+			if versionSpaces < 0 {
+				versionSpaces = 0
 			}
-			if strings.Contains(compatLower, "opencode") || strings.Contains(compatLower, "open_code") {
-				tools = append(tools, "open_code")
+			if repoSpaces < 0 {
+				repoSpaces = 0
+			}
+			if toolsSpaces < 0 {
+				toolsSpaces = 0
 			}
 
-			toolsStr := ""
-			if len(tools) > 0 {
-				toolsStr = tools[0]
-				for i := 1; i < len(tools); i++ {
-					toolsStr += "," + tools[i]
-				}
-			}
-
-			// 截断仓库名称，如果太长
-			repoName := skill.Repository
-			if len(repoName) > 10 {
-				repoName = repoName[:10] + "..."
-			}
-
-			fmt.Printf("%-12s %-20s %-10s %-12s %s\n",
-				skill.ID,
-				skill.Name,
-				skill.Version,
-				repoName,
-				toolsStr)
+			fmt.Printf("%s%s %s%s %s%s %s%s %s%s\n",
+				skill.ID, strings.Repeat(" ", idSpaces),
+				skill.Name, strings.Repeat(" ", nameSpaces),
+				skill.Version, strings.Repeat(" ", versionSpaces),
+				repoName, strings.Repeat(" ", repoSpaces),
+				toolsStr, strings.Repeat(" ", toolsSpaces))
 		}
 	}
 
@@ -360,4 +401,320 @@ func parseSkillMetadataFromFile(mdPath, skillID string) (*spec.SkillMetadata, er
 	}
 
 	return skillMeta, nil
+}
+
+// columnWidths 定义列宽配置
+type columnWidths struct {
+	idMin      int
+	idMax      int
+	nameMin    int
+	nameMax    int
+	versionMin int
+	versionMax int
+	repoMin    int
+	repoMax    int
+	toolsMin   int
+	toolsMax   int
+}
+
+// calculateColumnWidths 计算每列的最佳宽度
+func calculateColumnWidths(skills []spec.SkillMetadata) columnWidths {
+	widths := columnWidths{
+		idMin:      2,  // "ID" 最小宽度
+		idMax:      30, // ID最大宽度
+		nameMin:    4,  // "名称" 最小宽度
+		nameMax:    30, // 名称最大宽度
+		versionMin: 4,  // "版本" 最小宽度
+		versionMax: 10, // 版本最大宽度
+		repoMin:    4,  // "仓库" 最小宽度
+		repoMax:    20, // 仓库最大宽度
+		toolsMin:   6,  // "适用工具" 最小宽度
+		toolsMax:   30, // 工具最大宽度
+	}
+
+	// 计算每列的实际最大数据长度
+	for _, skill := range skills {
+		// 获取工具字符串
+		toolsStr := getToolsString(skill.Compatibility)
+
+		// 更新ID列宽度（使用显示宽度）
+		updateWidth(&widths.idMin, displayWidth(skill.ID), widths.idMax)
+
+		// 更新名称列宽度（使用显示宽度）
+		updateWidth(&widths.nameMin, displayWidth(skill.Name), widths.nameMax)
+
+		// 更新版本列宽度（使用显示宽度）
+		updateWidth(&widths.versionMin, displayWidth(skill.Version), widths.versionMax)
+
+		// 更新仓库列宽度（使用显示宽度）
+		// 使用formatRepoName计算格式化后的仓库名称显示宽度
+		repoName := formatRepoName(skill.Repository, widths.repoMax)
+		updateWidth(&widths.repoMin, displayWidth(repoName), widths.repoMax)
+
+		// 更新工具列宽度（使用显示宽度）
+		updateWidth(&widths.toolsMin, displayWidth(toolsStr), widths.toolsMax)
+	}
+
+	// 确保每列至少有标题的字节长度，并为中文字符标题添加额外空间
+	// 中文字符在fmt.Printf中需要更多空间来正确对齐
+	if widths.idMin < len("ID") {
+		widths.idMin = len("ID")
+	}
+	// 基于显示宽度设置列宽
+	// 计算每列的最大显示宽度
+	for _, skill := range skills {
+		// 获取工具字符串
+		toolsStr := getToolsString(skill.Compatibility)
+
+		// 更新ID列显示宽度
+		updateWidth(&widths.idMin, displayWidth(skill.ID), widths.idMax)
+
+		// 更新名称列显示宽度
+		updateWidth(&widths.nameMin, displayWidth(skill.Name), widths.nameMax)
+
+		// 更新版本列显示宽度
+		updateWidth(&widths.versionMin, displayWidth(skill.Version), widths.versionMax)
+
+		// 更新仓库列显示宽度
+		repoName := formatRepoName(skill.Repository, widths.repoMax)
+		updateWidth(&widths.repoMin, displayWidth(repoName), widths.repoMax)
+
+		// 更新工具列显示宽度
+		updateWidth(&widths.toolsMin, displayWidth(toolsStr), widths.toolsMax)
+	}
+
+	// 确保每列至少有标题的显示宽度
+	titleDisplays := map[string]int{
+		"ID":   displayWidth("ID"),
+		"名称":   displayWidth("名称"),
+		"版本":   displayWidth("版本"),
+		"仓库":   displayWidth("仓库"),
+		"适用工具": displayWidth("适用工具"),
+	}
+
+	if widths.idMin < titleDisplays["ID"] {
+		widths.idMin = titleDisplays["ID"]
+	}
+	if widths.nameMin < titleDisplays["名称"] {
+		widths.nameMin = titleDisplays["名称"]
+	}
+	if widths.versionMin < titleDisplays["版本"] {
+		widths.versionMin = titleDisplays["版本"]
+	}
+	if widths.repoMin < titleDisplays["仓库"] {
+		widths.repoMin = titleDisplays["仓库"]
+	}
+	if widths.toolsMin < titleDisplays["适用工具"] {
+		widths.toolsMin = titleDisplays["适用工具"]
+	}
+
+	// 为后三列添加额外显示宽度补偿
+	// 经验值：每个中文字符需要额外1显示宽度补偿
+	widths.versionMin += 2 // "版本"有2个中文字符
+	widths.repoMin += 2    // "仓库"有2个中文字符
+	widths.toolsMin += 4   // "适用工具"有4个中文字符
+
+	// 确保不超过最大宽度限制
+	if widths.idMin > widths.idMax {
+		widths.idMin = widths.idMax
+	}
+	if widths.nameMin > widths.nameMax {
+		widths.nameMin = widths.nameMax
+	}
+	if widths.versionMin > widths.versionMax {
+		widths.versionMin = widths.versionMax
+	}
+	if widths.repoMin > widths.repoMax {
+		widths.repoMin = widths.repoMax
+	}
+	if widths.toolsMin > widths.toolsMax {
+		widths.toolsMin = widths.toolsMax
+	}
+	// 为中文标题添加额外空间补偿
+	if widths.nameMin < len("名称")+4 { // "名称"需要额外空间
+		widths.nameMin = len("名称") + 4
+	}
+	if widths.versionMin < len("版本")+4 { // "版本"需要额外空间
+		widths.versionMin = len("版本") + 4
+	}
+	if widths.repoMin < len("仓库")+4 { // "仓库"需要额外空间
+		widths.repoMin = len("仓库") + 4
+	}
+	if widths.toolsMin < len("适用工具")+8 { // "适用工具"需要更多额外空间
+		widths.toolsMin = len("适用工具") + 8
+	}
+
+	return widths
+}
+
+// getToolsString 从兼容性字符串提取工具列表
+func getToolsString(compatibility string) string {
+	if compatibility == "" {
+		return "all"
+	}
+
+	compatLower := strings.ToLower(compatibility)
+	tools := []string{}
+
+	// 检查各种兼容性格式
+	if strings.Contains(compatLower, "cursor") {
+		tools = append(tools, "cursor")
+	}
+	if strings.Contains(compatLower, "claude") {
+		tools = append(tools, "claude_code")
+	}
+	if strings.Contains(compatLower, "shell") {
+		tools = append(tools, "shell")
+	}
+	if strings.Contains(compatLower, "opencode") || strings.Contains(compatLower, "open_code") {
+		tools = append(tools, "open_code")
+	}
+
+	if len(tools) == 0 {
+		// 如果没有找到特定工具，但兼容性字段不为空，显示"all"
+		return "all"
+	}
+
+	// 限制最多显示3个工具，避免过长
+	if len(tools) > 3 {
+		return tools[0] + "," + tools[1] + ",..."
+	}
+
+	return strings.Join(tools, ",")
+}
+
+// formatRepoName 格式化仓库名称显示，考虑显示宽度
+func formatRepoName(repo string, maxDisplayWidth int) string {
+	if repo == "" {
+		return "local"
+	}
+
+	// 如果仓库名称的显示宽度不超过最大宽度，直接返回
+	if displayWidth(repo) <= maxDisplayWidth {
+		return repo
+	}
+
+	// 尝试截断路径部分，保留仓库名
+	parts := strings.Split(repo, "/")
+	if len(parts) > 1 {
+		repoName := parts[len(parts)-1]
+		if displayWidth(repoName) <= maxDisplayWidth {
+			return repoName
+		}
+	}
+
+	// 如果还是太长，截断并添加省略号
+	// 我们需要找到合适的截断点，使得显示宽度不超过maxDisplayWidth-3（为"..."留空间）
+	if maxDisplayWidth > 3 {
+		targetWidth := maxDisplayWidth - 3
+		truncated := ""
+		currentWidth := 0
+
+		// 逐个字符添加，直到达到目标宽度
+		for _, r := range repo {
+			charWidth := 1
+			if r >= 0x4E00 && r <= 0x9FFF { // 基本CJK统一表意文字
+				charWidth = 2
+			} else if r >= 0x3400 && r <= 0x4DBF { // CJK统一表意文字扩展A
+				charWidth = 2
+			} else if r >= 0x20000 && r <= 0x2A6DF { // CJK统一表意文字扩展B
+				charWidth = 2
+			}
+
+			if currentWidth+charWidth > targetWidth {
+				break
+			}
+			truncated += string(r)
+			currentWidth += charWidth
+		}
+
+		return truncated + "..."
+	}
+
+	// 如果最大宽度很小，直接截断
+	truncated := ""
+	currentWidth := 0
+	for _, r := range repo {
+		charWidth := 1
+		if r >= 0x4E00 && r <= 0x9FFF {
+			charWidth = 2
+		} else if r >= 0x3400 && r <= 0x4DBF {
+			charWidth = 2
+		} else if r >= 0x20000 && r <= 0x2A6DF {
+			charWidth = 2
+		}
+
+		if currentWidth+charWidth > maxDisplayWidth {
+			break
+		}
+		truncated += string(r)
+		currentWidth += charWidth
+	}
+	return truncated
+}
+
+// updateWidth 更新列宽，确保在最小和最大范围内
+func updateWidth(currentWidth *int, newLength int, maxWidth int) {
+	if newLength > *currentWidth && newLength <= maxWidth {
+		*currentWidth = newLength
+	}
+}
+
+// displayWidth 计算字符串在终端中的显示宽度（中文字符算2个宽度）
+func displayWidth(s string) int {
+	width := 0
+	for _, r := range s {
+		if r >= 0x4E00 && r <= 0x9FFF { // 基本CJK统一表意文字
+			width += 2
+		} else if r >= 0x3400 && r <= 0x4DBF { // CJK统一表意文字扩展A
+			width += 2
+		} else if r >= 0x20000 && r <= 0x2A6DF { // CJK统一表意文字扩展B
+			width += 2
+		} else {
+			width += 1
+		}
+	}
+	return width
+}
+
+// padRightDisplay 右填充字符串以达到目标显示宽度
+func padRightDisplay(s string, targetByteWidth, currentDisplayWidth int) string {
+	// 计算需要多少空格来达到目标显示宽度
+	// 每个空格占用1显示宽度和1字节
+	spacesNeeded := targetByteWidth - currentDisplayWidth
+	if spacesNeeded <= 0 {
+		// 如果已经达到或超过目标显示宽度，但可能需要确保字节长度
+		if len(s) >= targetByteWidth {
+			return s
+		}
+		// 添加空格以达到字节长度
+		return s + strings.Repeat(" ", targetByteWidth-len(s))
+	}
+
+	// 添加空格以达到显示宽度
+	return s + strings.Repeat(" ", spacesNeeded)
+}
+
+// addChineseCompensation 为中文字符串添加字节补偿
+// 中文字符显示宽度小但字节长度大，需要额外字节空间来正确对齐
+func addChineseCompensation(s string, displayWidth int) int {
+	// 计算中文字符比例
+	chineseCount := 0
+	for _, r := range s {
+		if r >= 0x4E00 && r <= 0x9FFF { // 基本CJK统一表意文字
+			chineseCount++
+		} else if r >= 0x3400 && r <= 0x4DBF { // CJK统一表意文字扩展A
+			chineseCount++
+		} else if r >= 0x20000 && r <= 0x2A6DF { // CJK统一表意文字扩展B
+			chineseCount++
+		}
+	}
+
+	// 如果有中文字符，增加补偿
+	if chineseCount > 0 {
+		// 每个中文字符需要额外补偿
+		// 经验值：每个中文字符需要额外1-2字节补偿
+		return displayWidth + chineseCount*2
+	}
+	return displayWidth
 }

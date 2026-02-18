@@ -145,8 +145,18 @@ func runStatus(skillID string, verbose bool) error {
 
 	// 显示结果
 	fmt.Println("\n=== 技能状态 ===")
-	fmt.Println("ID          状态")
-	fmt.Println("------------------")
+
+	// 计算最大ID长度用于动态列宽
+	maxIDLength := 2 // 至少"ID"的长度
+	for skillID := range results {
+		if len(skillID) > maxIDLength {
+			maxIDLength = len(skillID)
+		}
+	}
+
+	// 生成标题行
+	fmt.Printf("%-*s 状态\n", maxIDLength, "ID")
+	fmt.Println(strings.Repeat("-", maxIDLength+4)) // +4 为了" 状态"
 
 	for skillID, status := range results {
 		statusSymbol := "❓"
@@ -160,7 +170,7 @@ func runStatus(skillID string, verbose bool) error {
 		case "Missing":
 			statusSymbol = "❌"
 		}
-		fmt.Printf("%-12s %s %s\n", skillID, statusSymbol, status)
+		fmt.Printf("%-*s %s %s\n", maxIDLength, skillID, statusSymbol, status)
 	}
 
 	if verbose {

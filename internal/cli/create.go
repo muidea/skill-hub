@@ -109,8 +109,7 @@ func runCreate(skillID string, target string) error {
 
 			fmt.Printf("✅ 技能 '%s' 已成功登记到项目状态\n", skillID)
 			fmt.Println("\n下一步:")
-			fmt.Printf("1. 使用 'skill-hub apply' 应用技能到目标环境\n")
-			fmt.Printf("2. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", skillID)
+			fmt.Printf("1. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", skillID)
 
 			return nil
 		}
