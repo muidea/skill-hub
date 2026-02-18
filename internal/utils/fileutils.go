@@ -166,7 +166,7 @@ func CopyDir(src, dst string) error {
 		return errors.Wrap(err, "获取源目录信息失败")
 	}
 	if !srcInfo.IsDir() {
-		return errors.New("源路径不是目录")
+		return errors.NewWithCode("CopyDir", errors.ErrFileOperation, "源路径不是目录")
 	}
 
 	// 创建目标目录
@@ -217,7 +217,7 @@ func RemoveDir(path string) error {
 // ListFiles 列出目录中的文件
 func ListFiles(dir string, pattern string) ([]string, error) {
 	if !DirExists(dir) {
-		return nil, errors.New(fmt.Sprintf("目录不存在: %s", dir))
+		return nil, errors.NewWithCodef("ListFiles", errors.ErrFileNotFound, "目录不存在: %s", dir)
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -246,7 +246,7 @@ func ListFiles(dir string, pattern string) ([]string, error) {
 // ListDirs 列出目录中的子目录
 func ListDirs(dir string) ([]string, error) {
 	if !DirExists(dir) {
-		return nil, errors.New(fmt.Sprintf("目录不存在: %s", dir))
+		return nil, errors.NewWithCodef("ListDirs", errors.ErrFileNotFound, "目录不存在: %s", dir)
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -276,7 +276,7 @@ func FileSize(path string) (int64, error) {
 // IsEmptyDir 检查目录是否为空
 func IsEmptyDir(path string) (bool, error) {
 	if !DirExists(path) {
-		return false, errors.New(fmt.Sprintf("目录不存在: %s", path))
+		return false, errors.NewWithCodef("IsEmptyDir", errors.ErrFileNotFound, "目录不存在: %s", path)
 	}
 
 	entries, err := os.ReadDir(path)

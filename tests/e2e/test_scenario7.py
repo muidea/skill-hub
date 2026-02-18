@@ -12,10 +12,10 @@ from pathlib import Path
 import subprocess
 import shutil
 
-from utils.command_runner import CommandRunner
-from utils.file_validator import FileValidator
-from utils.test_environment import TestEnvironment
-from utils.network_checker import NetworkChecker
+from tests.e2e.utils.command_runner import CommandRunner
+from tests.e2e.utils.file_validator import FileValidator
+from tests.e2e.utils.test_environment import TestEnvironment
+from tests.e2e.utils.network_checker import NetworkChecker
 
 class TestScenario7GitOperations:
     """Test scenario 7: Git repository basic operations"""

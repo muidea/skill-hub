@@ -6,42 +6,28 @@ import (
 	"path/filepath"
 	"strings"
 
+	"skill-hub/internal/adapter/common"
 	"skill-hub/internal/config"
 )
 
 // OpenCodeAdapter 实现OpenCode适配器
 type OpenCodeAdapter struct {
-	mode     string // "project" 或 "global"
+	*common.BaseAdapter
 	basePath string // 基础路径
 }
 
 // NewOpenCodeAdapter 创建新的OpenCode适配器
 func NewOpenCodeAdapter() *OpenCodeAdapter {
 	return &OpenCodeAdapter{
-		mode: "project", // 默认项目级
+		BaseAdapter: common.NewBaseAdapter(),
 	}
 }
 
-// WithProjectMode 设置为项目级模式（向后兼容）
-func (a *OpenCodeAdapter) WithProjectMode() *OpenCodeAdapter {
-	a.mode = "project"
-	return a
-}
-
-// WithGlobalMode 设置为全局级模式（向后兼容）
-func (a *OpenCodeAdapter) WithGlobalMode() *OpenCodeAdapter {
-	a.mode = "global"
-	return a
-}
-
-// SetProjectMode 设置为项目模式
-func (a *OpenCodeAdapter) SetProjectMode() {
-	a.mode = "project"
-}
-
-// SetGlobalMode 设置为全局模式
-func (a *OpenCodeAdapter) SetGlobalMode() {
-	a.mode = "global"
+// NewOpenCodeAdapterWithOptions 使用Functional Options模式创建OpenCode适配器
+func NewOpenCodeAdapterWithOptions(opts ...common.ModeOption) *OpenCodeAdapter {
+	return &OpenCodeAdapter{
+		BaseAdapter: common.NewBaseAdapterWithOptions(opts...),
+	}
 }
 
 // GetTarget 获取适配器对应的target类型
@@ -54,10 +40,7 @@ func (a *OpenCodeAdapter) GetSkillPath(skillID string) (string, error) {
 	return a.GetSkillDir(skillID)
 }
 
-// GetMode 获取当前模式（project/global）
-func (a *OpenCodeAdapter) GetMode() string {
-	return a.mode
-}
+// GetMode 获取当前模式（project/global） - 已由BaseAdapter提供
 
 // Apply 应用技能到OpenCode目录
 func (a *OpenCodeAdapter) Apply(skillID string, content string, variables map[string]string) error {
@@ -295,7 +278,7 @@ func (a *OpenCodeAdapter) getBasePath() (string, error) {
 		return a.basePath, nil
 	}
 
-	if a.mode == "project" {
+	if a.GetMode() == "project" {
 		// 项目级：使用当前工作目录
 		cwd, err := os.Getwd()
 		if err != nil {

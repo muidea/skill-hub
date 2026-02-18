@@ -315,7 +315,7 @@ func parseSkillMetadataFromFile(mdPath, skillID string) (*spec.SkillMetadata, er
 	// 解析frontmatter
 	lines := strings.Split(string(content), "\n")
 	if len(lines) < 2 || lines[0] != "---" {
-		return nil, errors.New("parseSkillMetadataFromFile: 无效的SKILL.md格式: 缺少frontmatter")
+		return nil, errors.NewWithCode("parseSkillMetadataFromFile", errors.ErrSkillInvalid, "无效的SKILL.md格式: 缺少frontmatter")
 	}
 
 	var frontmatterLines []string

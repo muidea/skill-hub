@@ -101,13 +101,14 @@ func runInit(args []string, target string) error {
 		defaultRepoPath := filepath.Join(repositoriesDir, "main")
 		if remoteURL, err := getRemoteURLFromGit(defaultRepoPath); err == nil && remoteURL != "" {
 			// 有git仓库且有远程URL，需要更新配置
-			fmt.Printf("检测到现有git仓库，将更新配置中的远程URL: %s\n", remoteURL)
+			logger.Info("检测到现有git仓库，将更新配置中的远程URL", "remoteURL", remoteURL)
 			gitURL = remoteURL
 			alreadyInitialized = false // 强制重新初始化以更新配置
 		}
 	}
 
 	if alreadyInitialized {
+		logger.Info("skill-hub 已经初始化完成", "skillHubDir", skillHubDir, "gitURL", gitURL)
 		fmt.Printf("✅ skill-hub 已经初始化完成！\n")
 		fmt.Println("工作区位置:", skillHubDir)
 		if gitURL != "" {
@@ -123,6 +124,7 @@ func runInit(args []string, target string) error {
 		return nil
 	}
 
+	logger.Info("正在初始化Skill Hub工作区", "skillHubDir", skillHubDir, "gitURL", gitURL)
 	fmt.Printf("正在初始化Skill Hub工作区: %s\n", skillHubDir)
 	if gitURL != "" {
 		fmt.Printf("将克隆远程仓库: %s\n", gitURL)

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"skill-hub/internal/adapter/common"
 	"skill-hub/internal/config"
 	"skill-hub/pkg/utils"
 )
@@ -29,37 +30,22 @@ type Adapter interface {
 
 // ClaudeAdapter 实现Claude配置文件的适配器
 type ClaudeAdapter struct {
+	*common.BaseAdapter
 	configPath string
-	mode       string // "global" 或 "project"
 }
 
 // NewClaudeAdapter 创建新的Claude适配器
 func NewClaudeAdapter() *ClaudeAdapter {
 	return &ClaudeAdapter{
-		mode: "global",
+		BaseAdapter: common.NewBaseAdapter(),
 	}
 }
 
-// WithProjectMode 设置为项目模式（向后兼容）
-func (a *ClaudeAdapter) WithProjectMode() *ClaudeAdapter {
-	a.mode = "project"
-	return a
-}
-
-// WithGlobalMode 设置为全局模式（向后兼容）
-func (a *ClaudeAdapter) WithGlobalMode() *ClaudeAdapter {
-	a.mode = "global"
-	return a
-}
-
-// SetProjectMode 设置为项目模式
-func (a *ClaudeAdapter) SetProjectMode() {
-	a.mode = "project"
-}
-
-// SetGlobalMode 设置为全局模式
-func (a *ClaudeAdapter) SetGlobalMode() {
-	a.mode = "global"
+// NewClaudeAdapterWithOptions 使用Functional Options模式创建Claude适配器
+func NewClaudeAdapterWithOptions(opts ...common.ModeOption) *ClaudeAdapter {
+	return &ClaudeAdapter{
+		BaseAdapter: common.NewBaseAdapterWithOptions(opts...),
+	}
 }
 
 // GetTarget 获取适配器对应的target类型
@@ -70,11 +56,6 @@ func (a *ClaudeAdapter) GetTarget() string {
 // GetSkillPath 获取技能在目标系统中的路径
 func (a *ClaudeAdapter) GetSkillPath(skillID string) (string, error) {
 	return a.getConfigPath()
-}
-
-// GetMode 获取当前模式（project/global）
-func (a *ClaudeAdapter) GetMode() string {
-	return a.mode
 }
 
 // Apply 应用技能到Claude配置文件
@@ -195,7 +176,7 @@ func (a *ClaudeAdapter) GetConfigPath() (string, error) {
 
 // getConfigPath 获取配置文件路径
 func (a *ClaudeAdapter) getConfigPath() (string, error) {
-	if a.mode == "project" {
+	if a.GetMode() == "project" {
 		// 项目级配置
 		cwd, err := os.Getwd()
 		if err != nil {

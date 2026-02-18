@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"skill-hub/internal/adapter/common"
 	"skill-hub/internal/config"
 	"skill-hub/pkg/utils"
 )
@@ -29,37 +30,22 @@ type Adapter interface {
 
 // CursorAdapter 实现Cursor规则的适配器
 type CursorAdapter struct {
+	*common.BaseAdapter
 	filePath string
-	mode     string // "global" 或 "project"
 }
 
 // NewCursorAdapter 创建新的Cursor适配器
 func NewCursorAdapter() *CursorAdapter {
 	return &CursorAdapter{
-		mode: "project", // 默认项目模式
+		BaseAdapter: common.NewBaseAdapter(),
 	}
 }
 
-// WithProjectMode 设置为项目模式（向后兼容）
-func (a *CursorAdapter) WithProjectMode() *CursorAdapter {
-	a.mode = "project"
-	return a
-}
-
-// WithGlobalMode 设置为全局模式（向后兼容）
-func (a *CursorAdapter) WithGlobalMode() *CursorAdapter {
-	a.mode = "global"
-	return a
-}
-
-// SetProjectMode 设置为项目模式
-func (a *CursorAdapter) SetProjectMode() {
-	a.mode = "project"
-}
-
-// SetGlobalMode 设置为全局模式
-func (a *CursorAdapter) SetGlobalMode() {
-	a.mode = "global"
+// NewCursorAdapterWithOptions 使用Functional Options模式创建Cursor适配器
+func NewCursorAdapterWithOptions(opts ...common.ModeOption) *CursorAdapter {
+	return &CursorAdapter{
+		BaseAdapter: common.NewBaseAdapterWithOptions(opts...),
+	}
 }
 
 // GetTarget 获取适配器对应的target类型
@@ -70,11 +56,6 @@ func (a *CursorAdapter) GetTarget() string {
 // GetSkillPath 获取技能在目标系统中的路径
 func (a *CursorAdapter) GetSkillPath(skillID string) (string, error) {
 	return a.getFilePath()
-}
-
-// GetMode 获取当前模式（project/global）
-func (a *CursorAdapter) GetMode() string {
-	return a.mode
 }
 
 // markerPattern 匹配技能标记块的正则表达式
@@ -280,7 +261,7 @@ func (a *CursorAdapter) GetFilePath() (string, error) {
 
 // getFilePath 获取配置文件路径
 func (a *CursorAdapter) getFilePath() (string, error) {
-	if a.mode == "project" {
+	if a.GetMode() == "project" {
 		// 项目级配置
 		cwd, err := os.Getwd()
 		if err != nil {

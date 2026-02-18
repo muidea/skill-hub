@@ -7,10 +7,13 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
+	"skill-hub/pkg/logging"
 )
 
 // Clone 克隆远程仓库到本地目录
 func Clone(url, dir string) error {
+	logger := logging.GetGlobalLogger().WithOperation("Clone")
+	logger.Info("正在克隆仓库", "url", url, "dir", dir)
 	fmt.Printf("正在克隆仓库: %s -> %s\n", url, dir)
 
 	// 确保目录不存在或为空

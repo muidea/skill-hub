@@ -79,25 +79,3 @@ func backupSkill(skillDir string) error {
 
 	return nil
 }
-
-// restoreBackup 恢复备份
-func restoreBackup(skillDir string) error {
-	backupDir := skillDir + ".bak"
-
-	// 检查备份是否存在
-	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
-		return nil // 备份不存在，无需恢复
-	}
-
-	// 删除当前目录（如果存在）
-	if err := os.RemoveAll(skillDir); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("删除当前目录失败: %w", err)
-	}
-
-	// 恢复备份
-	if err := os.Rename(backupDir, skillDir); err != nil {
-		return fmt.Errorf("恢复备份失败: %w", err)
-	}
-
-	return nil
-}

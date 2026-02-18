@@ -10,9 +10,9 @@ import tempfile
 import pytest
 from pathlib import Path
 
-from utils.command_runner import CommandRunner
-from utils.file_validator import FileValidator
-from utils.test_environment import TestEnvironment
+from tests.e2e.utils.command_runner import CommandRunner
+from tests.e2e.utils.file_validator import FileValidator
+from tests.e2e.utils.test_environment import TestEnvironment
 
 class TestScenario5TargetPriority:
     """Test scenario 5: Target priority and default value inheritance"""

@@ -11,11 +11,11 @@ from pathlib import Path
 import subprocess
 import shutil
 
-from utils.command_runner import CommandRunner
-from utils.file_validator import FileValidator
-from utils.test_environment import TestEnvironment
-from utils.debug_utils import DebugUtils
-from utils.network_checker import NetworkChecker
+from tests.e2e.utils.command_runner import CommandRunner
+from tests.e2e.utils.file_validator import FileValidator
+from tests.e2e.utils.test_environment import TestEnvironment
+from tests.e2e.utils.debug_utils import DebugUtils
+from tests.e2e.utils.network_checker import NetworkChecker
 
 class TestScenario9LocalChangesPush:
     """Test scenario 9: Local changes push and synchronization"""
