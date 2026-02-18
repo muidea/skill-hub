@@ -39,7 +39,7 @@ func TestConvertSSHToHTTPS(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := convertSSHToHTTPS(tt.sshURL)
+			result := ConvertSSHToHTTPS(tt.sshURL)
 			if result != tt.expected {
 				t.Errorf("convertSSHToHTTPS(%q) = %q, want %q", tt.sshURL, result, tt.expected)
 			}

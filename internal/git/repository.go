@@ -148,7 +148,7 @@ func (r *Repository) Clone(url string) error {
 	if err != nil {
 		// 如果SSH克隆失败，尝试转换为HTTPS URL
 		if strings.HasPrefix(url, "git@") {
-			httpsURL := convertSSHToHTTPS(url)
+			httpsURL := ConvertSSHToHTTPS(url)
 			if httpsURL != "" {
 				fmt.Printf("SSH克隆失败，尝试HTTPS URL: %s\n", httpsURL)
 				cloneOpts.URL = httpsURL
@@ -227,7 +227,18 @@ func (r *Repository) Pull() error {
 		return nil // 已经是最新
 	}
 
-	return err
+	if err != nil {
+		// 提供更详细的错误信息
+		errMsg := fmt.Sprintf("拉取仓库失败: %v", err)
+		if strings.Contains(err.Error(), "SSH_AUTH_SOCK") {
+			errMsg += "\nSSH认证失败: 请确保SSH agent正在运行或使用HTTPS URL"
+		} else if strings.Contains(err.Error(), "authentication required") {
+			errMsg += "\n认证失败: 请检查Git token配置或使用SSH key"
+		}
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	return nil
 }
 
 // Push 推送本地更改
@@ -236,16 +247,54 @@ func (r *Repository) Push() error {
 		return fmt.Errorf("未设置远程仓库URL")
 	}
 
-	auth, err := r.getAuth()
-	if err != nil {
-		return err
+	// 根据URL类型选择认证方式
+	var auth transport.AuthMethod
+	var err error
+
+	if strings.HasPrefix(r.remoteURL, "git@") || strings.Contains(r.remoteURL, "ssh://") {
+		// SSH URL，使用SSH认证
+		auth, err = r.getSSHAuth()
+		if err != nil {
+			return fmt.Errorf("SSH认证失败: %w", err)
+		}
+	} else {
+		// HTTP/HTTPS URL，使用HTTP认证
+		httpAuth, err := r.getAuth()
+		if err != nil {
+			return err
+		}
+		auth = httpAuth
 	}
 
-	return r.repo.Push(&git.PushOptions{
+	err = r.repo.Push(&git.PushOptions{
 		RemoteName: r.remoteName,
 		Auth:       auth,
 		Progress:   os.Stdout,
 	})
+
+	if err != nil {
+		// 提供更详细的错误信息
+		errMsg := fmt.Sprintf("推送失败: %v", err)
+		if strings.Contains(err.Error(), "SSH_AUTH_SOCK") {
+			errMsg += "\nSSH认证失败: 请确保SSH agent正在运行或使用HTTPS URL"
+			if strings.HasPrefix(r.remoteURL, "git@") {
+				httpsURL := ConvertSSHToHTTPS(r.remoteURL)
+				if httpsURL != "" {
+					errMsg += fmt.Sprintf("\n可以手动更新远程URL: git -C %s remote set-url origin %s", r.path, httpsURL)
+				}
+			}
+		} else if strings.Contains(err.Error(), "authentication required") {
+			errMsg += "\n认证失败: 请检查Git token配置或使用SSH key"
+		} else if strings.Contains(err.Error(), "invalid auth method") {
+			errMsg += "\n认证方法不匹配: 远程URL是SSH但使用了HTTP认证，或反之"
+			if strings.HasPrefix(r.remoteURL, "git@") {
+				errMsg += "\nSSH URL需要SSH认证，请确保SSH agent正在运行"
+			}
+		}
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	return nil
 }
 
 // Commit 提交更改
@@ -434,14 +483,14 @@ func (r *Repository) getSSHAuth() (transport.AuthMethod, error) {
 			}
 		}
 
-		return nil, fmt.Errorf("SSH认证失败: 请确保SSH agent运行或配置了SSH key")
+		return nil, fmt.Errorf("SSH认证失败: %w\n请确保SSH agent正在运行 (SSH_AUTH_SOCK环境变量) 或配置了SSH key\n或者使用HTTPS URL代替SSH URL", err)
 	}
 
 	return sshAuth, nil
 }
 
-// convertSSHToHTTPS 将SSH URL转换为HTTPS URL
-func convertSSHToHTTPS(sshURL string) string {
+// ConvertSSHToHTTPS 将SSH URL转换为HTTPS URL
+func ConvertSSHToHTTPS(sshURL string) string {
 	// 处理 git@github.com:user/repo.git 格式
 	if strings.HasPrefix(sshURL, "git@") {
 		parts := strings.Split(sshURL, ":")

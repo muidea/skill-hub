@@ -3,8 +3,10 @@ package git
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
+	gitconfig "github.com/go-git/go-git/v5/config"
 )
 
 // Clone 克隆远程仓库到本地目录
@@ -39,7 +41,14 @@ func Clone(url, dir string) error {
 	// 执行克隆
 	_, err := git.PlainClone(dir, false, options)
 	if err != nil {
-		return fmt.Errorf("克隆失败: %w", err)
+		// 提供更详细的错误信息
+		errMsg := fmt.Sprintf("克隆失败: %v", err)
+		if strings.Contains(err.Error(), "SSH_AUTH_SOCK") {
+			errMsg += "\nSSH认证失败: 请确保SSH agent正在运行或使用HTTPS URL"
+		} else if strings.Contains(err.Error(), "authentication required") {
+			errMsg += "\n认证失败: 请检查Git token配置或使用SSH key"
+		}
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	fmt.Println("✅ 克隆完成")
@@ -87,6 +96,15 @@ func Pull(dir string) error {
 		return fmt.Errorf("获取工作树失败: %w", err)
 	}
 
+	// 获取远程URL
+	remote, err := repo.Remote("origin")
+	var remoteURL string
+	if err == nil && remote != nil {
+		if urls := remote.Config().URLs; len(urls) > 0 {
+			remoteURL = urls[0]
+		}
+	}
+
 	// 配置拉取选项
 	options := &git.PullOptions{
 		RemoteName: "origin",
@@ -96,7 +114,45 @@ func Pull(dir string) error {
 	// 执行拉取
 	err = w.Pull(options)
 	if err != nil && err != git.NoErrAlreadyUpToDate {
-		return fmt.Errorf("拉取失败: %w", err)
+		// 如果SSH拉取失败，尝试转换为HTTPS URL
+		if strings.Contains(err.Error(), "SSH_AUTH_SOCK") && remoteURL != "" && strings.HasPrefix(remoteURL, "git@") {
+			httpsURL := ConvertSSHToHTTPS(remoteURL)
+			if httpsURL != "" {
+				fmt.Printf("SSH拉取失败，尝试HTTPS URL: %s\n", httpsURL)
+
+				// 更新远程URL为HTTPS
+				if err := updateRemoteURL(repo, httpsURL); err != nil {
+					fmt.Printf("⚠️  更新远程URL失败: %v\n", err)
+				} else {
+					// 重试拉取
+					err = w.Pull(options)
+					if err == nil || err == git.NoErrAlreadyUpToDate {
+						fmt.Println("✅ 使用HTTPS URL拉取成功")
+						if err == git.NoErrAlreadyUpToDate {
+							fmt.Println("✅ 仓库已是最新")
+						} else {
+							fmt.Println("✅ 拉取完成")
+						}
+						return nil
+					}
+				}
+			}
+		}
+
+		// 提供更详细的错误信息
+		errMsg := fmt.Sprintf("拉取失败: %v", err)
+		if strings.Contains(err.Error(), "SSH_AUTH_SOCK") {
+			errMsg += "\nSSH认证失败: 请确保SSH agent正在运行或使用HTTPS URL"
+			if remoteURL != "" && strings.HasPrefix(remoteURL, "git@") {
+				httpsURL := ConvertSSHToHTTPS(remoteURL)
+				if httpsURL != "" {
+					errMsg += fmt.Sprintf("\n可以手动更新远程URL: git -C %s remote set-url origin %s", dir, httpsURL)
+				}
+			}
+		} else if strings.Contains(err.Error(), "authentication required") {
+			errMsg += "\n认证失败: 请检查Git token配置或使用SSH key"
+		}
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	if err == git.NoErrAlreadyUpToDate {
@@ -121,4 +177,17 @@ func GetCurrentCommit(dir string) (string, error) {
 	}
 
 	return ref.Hash().String()[:8], nil // 返回短哈希
+}
+
+// updateRemoteURL 更新远程仓库URL
+func updateRemoteURL(repo *git.Repository, newURL string) error {
+	// 删除现有远程
+	_ = repo.DeleteRemote("origin")
+
+	// 添加新远程
+	_, err := repo.CreateRemote(&gitconfig.RemoteConfig{
+		Name: "origin",
+		URLs: []string{newURL},
+	})
+	return err
 }
