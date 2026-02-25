@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"skill-hub/pkg/errors"
+	"skill-hub/pkg/utils"
 )
 
 // FileExists 检查文件是否存在
@@ -55,7 +56,7 @@ func WriteFile(path string, data []byte) error {
 	// 确保目录存在
 	dir := filepath.Dir(path)
 	if err := EnsureDir(dir); err != nil {
-		return errors.Wrap(err, "创建目录失败")
+		return utils.CreateDirErr(err, dir)
 	}
 
 	// 创建临时文件
@@ -79,7 +80,7 @@ func WriteFileDirect(path string, data []byte) error {
 	// 确保目录存在
 	dir := filepath.Dir(path)
 	if err := EnsureDir(dir); err != nil {
-		return errors.Wrap(err, "创建目录失败")
+		return utils.CreateDirErr(err, dir)
 	}
 
 	// 直接写入文件（非原子操作）

@@ -180,7 +180,7 @@ func (a *ClaudeAdapter) getConfigPath() (string, error) {
 		// 项目级配置
 		cwd, err := os.Getwd()
 		if err != nil {
-			return "", fmt.Errorf("获取当前目录失败: %w", err)
+			return "", utils.GetCwdErr(err)
 		}
 		return filepath.Join(cwd, ".clauderc"), nil
 	}

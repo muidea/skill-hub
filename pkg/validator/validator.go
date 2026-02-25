@@ -1,11 +1,11 @@
 package validator
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	"skill-hub/pkg/utils"
 )
 
 // Validator 技能校验器
@@ -35,7 +35,7 @@ func (v *Validator) ValidateFile(skillPath string) (*ValidationResult, error) {
 	// 读取文件内容
 	content, err := os.ReadFile(skillPath)
 	if err != nil {
-		return nil, fmt.Errorf("读取文件失败: %w", err)
+		return nil, utils.ReadFileErr(err, skillPath)
 	}
 
 	// 解析文件

@@ -8,6 +8,7 @@ import (
 
 	"skill-hub/internal/adapter/common"
 	"skill-hub/internal/config"
+	"skill-hub/pkg/utils"
 )
 
 // OpenCodeAdapter 实现OpenCode适配器
@@ -153,11 +154,11 @@ func (a *OpenCodeAdapter) copySkillFromRepository(skillID, targetDir string) err
 		// 如果是文件，复制文件
 		content, err := os.ReadFile(srcPath)
 		if err != nil {
-			return fmt.Errorf("读取文件失败 %s: %w", srcPath, err)
+			return utils.ReadFileErr(err, srcPath)
 		}
 
 		if err := os.WriteFile(dstPath, content, info.Mode()); err != nil {
-			return fmt.Errorf("写入文件失败 %s: %w", dstPath, err)
+			return utils.WriteFileErr(err, dstPath)
 		}
 
 		return nil
@@ -282,7 +283,7 @@ func (a *OpenCodeAdapter) getBasePath() (string, error) {
 		// 项目级：使用当前工作目录
 		cwd, err := os.Getwd()
 		if err != nil {
-			return "", fmt.Errorf("获取当前目录失败: %w", err)
+			return "", utils.GetCwdErr(err)
 		}
 		a.basePath = filepath.Join(cwd, ".agents")
 	} else {

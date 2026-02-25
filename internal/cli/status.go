@@ -12,6 +12,7 @@ import (
 	"skill-hub/internal/config"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/spec"
+	"skill-hub/pkg/utils"
 )
 
 var statusCmd = &cobra.Command{
@@ -47,7 +48,7 @@ func runStatus(skillID string, verbose bool) error {
 	// 获取当前目录
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("获取当前目录失败: %w", err)
+		return utils.GetCwdErr(err)
 	}
 
 	// 检查项目工作区状态（规范4.9：检查当前目录是否存在于state.json中）
@@ -198,7 +199,7 @@ func getLocalSkillInfo(skillMdPath string) (string, string, error) {
 	// 读取文件内容
 	content, err := os.ReadFile(skillMdPath)
 	if err != nil {
-		return "", "", fmt.Errorf("读取文件失败: %w", err)
+		return "", "", utils.ReadFileErr(err, skillMdPath)
 	}
 
 	// 计算文件哈希

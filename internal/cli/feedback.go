@@ -11,6 +11,7 @@ import (
 	"skill-hub/internal/state"
 
 	"github.com/spf13/cobra"
+	"skill-hub/pkg/utils"
 )
 
 var (
@@ -53,7 +54,7 @@ func runFeedback(skillID string) error {
 	// 获取当前目录
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("获取当前目录失败: %w", err)
+		return utils.GetCwdErr(err)
 	}
 
 	// 检查项目工作区状态（规范4.11：检查当前目录是否存在于state.json中）
@@ -404,7 +405,7 @@ func copySkillDirectory(srcDir, dstDir string) error {
 		// 读取源文件
 		content, err := os.ReadFile(srcPath)
 		if err != nil {
-			return fmt.Errorf("读取文件失败 %s: %w", srcPath, err)
+			return utils.ReadFileErr(err, srcPath)
 		}
 
 		// 获取文件权限
@@ -415,7 +416,7 @@ func copySkillDirectory(srcDir, dstDir string) error {
 
 		// 写入目标文件
 		if err := os.WriteFile(dstPath, content, info.Mode()); err != nil {
-			return fmt.Errorf("写入文件失败 %s: %w", dstPath, err)
+			return utils.WriteFileErr(err, dstPath)
 		}
 
 		// 从dstFiles中移除，表示已处理
@@ -426,7 +427,7 @@ func copySkillDirectory(srcDir, dstDir string) error {
 	for relPath := range dstFiles {
 		dstPath := filepath.Join(dstDir, relPath)
 		if err := os.Remove(dstPath); err != nil {
-			return fmt.Errorf("删除文件失败 %s: %w", dstPath, err)
+			return utils.DeleteFileErr(err, dstPath)
 		}
 	}
 

@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/spec"
+	"skill-hub/pkg/utils"
 )
 
 var createCmd = &cobra.Command{
@@ -49,7 +50,7 @@ func runCreate(skillID string, target string) error {
 	// 获取当前工作目录
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("获取当前目录失败: %w", err)
+		return utils.GetCwdErr(err)
 	}
 
 	// 检查项目工作区状态（规范4.5：检查当前目录是否存在于state.json中）
@@ -144,7 +145,7 @@ func runCreate(skillID string, target string) error {
 
 	// 写入文件
 	if err := os.WriteFile(skillFilePath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("写入文件失败: %w", err)
+		return utils.WriteFileErr(err, skillFilePath)
 	}
 
 	fmt.Printf("✅ 技能模板创建成功: %s\n", skillFilePath)

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"skill-hub/pkg/fs"
 	"skill-hub/pkg/spec"
 )
 
@@ -21,7 +22,10 @@ func TestStateManager(t *testing.T) {
 	statePath := filepath.Join(stateDir, "state.json")
 
 	t.Run("Create state manager", func(t *testing.T) {
-		manager := &StateManager{statePath: statePath}
+		manager := &StateManager{
+			statePath: statePath,
+			fs:        &fs.RealFileSystem{},
+		}
 
 		// 验证状态文件路径
 		if manager.statePath != statePath {
@@ -30,7 +34,10 @@ func TestStateManager(t *testing.T) {
 	})
 
 	t.Run("Load and save project state", func(t *testing.T) {
-		manager := &StateManager{statePath: statePath}
+		manager := &StateManager{
+			statePath: statePath,
+			fs:        &fs.RealFileSystem{},
+		}
 
 		projectPath := filepath.Join(tmpDir, "test-project")
 
@@ -109,7 +116,10 @@ func TestStateManager(t *testing.T) {
 	})
 
 	t.Run("Multiple projects state", func(t *testing.T) {
-		manager := &StateManager{statePath: statePath}
+		manager := &StateManager{
+			statePath: statePath,
+			fs:        &fs.RealFileSystem{},
+		}
 
 		// 创建多个项目状态
 		projects := []string{
@@ -185,7 +195,10 @@ func TestStateManager(t *testing.T) {
 	})
 
 	t.Run("Update existing project", func(t *testing.T) {
-		manager := &StateManager{statePath: statePath}
+		manager := &StateManager{
+			statePath: statePath,
+			fs:        &fs.RealFileSystem{},
+		}
 
 		projectPath := filepath.Join(tmpDir, "update-project")
 
@@ -274,7 +287,10 @@ func TestStateManager(t *testing.T) {
 			t.Fatalf("Failed to write invalid JSON file: %v", err)
 		}
 
-		manager := &StateManager{statePath: invalidJSONPath}
+		manager := &StateManager{
+			statePath: invalidJSONPath,
+			fs:        &fs.RealFileSystem{},
+		}
 		_, err := manager.LoadProjectState("/some/path")
 		if err == nil {
 			t.Error("Expected error when loading invalid JSON")
@@ -290,7 +306,10 @@ func TestStateManager(t *testing.T) {
 			t.Fatalf("Failed to create file: %v", err)
 		}
 
-		invalidManager := &StateManager{statePath: invalidPath}
+		invalidManager := &StateManager{
+			statePath: invalidPath,
+			fs:        &fs.RealFileSystem{},
+		}
 
 		state := &spec.ProjectState{
 			ProjectPath: "/test/path",
@@ -303,7 +322,10 @@ func TestStateManager(t *testing.T) {
 		}
 
 		// 测试相对路径转换
-		manager2 := &StateManager{statePath: statePath}
+		manager2 := &StateManager{
+			statePath: statePath,
+			fs:        &fs.RealFileSystem{},
+		}
 
 		// 使用相对路径
 		relativePath := "./test-project"
@@ -324,7 +346,10 @@ func TestStateManager(t *testing.T) {
 	})
 
 	t.Run("State file structure", func(t *testing.T) {
-		manager := &StateManager{statePath: statePath}
+		manager := &StateManager{
+			statePath: statePath,
+			fs:        &fs.RealFileSystem{},
+		}
 
 		projectPath := filepath.Join(tmpDir, "struct-test")
 

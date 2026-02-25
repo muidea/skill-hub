@@ -13,6 +13,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"skill-hub/internal/config"
+	"skill-hub/pkg/utils"
 )
 
 // Repository 表示一个Git仓库
@@ -27,7 +28,7 @@ type Repository struct {
 func NewRepository(repoPath string) (*Repository, error) {
 	// 确保目录存在
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
-		return nil, fmt.Errorf("创建目录失败: %w", err)
+		return nil, utils.CreateDirErr(err, repoPath)
 	}
 
 	// 尝试打开现有仓库
@@ -116,7 +117,7 @@ func (r *Repository) Clone(url string) error {
 		}
 		// 重新创建空目录
 		if err := os.MkdirAll(r.path, 0755); err != nil {
-			return fmt.Errorf("创建目录失败: %w", err)
+			return utils.CreateDirErr(err, r.path)
 		}
 	}
 

@@ -8,6 +8,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
 	"skill-hub/pkg/logging"
+	"skill-hub/pkg/utils"
 )
 
 // Clone 克隆远程仓库到本地目录
@@ -32,7 +33,7 @@ func Clone(url, dir string) error {
 
 	// 创建目录
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("创建目录失败: %w", err)
+		return utils.CreateDirErr(err, dir)
 	}
 
 	// 配置克隆选项
@@ -64,7 +65,7 @@ func Init(dir string) error {
 
 	// 确保目录存在
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("创建目录失败: %w", err)
+		return utils.CreateDirErr(err, dir)
 	}
 
 	// 初始化仓库

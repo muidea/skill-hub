@@ -3,16 +3,18 @@ package state
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"skill-hub/internal/config"
+	"skill-hub/pkg/fs"
 	"skill-hub/pkg/spec"
+	"skill-hub/pkg/utils"
 )
 
 // StateManager 管理项目状态
 type StateManager struct {
 	statePath string
+	fs        fs.FileSystem
 }
 
 // GetStatePath 获取状态文件路径
@@ -27,12 +29,20 @@ type StateFile struct {
 
 // NewStateManager 创建新的状态管理器
 func NewStateManager() (*StateManager, error) {
+	return NewStateManagerWithFS(&fs.RealFileSystem{})
+}
+
+// NewStateManagerWithFS 使用指定的文件系统创建状态管理器
+func NewStateManagerWithFS(fileSystem fs.FileSystem) (*StateManager, error) {
 	statePath, err := config.GetStatePath()
 	if err != nil {
 		return nil, err
 	}
 
-	return &StateManager{statePath: statePath}, nil
+	return &StateManager{
+		statePath: statePath,
+		fs:        fileSystem,
+	}, nil
 }
 
 // LoadProjectState 加载指定项目的状态
@@ -43,9 +53,9 @@ func (m *StateManager) LoadProjectState(projectPath string) (*spec.ProjectState,
 	}
 
 	// 读取状态文件
-	data, err := os.ReadFile(m.statePath)
+	data, err := m.fs.ReadFile(m.statePath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if m.fs.IsNotExist(err) {
 			// 文件不存在，返回空状态，默认目标为 open_code
 			return &spec.ProjectState{
 				ProjectPath:     absPath,
@@ -80,7 +90,7 @@ func (m *StateManager) SaveProjectState(state *spec.ProjectState) error {
 	// 读取现有所有状态
 	allStates := make(map[string]spec.ProjectState)
 
-	if data, err := os.ReadFile(m.statePath); err == nil {
+	if data, err := m.fs.ReadFile(m.statePath); err == nil {
 		if err := json.Unmarshal(data, &allStates); err != nil {
 			// 如果解析失败，使用空map
 			allStates = make(map[string]spec.ProjectState)
@@ -97,11 +107,11 @@ func (m *StateManager) SaveProjectState(state *spec.ProjectState) error {
 	}
 
 	// 确保目录存在
-	if err := os.MkdirAll(filepath.Dir(m.statePath), 0755); err != nil {
-		return fmt.Errorf("创建目录失败: %w", err)
+	if err := m.fs.MkdirAll(filepath.Dir(m.statePath), 0755); err != nil {
+		return utils.CreateDirErr(err, filepath.Dir(m.statePath))
 	}
 
-	if err := os.WriteFile(m.statePath, data, 0644); err != nil {
+	if err := m.fs.WriteFile(m.statePath, data, 0644); err != nil {
 		return fmt.Errorf("写入状态文件失败: %w", err)
 	}
 
@@ -168,9 +178,9 @@ func (m *StateManager) FindProjectByPath(path string) (*spec.ProjectState, error
 	}
 
 	// 读取所有项目状态
-	data, err := os.ReadFile(m.statePath)
+	data, err := m.fs.ReadFile(m.statePath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if m.fs.IsNotExist(err) {
 			return nil, nil // 文件不存在，返回nil
 		}
 		return nil, fmt.Errorf("读取状态文件失败: %w", err)

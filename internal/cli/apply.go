@@ -12,6 +12,7 @@ import (
 	"skill-hub/pkg/spec"
 
 	"github.com/spf13/cobra"
+	"skill-hub/pkg/utils"
 )
 
 var applyCmd = &cobra.Command{
@@ -44,7 +45,7 @@ func runApply(dryRun bool, force bool) error {
 	// 获取当前目录
 	cwd, err := os.Getwd()
 	if err != nil {
-		return errors.WrapWithCode(err, "runApply", errors.ErrSystem, "获取当前目录失败")
+		return utils.GetCwdErrWithCode(err, "runApply")
 	}
 
 	// 检查项目工作区状态（规范4.10：检查当前目录是否存在于state.json中）

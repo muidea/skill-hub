@@ -10,6 +10,7 @@ import (
 	"skill-hub/internal/state"
 
 	"github.com/spf13/cobra"
+	"skill-hub/pkg/utils"
 )
 
 var removeCmd = &cobra.Command{
@@ -38,7 +39,7 @@ func runRemove(skillID string) error {
 	// 获取当前目录
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("获取当前目录失败: %w", err)
+		return utils.GetCwdErr(err)
 	}
 
 	// 检查项目工作区状态（规范4.6：检查当前目录是否存在于state.json中）

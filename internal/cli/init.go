@@ -555,7 +555,7 @@ func setDefaultTargetIfEmpty(target string) error {
 	// 获取当前目录
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("获取当前目录失败: %w", err)
+		return utils.GetCwdErr(err)
 	}
 
 	// 创建状态管理器
