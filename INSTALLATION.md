@@ -201,10 +201,10 @@ skill-hub 提供了一系列命令来管理技能和项目。
 | `create` | 创建新技能模板 | `skill-hub create <id> [--target <value>]` |
 | `remove` | 移除项目技能 | `skill-hub remove <id>` |
 | `validate` | 验证技能合规性 | `skill-hub validate <id>` |
-| `use` | 使用本地仓库里的指定技能 | `skill-hub use <id> [--target <value>]` |
+| `use` | 使用指定技能 | `skill-hub use <id> [--target <value>]` |
 | `status` | 检查技能状态 | `skill-hub status [id] [--verbose]` |
 | `apply` | 应用技能到项目 | `skill-hub apply [--dry-run] [--force]` |
-| `feedback` | 将项目工作区技能修改内容更新至到本地仓库 | `skill-hub feedback <id> [--dry-run] [--force]` |
+| `feedback` | 反馈项目修改到默认仓库 | `skill-hub feedback <id> [--dry-run] [--force]` |
 | `pull` | 从远程仓库拉取最新技能 | `skill-hub pull [--force] [--check]` |
 | `push` | 推送本地更改到远程仓库 | `skill-hub push [--message MESSAGE] [--force] [--dry-run]` |
 

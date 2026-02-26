@@ -5,8 +5,8 @@
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
 | :--- | :--- | :--- | :--- |
 | 1.1 | **工作区创建** | 首次运行 `init` 后，用户家目录下必须生成 `.skill-hub` 文件夹，权限为 755。 | 执行 `skill-hub init [git_url] [--target <value>]`，检查 `~/.skill-hub`。 |
-| 1.2 | **Git 仓库同步** | `~/.skill-hub/repo` 目录下应包含远程仓库的所有文件，且 `.git` 目录完整。 | 执行 `ls -a ~/.skill-hub/repo` 查看内容。 |
-| 1.3 | **配置文件格式** | `config.yaml` 必须包含 `repo_path`、`claude_config_path` 等核心字段。 | 查看 `config.yaml` 内容，确认为合法的 YAML。 |
+| 1.2 | **Git 仓库同步** | `~/.skill-hub/repositories/<repo-name>/` 目录下应包含远程仓库的所有文件，且 `.git` 目录完整。 | 执行 `ls -a ~/.skill-hub/repositories/main` 查看内容。 |
+| 1.3 | **配置文件格式** | `config.yaml` 必须包含 `multi_repo` 配置节来管理多个仓库。 | 查看 `config.yaml` 内容，确认为合法的 YAML。 |
 | 1.4 | **二进制自包含** | 工具编译后为单二进制文件，不依赖系统安装 Python、Git 或其他运行库。 | 在纯净系统环境下直接运行 `skill-hub` 二进制。 |
 
 ## 模块 2：Skill 数据合规性 (Data Compliance)

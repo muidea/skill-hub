@@ -40,15 +40,11 @@
 #### 2.2.1 config.yaml 扩展
 ```yaml
 # ~/.skill-hub/config.yaml
-repo_path: "~/.skill-hub/repositories/main"  # 主仓库路径
 claude_config_path: "~/.claude/config.json"
 cursor_config_path: "~/.cursor/rules"
 default_tool: "open_code"
-git_remote_url: "git@github.com:muidea/skills-repo.git"
-git_token: ""
-git_branch: "master"
 
-# 多仓库配置扩展
+# 多仓库配置
 multi_repo:
   enabled: true
   default_repo: "main"          # 默认仓库（同时作为归档仓库）
@@ -182,13 +178,9 @@ type MultiRepoConfig struct {
 
 // 全局配置结构
 type Config struct {
-    RepoPath          string         `yaml:"repo_path" json:"repo_path"`
     ClaudeConfigPath  string         `yaml:"claude_config_path" json:"claude_config_path"`
     CursorConfigPath  string         `yaml:"cursor_config_path" json:"cursor_config_path"`
     DefaultTool       string         `yaml:"default_tool" json:"default_tool"`
-    GitRemoteURL      string         `yaml:"git_remote_url" json:"git_remote_url"`
-    GitToken          string         `yaml:"git_token" json:"git_token"`
-    GitBranch         string         `yaml:"git_branch" json:"git_branch"`
     MultiRepo         *MultiRepoConfig `yaml:"multi_repo,omitempty" json:"multi_repo,omitempty"`
 }
 
@@ -881,9 +873,8 @@ func handleFeedbackError(skillID, sourceRepo, targetRepo string, err error) erro
 
 #### 9.1.2 配置文件迁移
 1. **config.yaml**:
-   - 更新 `repo_path: "~/.skill-hub/repositories/main"`
+   - 移除旧单仓库配置项（`repo_path`, `git_remote_url`, `git_branch`, `git_token`）
    - 添加 `multi_repo` 配置节
-   - 保留原有配置项
 
 2. **registry.json**:
    - 版本升级到 `"2.0.0"`
@@ -948,30 +939,26 @@ func migrateLegacyToMultiRepo() error {
 
 #### 9.2.2 关键迁移函数
 ```go
-func updateConfigFile() error {
+func initMultiRepoConfig() error {
     // 读取现有配置
     config, err := loadConfig("~/.skill-hub/config.yaml")
     if err != nil {
         return err
     }
     
-    // 更新 repo_path
-    config.RepoPath = "~/.skill-hub/repositories/main"
-    
-    // 添加 multi_repo 配置
+    // 初始化多仓库配置
     config.MultiRepo = &MultiRepoConfig{
-        Enabled:     true,
+        Enabled:      true,
         DefaultRepo: "main",
-        ArchiveRepo: "main",
         Repositories: map[string]RepositoryConfig{
             "main": {
                 Name:        "main",
-                URL:         config.GitRemoteURL,
-                Branch:      config.GitBranch,
-
+                URL:         "",
+                Branch:      "main",
                 Enabled:     true,
-                Description: "主技能仓库",
+                Description: "默认归档仓库",
                 Type:        "user",
+                IsArchive:   true,
             },
         },
     }
@@ -1178,13 +1165,9 @@ func runInitWithMultiRepo(args []string, target string) error {
 #### 11.1.1 config.yaml 示例
 ```yaml
 # ~/.skill-hub/config.yaml
-repo_path: "~/.skill-hub/repositories/main"
 claude_config_path: "~/.claude/config.json"
 cursor_config_path: "~/.cursor/rules"
 default_tool: "open_code"
-git_remote_url: "git@github.com:muidea/skills-repo.git"
-git_token: ""
-git_branch: "master"
 
 multi_repo:
   enabled: true

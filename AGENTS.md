@@ -83,6 +83,11 @@ const (
 )
 ```
 
+### Logging
+- Use `log/slog` for structured logging (Go 1.21+)
+- Avoid using the older `log` package
+- Use contextual logging with `With()` and `WithGroup()`
+
 ### Testing Patterns
 - Use table-driven tests for multiple test cases
 - Use `t.Run()` for subtests
@@ -113,22 +118,15 @@ func TestSkillManager(t *testing.T) {
 - Document exported functions, types, packages
 - Use GoDoc format comments
 
-## Cursor Rules Integration
+## Multi-Repository Architecture
 
-Project includes `.cursorrules` with skill definitions:
-- Skills defined in Markdown with YAML frontmatter
-- Support template variables (e.g., `{{.PROJECT_NAME}}`)
-- Loaded from `.agents/skills/` directory
-- Use `skill` tool to load specialized skills
+The project uses a multi-repository architecture:
+- **Storage**: `~/.skill-hub/repositories/{repo-name}/`
+- **Default repository**: Named "main" as the archive repository
+- **Config location**: `~/.skill-hub/config.yaml` with `multi_repo` section
+- **State file**: `~/.skill-hub/state.json`
 
-Example from `.cursorrules:1-10`:
-```yaml
-# === SKILL-HUB BEGIN: test-target-skill ===
----
-name: test-target-skill
-description: 为项目定制的 test-target-skill 技能
-compatibility: Designed for OpenCode (or similar AI coding assistants)
-```
+All skills modified via `feedback` are archived to the default repository.
 
 ## Quality Assurance
 
@@ -152,5 +150,4 @@ Before committing changes:
 ### Important Files
 - `Makefile`: Build and test commands
 - `go.mod`: Go module dependencies
-- `.cursorrules`: Cursor AI assistant rules
 - `DEVELOPMENT.md`: Developer documentation

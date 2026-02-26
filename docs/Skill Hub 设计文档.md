@@ -66,10 +66,17 @@ graph TD
 ├── config.yaml
 ├── registry.json    # {"version": "1.0.0", "skills": []}
 ├── state.json
-└── repo/
-    ├── .git/
-    ├── skills/          
-    └── templates/       
+└── repositories/           # 多仓库目录
+    ├── main/              # 默认归档仓库
+    │   ├── .git/
+    │   ├── skills/          
+    │   └── templates/       
+    ├── community/          # 社区仓库
+    │   ├── .git/
+    │   └── skills/
+    └── personal/           # 个人仓库
+        ├── .git/
+        └── skills/
 ```
 
 ### 4.2 SKILL.md 定义
