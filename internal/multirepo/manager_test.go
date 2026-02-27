@@ -263,7 +263,7 @@ compatibility: open_code
 
 这是一个测试技能。`)
 
-	metadata, err := parseSkillMetadata(content, "main", "test-skill")
+	metadata, err := parseSkillMetadata(content, "main", "test-skill", "/fake/path/skills/test-skill/SKILL.md")
 	if err != nil {
 		t.Errorf("parseSkillMetadata() 返回错误: %v", err)
 		return
@@ -283,29 +283,45 @@ compatibility: open_code
 		t.Errorf("期望仓库 'main', 实际得到 '%s'", metadata.Repository)
 	}
 
-	// 注意：简化实现中，Name 被设置为 skillID
+	// 从技能文件内容中解析的名称
 	if metadata.Name != "test-skill" {
 		t.Errorf("期望技能名 'test-skill', 实际得到 '%s'", metadata.Name)
 	}
 
-	// 注意：简化实现中，Version 被设置为 "1.0.0"
+	// 从技能文件内容中解析的版本
 	if metadata.Version != "1.0.0" {
 		t.Errorf("期望版本 '1.0.0', 实际得到 '%s'", metadata.Version)
 	}
 
-	// 注意：简化实现中，Author 被设置为 "unknown"
-	if metadata.Author != "unknown" {
-		t.Errorf("期望作者 'unknown', 实际得到 '%s'", metadata.Author)
+	// 从技能文件内容中解析的作者
+	if metadata.Author != "test-author" {
+		t.Errorf("期望作者 'test-author', 实际得到 '%s'", metadata.Author)
 	}
 
-	// 注意：简化实现中，Description 被格式化为 "技能来自 X 仓库"
-	expectedDesc := "技能来自 main 仓库"
+	// 从技能文件内容中解析的描述
+	expectedDesc := "测试技能"
 	if metadata.Description != expectedDesc {
 		t.Errorf("期望描述 '%s', 实际得到 '%s'", expectedDesc, metadata.Description)
 	}
 
-	// 注意：简化实现中，Tags 为空数组
-	if len(metadata.Tags) != 0 {
-		t.Errorf("期望0个标签, 实际得到 %d", len(metadata.Tags))
+	// 从技能文件内容中解析的标签
+	expectedTags := 2
+	if len(metadata.Tags) != expectedTags {
+		t.Errorf("期望%d个标签, 实际得到 %d", expectedTags, len(metadata.Tags))
+	}
+
+	// 检查标签内容
+	expectedTag1 := "test"
+	expectedTag2 := "example"
+	if len(metadata.Tags) >= 1 && metadata.Tags[0] != expectedTag1 {
+		t.Errorf("期望第一个标签 '%s', 实际得到 '%s'", expectedTag1, metadata.Tags[0])
+	}
+	if len(metadata.Tags) >= 2 && metadata.Tags[1] != expectedTag2 {
+		t.Errorf("期望第二个标签 '%s', 实际得到 '%s'", expectedTag2, metadata.Tags[1])
+	}
+
+	// 检查兼容性
+	if metadata.Compatibility != "open_code" {
+		t.Errorf("期望兼容性 'open_code', 实际得到 '%s'", metadata.Compatibility)
 	}
 }

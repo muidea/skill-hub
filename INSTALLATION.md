@@ -196,7 +196,7 @@ skill-hub 提供了一系列命令来管理技能和项目。
 |------|------|------|
 | `init` | 初始化本地仓库 | `skill-hub init [git_url] [--target <value>]` |
 | `set-target` | 设置项目目标环境 | `skill-hub set-target <value>` |
-| `list` | 列出可用技能 | `skill-hub list [--target <value>] [--verbose]` |
+| `list` | 列出可用技能 | `skill-hub list [--target <value>] [--verbose] [--repo <repo-name>...]` |
 | `search` | 搜索远程技能 | `skill-hub search <keyword> [--target <value>] [--limit <number>]` |
 | `create` | 创建新技能模板 | `skill-hub create <id> [--target <value>]` |
 | `remove` | 移除项目技能 | `skill-hub remove <id>` |
@@ -260,6 +260,12 @@ skill-hub list --verbose
 
 # 按目标环境过滤技能列表
 skill-hub list --target cursor
+
+# 按仓库过滤技能列表
+skill-hub list --repo skills-repo
+
+# 组合过滤选项
+skill-hub list --repo skills-repo --target cursor --verbose
 ```
 
 #### 技能反馈和更新

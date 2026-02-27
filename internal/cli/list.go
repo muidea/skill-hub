@@ -20,20 +20,22 @@ import (
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "列出可用技能",
-	Long:  "显示本地技能仓库中的所有技能，支持按目标环境过滤。",
+	Long:  "显示本地技能仓库中的所有技能，支持按目标环境和仓库过滤。",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
 		verbose, _ := cmd.Flags().GetBool("verbose")
-		return runList(target, verbose)
+		repoFilters, _ := cmd.Flags().GetStringSlice("repo")
+		return runList(target, verbose, repoFilters)
 	},
 }
 
 func init() {
 	listCmd.Flags().String("target", "", "按目标环境过滤技能列表")
 	listCmd.Flags().Bool("verbose", false, "显示详细信息，包括技能描述、版本、兼容性等")
+	listCmd.Flags().StringSlice("repo", []string{}, "按仓库名称过滤技能列表（可多次使用指定多个仓库）")
 }
 
-func runList(target string, verbose bool) error {
+func runList(target string, verbose bool, repoFilters []string) error {
 	// 检查init依赖（规范4.3：该命令依赖init命令）
 	if err := CheckInitDependency(); err != nil {
 		return err
@@ -45,10 +47,39 @@ func runList(target string, verbose bool) error {
 		return fmt.Errorf("创建多仓库管理器失败: %w", err)
 	}
 
-	// 获取所有技能
-	skillsMetadata, err := repoManager.ListSkills("")
-	if err != nil {
-		return fmt.Errorf("获取技能列表失败: %w", err)
+	// 获取技能列表，支持按仓库过滤
+	var skillsMetadata []spec.SkillMetadata
+	if len(repoFilters) == 0 {
+		// 如果没有指定仓库过滤器，获取所有技能
+		skillsMetadata, err = repoManager.ListSkills("")
+		if err != nil {
+			return fmt.Errorf("获取技能列表失败: %w", err)
+		}
+	} else {
+		// 获取所有可用仓库以验证过滤器
+		availableRepos, err := repoManager.ListRepositories()
+		if err != nil {
+			return fmt.Errorf("获取仓库列表失败: %w", err)
+		}
+
+		// 验证仓库过滤器
+		validRepos := make(map[string]bool)
+		for _, repo := range availableRepos {
+			validRepos[repo.Name] = true
+		}
+
+		for _, repoFilter := range repoFilters {
+			if !validRepos[repoFilter] {
+				return fmt.Errorf("仓库 '%s' 不存在或已禁用", repoFilter)
+			}
+
+			// 获取指定仓库的技能
+			repoSkills, err := repoManager.ListSkills(repoFilter)
+			if err != nil {
+				return fmt.Errorf("获取仓库 '%s' 的技能列表失败: %w", repoFilter, err)
+			}
+			skillsMetadata = append(skillsMetadata, repoSkills...)
+		}
 	}
 
 	// 按目标环境过滤技能
@@ -161,9 +192,12 @@ func runList(target string, verbose bool) error {
 			// 格式化仓库名称
 			repoName := formatRepoName(skill.Repository, widths.repoMin)
 
+			// 格式化技能ID（用于显示）
+			displaySkillID := formatSkillID(skill.ID, widths.idMin)
+
 			// 手动格式化以确保对齐
 			// 计算每个单元格需要的空格数
-			idSpaces := widths.idMin - displayWidth(skill.ID)
+			idSpaces := widths.idMin - displayWidth(displaySkillID)
 			nameSpaces := widths.nameMin - displayWidth(skill.Name)
 			versionSpaces := widths.versionMin - displayWidth(skill.Version)
 			repoSpaces := widths.repoMin - displayWidth(repoName)
@@ -187,7 +221,7 @@ func runList(target string, verbose bool) error {
 			}
 
 			fmt.Printf("%s%s %s%s %s%s %s%s %s%s\n",
-				skill.ID, strings.Repeat(" ", idSpaces),
+				displaySkillID, strings.Repeat(" ", idSpaces),
 				skill.Name, strings.Repeat(" ", nameSpaces),
 				skill.Version, strings.Repeat(" ", versionSpaces),
 				repoName, strings.Repeat(" ", repoSpaces),
@@ -197,6 +231,9 @@ func runList(target string, verbose bool) error {
 
 	if target != "" {
 		fmt.Printf("\n已过滤显示兼容 %s 目标的技能\n", target)
+	}
+	if len(repoFilters) > 0 {
+		fmt.Printf("\n已过滤显示仓库: %s\n", strings.Join(repoFilters, ", "))
 	}
 	fmt.Println("\n使用 'skill-hub use <skill-id>' 在当前项目启用技能")
 	return nil
@@ -421,7 +458,7 @@ type columnWidths struct {
 func calculateColumnWidths(skills []spec.SkillMetadata) columnWidths {
 	widths := columnWidths{
 		idMin:      2,  // "ID" 最小宽度
-		idMax:      30, // ID最大宽度
+		idMax:      50, // ID最大宽度（增加以支持路径格式的技能ID）
 		nameMin:    4,  // "名称" 最小宽度
 		nameMax:    30, // 名称最大宽度
 		versionMin: 4,  // "版本" 最小宽度
@@ -581,6 +618,76 @@ func getToolsString(compatibility string) string {
 	}
 
 	return strings.Join(tools, ",")
+}
+
+// formatSkillID 格式化技能ID显示，考虑显示宽度
+func formatSkillID(skillID string, maxDisplayWidth int) string {
+	if skillID == "" {
+		return ""
+	}
+
+	// 如果技能ID的显示宽度不超过最大宽度，直接返回
+	if displayWidth(skillID) <= maxDisplayWidth {
+		return skillID
+	}
+
+	// 尝试截断路径部分，保留最后一部分
+	parts := strings.Split(skillID, "/")
+	if len(parts) > 1 {
+		lastPart := parts[len(parts)-1]
+		if displayWidth(lastPart) <= maxDisplayWidth {
+			return lastPart
+		}
+	}
+
+	// 如果还是太长，截断并添加省略号
+	// 我们需要找到合适的截断点，使得显示宽度不超过maxDisplayWidth-3（为"..."留空间）
+	if maxDisplayWidth > 3 {
+		targetWidth := maxDisplayWidth - 3
+		truncated := ""
+		currentWidth := 0
+
+		// 逐个字符添加，直到达到目标宽度
+		for _, r := range skillID {
+			charWidth := 1
+			if r >= 0x4E00 && r <= 0x9FFF { // 基本CJK统一表意文字
+				charWidth = 2
+			} else if r >= 0x3400 && r <= 0x4DBF { // CJK统一表意文字扩展A
+				charWidth = 2
+			} else if r >= 0x20000 && r <= 0x2A6DF { // CJK统一表意文字扩展B
+				charWidth = 2
+			}
+
+			if currentWidth+charWidth > targetWidth {
+				break
+			}
+			truncated += string(r)
+			currentWidth += charWidth
+		}
+
+		return truncated + "..."
+	}
+
+	// 如果最大宽度很小，直接截断
+	truncated := ""
+	currentWidth := 0
+	for _, r := range skillID {
+		charWidth := 1
+		if r >= 0x4E00 && r <= 0x9FFF {
+			charWidth = 2
+		} else if r >= 0x3400 && r <= 0x4DBF {
+			charWidth = 2
+		} else if r >= 0x20000 && r <= 0x2A6DF {
+			charWidth = 2
+		}
+
+		if currentWidth+charWidth > maxDisplayWidth {
+			break
+		}
+		truncated += string(r)
+		currentWidth += charWidth
+	}
+	return truncated
 }
 
 // formatRepoName 格式化仓库名称显示，考虑显示宽度

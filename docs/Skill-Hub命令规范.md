@@ -134,19 +134,20 @@ skill-hub set-target cursor
 
 ### 4.3 list - 列出可用技能
 
-**语法**: `skill-hub list [--target <value>] [--verbose]`
+**语法**: `skill-hub list [--target <value>] [--verbose] [--repo <repo-name>...]`
 
 **选项**:
 - `--target <value>`: 按目标环境过滤技能列表。
 - `--verbose`: 显示详细信息，包括技能描述、版本、兼容性等。
+- `--repo <repo-name>`: 按仓库名称过滤技能列表（可多次使用指定多个仓库）。
 
 **功能描述**:
 
-显示所有已启用仓库中的技能，支持按目标环境过滤。默认显示简要列表，包含技能 ID、状态、版本和所属仓库信息。
+显示所有已启用仓库中的技能，支持按目标环境和仓库过滤。默认显示简要列表，包含技能 ID、状态、版本和所属仓库信息。
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
-**多仓库说明**：默认显示所有已启用仓库中的技能。技能列表会标注技能所属的仓库名称。
+**多仓库说明**：默认显示所有已启用仓库中的技能。技能列表会标注技能所属的仓库名称。使用 `--repo` 选项可以指定只显示特定仓库中的技能，这在有大量技能时可以提高性能。
 
 **示例**:
 ```bash
@@ -158,6 +159,15 @@ skill-hub list --target cursor
 
 # 显示详细信息
 skill-hub list --verbose
+
+# 仅显示指定仓库中的技能
+skill-hub list --repo skills-repo
+
+# 显示多个仓库中的技能
+skill-hub list --repo skills-repo --repo openclaw
+
+# 组合使用过滤选项
+skill-hub list --repo skills-repo --target cursor --verbose
 ```
 
 ### 4.4 search - 搜索远程技能

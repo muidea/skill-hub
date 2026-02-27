@@ -1,11 +1,13 @@
 package multirepo
 
 import (
-	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
+	"gopkg.in/yaml.v3"
 	"skill-hub/internal/config"
 	"skill-hub/internal/git"
 	"skill-hub/pkg/errors"
@@ -122,6 +124,11 @@ func (m *Manager) AddRepository(repoConfig config.RepositoryConfig) error {
 		}
 	}
 
+	// 保存配置到文件
+	if err := config.SaveConfig(m.config); err != nil {
+		return errors.Wrap(err, "AddRepository: 保存配置失败")
+	}
+
 	return nil
 }
 
@@ -143,6 +150,11 @@ func (m *Manager) RemoveRepository(name string) error {
 
 	// 从配置中移除
 	delete(m.config.MultiRepo.Repositories, name)
+
+	// 保存配置到文件
+	if err := config.SaveConfig(m.config); err != nil {
+		return errors.Wrap(err, "RemoveRepository: 保存配置失败")
+	}
 
 	// 可选：删除仓库目录（需要用户确认）
 	// 这里暂时不删除目录，保留数据
@@ -192,6 +204,11 @@ func (m *Manager) EnableRepository(name string) error {
 	repo.Enabled = true
 	m.config.MultiRepo.Repositories[name] = repo
 
+	// 保存配置到文件
+	if err := config.SaveConfig(m.config); err != nil {
+		return errors.Wrap(err, "EnableRepository: 保存配置失败")
+	}
+
 	return nil
 }
 
@@ -215,6 +232,11 @@ func (m *Manager) DisableRepository(name string) error {
 	repo := m.config.MultiRepo.Repositories[name]
 	repo.Enabled = false
 	m.config.MultiRepo.Repositories[name] = repo
+
+	// 保存配置到文件
+	if err := config.SaveConfig(m.config); err != nil {
+		return errors.Wrap(err, "DisableRepository: 保存配置失败")
+	}
 
 	return nil
 }
@@ -247,21 +269,23 @@ func (m *Manager) findSkillInRepository(skillID string, repoName string) ([]spec
 		return nil, err
 	}
 
-	// 检查技能目录是否存在
-	skillDir := filepath.Join(repoDir, "skills", skillID)
-	if _, err := os.Stat(skillDir); os.IsNotExist(err) {
+	// 技能ID可能是路径格式（如 "owner/skill-name"）
+	// 构建技能文件路径
+	skillFile := filepath.Join(repoDir, "skills", skillID, "SKILL.md")
+
+	// 检查技能文件是否存在
+	if _, err := os.Stat(skillFile); os.IsNotExist(err) {
 		return nil, nil
 	}
 
 	// 读取技能文件
-	skillFile := filepath.Join(skillDir, "SKILL.md")
 	content, err := os.ReadFile(skillFile)
 	if err != nil {
 		return nil, errors.WrapWithCode(err, "findSkillInRepository", errors.ErrFileOperation, "读取技能文件失败")
 	}
 
 	// 解析技能元数据
-	skill, err := parseSkillMetadata(content, repoName, skillID)
+	skill, err := parseSkillMetadata(content, repoName, skillID, skillFile)
 	if err != nil {
 		return nil, err
 	}
@@ -270,18 +294,113 @@ func (m *Manager) findSkillInRepository(skillID string, repoName string) ([]spec
 }
 
 // parseSkillMetadata 从技能文件内容解析元数据
-func parseSkillMetadata(content []byte, repoName, skillID string) (*spec.SkillMetadata, error) {
-	// 这里简化实现，实际需要解析YAML frontmatter
-	// 暂时返回基本元数据
-	return &spec.SkillMetadata{
-		ID:             skillID,
-		Name:           skillID,
-		Version:        "1.0.0",
-		Author:         "unknown",
-		Description:    fmt.Sprintf("技能来自 %s 仓库", repoName),
-		Repository:     repoName,
-		RepositoryPath: filepath.Join("skills", skillID),
-	}, nil
+func parseSkillMetadata(content []byte, repoName, skillID, skillPath string) (*spec.SkillMetadata, error) {
+	// 解析frontmatter
+	lines := strings.Split(string(content), "\n")
+	if len(lines) < 2 || lines[0] != "---" {
+		return nil, errors.NewWithCode("parseSkillMetadata", errors.ErrSkillInvalid, "无效的SKILL.md格式: 缺少frontmatter")
+	}
+
+	var frontmatterLines []string
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" {
+			break
+		}
+		frontmatterLines = append(frontmatterLines, lines[i])
+	}
+
+	frontmatter := strings.Join(frontmatterLines, "\n")
+
+	// 解析YAML frontmatter
+	var skillData map[string]interface{}
+	if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err != nil {
+		return nil, errors.Wrap(err, "parseSkillMetadata: 解析frontmatter失败")
+	}
+
+	// 创建技能元数据对象
+	skillMeta := &spec.SkillMetadata{
+		ID: skillID,
+	}
+
+	// 设置名称
+	if name, ok := skillData["name"].(string); ok {
+		skillMeta.Name = name
+	} else {
+		skillMeta.Name = skillID
+	}
+
+	// 设置描述
+	if desc, ok := skillData["description"].(string); ok {
+		skillMeta.Description = desc
+	}
+
+	// 设置版本
+	skillMeta.Version = "1.0.0"
+	if version, ok := skillData["version"].(string); ok {
+		skillMeta.Version = version
+	}
+
+	// 设置作者
+	if author, ok := skillData["author"].(string); ok {
+		skillMeta.Author = author
+	} else if source, ok := skillData["source"].(string); ok {
+		skillMeta.Author = source
+	} else {
+		skillMeta.Author = "unknown"
+	}
+
+	// 设置标签
+	if tagsStr, ok := skillData["tags"].(string); ok {
+		skillMeta.Tags = strings.Split(tagsStr, ",")
+		for i, tag := range skillMeta.Tags {
+			skillMeta.Tags[i] = strings.TrimSpace(tag)
+		}
+	}
+
+	// 设置兼容性
+	if compatData, ok := skillData["compatibility"]; ok {
+		switch v := compatData.(type) {
+		case string:
+			skillMeta.Compatibility = v
+		case map[string]interface{}:
+			// 向后兼容：将对象格式转换为字符串
+			var compatList []string
+			if cursorVal, ok := v["cursor"].(bool); ok && cursorVal {
+				compatList = append(compatList, "Cursor")
+			}
+			if claudeVal, ok := v["claude_code"].(bool); ok && claudeVal {
+				compatList = append(compatList, "Claude Code")
+			}
+			if openCodeVal, ok := v["open_code"].(bool); ok && openCodeVal {
+				compatList = append(compatList, "OpenCode")
+			}
+			if shellVal, ok := v["shell"].(bool); ok && shellVal {
+				compatList = append(compatList, "Shell")
+			}
+			if len(compatList) > 0 {
+				skillMeta.Compatibility = "Designed for " + strings.Join(compatList, ", ") + " (or similar AI coding assistants)"
+			}
+		}
+	}
+
+	// 设置仓库信息
+	skillMeta.Repository = repoName
+
+	// 计算仓库内相对路径
+	repoDir, err := config.GetRepositoryPath(repoName)
+	if err != nil {
+		return nil, errors.Wrap(err, "parseSkillMetadata: 获取仓库路径失败")
+	}
+
+	relPath, err := filepath.Rel(repoDir, skillPath)
+	if err != nil {
+		// 如果无法计算相对路径，使用默认路径
+		skillMeta.RepositoryPath = filepath.Join("skills", skillID)
+	} else {
+		skillMeta.RepositoryPath = relPath
+	}
+
+	return skillMeta, nil
 }
 
 // LoadSkill 加载完整技能信息
@@ -291,31 +410,40 @@ func (m *Manager) LoadSkill(skillID, repoName string) (*spec.Skill, error) {
 		return nil, err
 	}
 
-	// 检查技能目录是否存在
-	skillDir := filepath.Join(repoDir, "skills", skillID)
-	if _, err := os.Stat(skillDir); os.IsNotExist(err) {
+	// 技能ID可能是路径格式（如 "owner/skill-name"）
+	// 检查技能文件是否存在
+	skillFile := filepath.Join(repoDir, "skills", skillID, "SKILL.md")
+	if _, err := os.Stat(skillFile); os.IsNotExist(err) {
 		return nil, errors.SkillNotFound("LoadSkill", skillID)
 	}
 
 	// 读取技能文件
-	skillFile := filepath.Join(skillDir, "SKILL.md")
-	_, err = os.ReadFile(skillFile)
+	content, err := os.ReadFile(skillFile)
 	if err != nil {
 		return nil, errors.WrapWithCode(err, "LoadSkill", errors.ErrFileOperation, "读取技能文件失败")
 	}
 
-	// 解析技能文件（简化实现，实际需要解析YAML frontmatter）
-	// 这里暂时返回基本技能信息
+	// 解析技能元数据
+	skillMeta, err := parseSkillMetadata(content, repoName, skillID, skillFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// 从SkillMetadata创建Skill对象
+	// 注意：这里简化处理，实际需要解析完整的技能文件内容
 	return &spec.Skill{
-		ID:             skillID,
-		Name:           skillID,
-		Version:        "1.0.0",
-		Author:         "unknown",
-		Description:    fmt.Sprintf("技能来自 %s 仓库", repoName),
-		Tags:           []string{},
-		Variables:      []spec.Variable{},
-		Repository:     repoName,
-		RepositoryPath: filepath.Join("skills", skillID),
+		ID:               skillMeta.ID,
+		Name:             skillMeta.Name,
+		Version:          skillMeta.Version,
+		Author:           skillMeta.Author,
+		Description:      skillMeta.Description,
+		Tags:             skillMeta.Tags,
+		Compatibility:    skillMeta.Compatibility,
+		Variables:        []spec.Variable{}, // 需要从技能文件解析
+		Dependencies:     []string{},        // 需要从技能文件解析
+		Repository:       skillMeta.Repository,
+		RepositoryPath:   skillMeta.RepositoryPath,
+		RepositoryCommit: "", // 需要从Git获取
 	}, nil
 }
 
@@ -353,24 +481,18 @@ func (m *Manager) ListSkills(repoFilter string) ([]spec.SkillMetadata, error) {
 			continue
 		}
 
-		// 读取skills目录
-		entries, err := os.ReadDir(skillsDir)
+		// 递归扫描所有SKILL.md文件
+		skillFiles, err := scanSkillsRecursively(skillsDir)
 		if err != nil {
 			// 跳过出错的仓库，继续处理其他仓库
 			continue
 		}
 
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-
-			skillID := entry.Name()
-			skillDir := filepath.Join(skillsDir, skillID)
-			skillFile := filepath.Join(skillDir, "SKILL.md")
-
-			// 检查是否存在SKILL.md文件
-			if _, err := os.Stat(skillFile); os.IsNotExist(err) {
+		for _, skillFile := range skillFiles {
+			// 生成技能ID（相对于skills目录的路径）
+			skillID, err := getSkillIDFromPath(skillFile, skillsDir)
+			if err != nil {
+				// 跳过路径解析失败的技能
 				continue
 			}
 
@@ -382,7 +504,7 @@ func (m *Manager) ListSkills(repoFilter string) ([]spec.SkillMetadata, error) {
 			}
 
 			// 解析技能元数据
-			skill, err := parseSkillMetadata(content, repo.Name, skillID)
+			skill, err := parseSkillMetadata(content, repo.Name, skillID, skillFile)
 			if err != nil {
 				// 跳过解析失败的技能，继续处理其他技能
 				continue
@@ -473,4 +595,44 @@ func copyDirectory(src, dst string) error {
 // GetDefaultRepository 获取默认仓库
 func (m *Manager) GetDefaultRepository() (*config.RepositoryConfig, error) {
 	return m.config.GetArchiveRepository()
+}
+
+// scanSkillsRecursively 递归扫描技能目录，查找所有SKILL.md文件
+func scanSkillsRecursively(skillsDir string) ([]string, error) {
+	var skillFiles []string
+
+	err := filepath.WalkDir(skillsDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			// 跳过错误，继续扫描其他文件
+			return nil
+		}
+
+		// 跳过.git目录
+		if d.IsDir() && d.Name() == ".git" {
+			return filepath.SkipDir
+		}
+
+		// 只处理SKILL.md文件
+		if !d.IsDir() && d.Name() == "SKILL.md" {
+			skillFiles = append(skillFiles, path)
+		}
+
+		return nil
+	})
+
+	return skillFiles, err
+}
+
+// getSkillIDFromPath 从文件路径生成技能ID
+func getSkillIDFromPath(skillPath, skillsDir string) (string, error) {
+	// 获取相对于skills目录的路径
+	relPath, err := filepath.Rel(skillsDir, skillPath)
+	if err != nil {
+		return "", err
+	}
+
+	// 移除SKILL.md后缀，得到技能目录路径
+	skillDir := filepath.Dir(relPath)
+
+	return skillDir, nil
 }

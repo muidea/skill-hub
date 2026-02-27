@@ -411,8 +411,10 @@ func runRepoDefault(name string) error {
 		cfg.MultiRepo.DefaultRepo = name
 	}
 
-	// TODO: 保存配置到文件
-	// 这里需要实现配置保存功能
+	// 保存配置到文件
+	if err := config.SaveConfig(cfg); err != nil {
+		return errors.Wrap(err, "保存配置失败")
+	}
 
 	fmt.Printf("✅ 默认仓库已设置为 '%s'\n", name)
 	fmt.Println("注意：所有通过 feedback 命令修改的技能都会归档到此仓库")

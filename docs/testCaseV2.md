@@ -71,6 +71,12 @@ tests/e2e/
    - 验证目标环境过滤
    - 执行 `skill-hub list --verbose`
    - 验证详细信息显示
+   - 执行 `skill-hub list --repo <repo-name>`
+   - 验证仓库过滤功能
+   - 执行 `skill-hub list --repo <repo1> --repo <repo2>`
+   - 验证多仓库过滤功能
+   - 执行 `skill-hub list --repo <repo-name> --target <value> --verbose`
+   - 验证组合过滤功能
 
 7. **test_07_full_workflow_integration()** - 完整工作流集成测试
    - 端到端测试整个创建流程
