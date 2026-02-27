@@ -10,18 +10,17 @@ make build        # Build binary
 make test         # Run all Go tests
 make test-verbose # Tests with verbose output
 make test-coverage # Tests with coverage report
-make coverage-html # Generate HTML coverage report
-make lint         # Run linting checks
-make deps         # Update dependencies
+make lint         # Run linting checks (gofmt, go vet, staticcheck)
+make deps         # Update dependencies (go mod tidy)
 make clean        # Clean build artifacts
 ```
 
 ### Running Single Tests
 ```bash
-make test-pkg PKG=./internal/cli  # Test specific package
-go test ./internal/cli -v         # Test specific file
-go test ./internal/cli -v -run TestLoadSkill  # Test single function
-go test ./pkg/errors -bench=.     # Run benchmarks
+go test ./internal/cli -v                   # Test specific package
+go test ./internal/cli -v -run TestLoadSkill # Test single function
+go test ./pkg/errors -bench=.              # Run benchmarks
+go clean -testcache                         # Clear test cache
 ```
 
 ### End-to-End Testing
@@ -44,13 +43,12 @@ make install      # Install to ~/.local/bin
 - Go 1.24.0 with toolchain go1.24.11
 - Use Go modules, always run `go mod tidy` before committing
 
-### Import Organization
+### Import Organization (3 groups)
 ```go
 import (
     // Standard library
     "fmt"
     "os"
-    "path/filepath"
 
     // Third-party packages
     "gopkg.in/yaml.v3"
@@ -63,11 +61,12 @@ import (
 ```
 
 ### Naming Conventions
-- **Packages**: lowercase, single-word (e.g., `engine`, `cli`, `errors`)
+- **Packages**: lowercase, single-word (e.g., `engine`, `cli`)
 - **Interfaces**: `-er` suffix (e.g., `FileSystem`, `Manager`)
-- **Methods/Variables**: camelCase, descriptive
+- **Methods/Variables**: camelCase
 - **Constants**: PascalCase for exported, camelCase for internal
 - **Error variables**: Prefix with `Err` (e.g., `ErrSkillNotFound`)
+- **Type parameters**: Single uppercase letters (e.g., `T`, `K`, `V`)
 
 ### Error Handling
 - Use custom error package `pkg/errors`
@@ -75,12 +74,15 @@ import (
 - Wrap errors with context using `errors.Wrap()`
 - Always check errors, return early on errors
 
-Example from `pkg/errors/errors.go:18`:
+Example:
 ```go
-const (
-    ErrSkillNotFound ErrorCode = "SKILL_NOT_FOUND"
-    ErrSkillInvalid  ErrorCode = "SKILL_INVALID"
-)
+func LoadSkill(id string) (*Skill, error) {
+    skill, err := findSkill(id)
+    if err != nil {
+        return nil, errors.Wrap(err, "LoadSkill: 查找技能失败")
+    }
+    return skill, nil
+}
 ```
 
 ### Logging
@@ -89,65 +91,54 @@ const (
 - Use contextual logging with `With()` and `WithGroup()`
 
 ### Testing Patterns
-- Use table-driven tests for multiple test cases
-- Use `t.Run()` for subtests
+- Use table-driven tests with `t.Run()` for subtests
 - Use `t.TempDir()` for temporary directories
 - Mock dependencies using interfaces
 - Test both success and error cases
 
-Example from test files:
-```go
-func TestSkillManager(t *testing.T) {
-    tmpDir := t.TempDir()
-    t.Run("Create skill manager", func(t *testing.T) {
-        // test implementation
-    })
-}
-```
-
-### File Structure
-- **Internal packages**: Code not for external use
-- **Public packages**: Reusable components in `pkg/`
-- **Command packages**: Executable binaries in `cmd/`
-- **Test files**: Use `_test.go` suffix
-
 ### Formatting & Documentation
 - Use `gofmt` for consistent formatting
 - Line length: 80-100 characters
-- Tabs for indentation (not spaces)
-- Document exported functions, types, packages
-- Use GoDoc format comments
+- Document exported functions with GoDoc comments
+- Use Chinese comments for business logic, English for technical details
+
+## Available Skills
+
+### go-refactor-pro
+A specialized skill for advanced Go refactoring. Use when:
+- Code has significant duplication (DRY violations)
+- Need to migrate to modern Go features (slog, generics, errors.Join)
+- Performance optimization is needed
+- Code needs decoupling for testability
+
+Located at: `.agents/skills/go-refactor-pro/SKILL.md`
 
 ## Multi-Repository Architecture
-
-The project uses a multi-repository architecture:
 - **Storage**: `~/.skill-hub/repositories/{repo-name}/`
-- **Default repository**: Named "main" as the archive repository
-- **Config location**: `~/.skill-hub/config.yaml` with `multi_repo` section
+- **Default repository**: "main" as the archive repository
+- **Config**: `~/.skill-hub/config.yaml`
 - **State file**: `~/.skill-hub/state.json`
 
-All skills modified via `feedback` are archived to the default repository.
+## Skill Structure
+- Skills use path format IDs (e.g., `owner/skill-name`)
+- Each skill requires `SKILL.md` with YAML frontmatter
+- Variables use `{{.VARIABLE_NAME}}` syntax
 
 ## Quality Assurance
-
-Before committing changes:
-1. Run `make test` to ensure tests pass
-2. Run `make lint` to check code style
-3. Run `make build` to ensure compilation succeeds
-4. For significant changes, run `make test-e2e-simple`
-5. Update documentation if needed
+Before committing:
+1. Run `make test` - ensure tests pass
+2. Run `make lint` - check code style
+3. Run `make build` - ensure compilation succeeds
 
 ## Project Structure
-
-### Key Directories
 - `cmd/`: Command-line interfaces
-- `internal/`: Internal packages
+- `internal/`: Internal packages (not for external use)
 - `pkg/`: Public packages
 - `examples/`: Example skills
-- `tests/`: Test files and data
+- `tests/`: Test files
 - `.agents/`: Skill definitions
 
-### Important Files
+## Key Files
 - `Makefile`: Build and test commands
 - `go.mod`: Go module dependencies
 - `DEVELOPMENT.md`: Developer documentation
