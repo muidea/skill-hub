@@ -106,11 +106,25 @@ def run_tests(scenarios=None, verbose=False, debug=False):
         else:
             print(f"⚠️  Test file not found: {test_file}")
     
+    # Add additional test files
+    additional_tests = [
+        "test_feedback_apply_multifile.py",
+        "test_feedback_version_upgrade.py",
+    ]
+    for test_name in additional_tests:
+        test_file = Path(__file__).parent / test_name
+        if test_file.exists():
+            test_files.append(test_file)
+        else:
+            print(f"⚠️  Test file not found: {test_file}")
+    
     if not test_files:
         print("❌ No test files found to run!")
         return False
     
-    print(f"📋 Running {len(test_files)} test scenario(s): {scenarios}")
+    print(f"📋 Running {len(test_files)} test file(s)")
+    print(f"   Scenarios: {scenarios}")
+    print(f"   Additional: {additional_tests}")
     
     # Build pytest command
     pytest_cmd = [

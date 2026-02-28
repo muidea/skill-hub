@@ -6,35 +6,32 @@ This document provides guidelines for AI agents working on the skill-hub project
 
 ### Basic Build & Test
 ```bash
-make build        # Build binary
+make build        # Build binary to bin/skill-hub
 make test         # Run all Go tests
 make test-verbose # Tests with verbose output
-make test-coverage # Tests with coverage report
-make lint         # Run linting checks (gofmt, go vet, staticcheck)
+make lint         # Run linting (gofmt, go vet, staticcheck)
 make deps         # Update dependencies (go mod tidy)
-make clean        # Clean build artifacts
 ```
 
 ### Running Single Tests
 ```bash
 go test ./internal/cli -v                   # Test specific package
 go test ./internal/cli -v -run TestLoadSkill # Test single function
-go test ./pkg/errors -bench=.              # Run benchmarks
-go clean -testcache                         # Clear test cache
+go test ./... -v -run "TestFeedback"        # Test with pattern matching
+go test ./pkg/errors -bench=.               # Run benchmarks
+go clean -testcache                          # Clear test cache
 ```
 
-### End-to-End Testing
+### End-to-End Testing (Python)
 ```bash
-make test-e2e           # Python e2e tests (requires deps)
-make test-e2e-simple    # Simple e2e tests (no deps)
-make test-e2e-scenario SCENARIO=1  # Specific test scenario
-make test-e2e-deps      # Install Python test dependencies
-```
+make test-e2e           # Run all e2e tests
+make test-e2e-scenario SCENARIO=1  # Specific scenario (1-5)
 
-### Release & Installation
-```bash
-make release-all  # Build release packages for all platforms
-make install      # Install to ~/.local/bin
+# Run specific test file directly
+cd tests/e2e && python3 -m pytest test_feedback_version_upgrade.py -v
+
+# Run specific test method
+cd tests/e2e && python3 -m pytest test_feedback_version_upgrade.py::TestFeedbackVersionAutoUpgrade::test_01_auto_upgrade_patch_version -v
 ```
 
 ## Code Style Guidelines
@@ -43,7 +40,7 @@ make install      # Install to ~/.local/bin
 - Go 1.24.0 with toolchain go1.24.11
 - Use Go modules, always run `go mod tidy` before committing
 
-### Import Organization (3 groups)
+### Import Organization (3 groups, separated by blank lines)
 ```go
 import (
     // Standard library
@@ -54,28 +51,30 @@ import (
     "gopkg.in/yaml.v3"
     "github.com/spf13/cobra"
 
-    // Internal packages
+    // Internal packages (skill-hub prefix)
     "skill-hub/internal/config"
     "skill-hub/pkg/errors"
 )
 ```
 
 ### Naming Conventions
-- **Packages**: lowercase, single-word (e.g., `engine`, `cli`)
-- **Interfaces**: `-er` suffix (e.g., `FileSystem`, `Manager`)
-- **Methods/Variables**: camelCase
-- **Constants**: PascalCase for exported, camelCase for internal
-- **Error variables**: Prefix with `Err` (e.g., `ErrSkillNotFound`)
-- **Type parameters**: Single uppercase letters (e.g., `T`, `K`, `V`)
+| Type | Convention | Example |
+|------|-----------|---------|
+| Packages | lowercase, single-word | `engine`, `cli`, `state` |
+| Interfaces | `-er` suffix | `FileSystem`, `Manager`, `StateLoader` |
+| Methods/Variables | camelCase | `loadSkill`, `projectPath` |
+| Constants | PascalCase (exported), camelCase (internal) | `SkillStatusSynced`, `defaultTimeout` |
+| Error variables | Prefix `Err` | `ErrSkillNotFound`, `ErrConfigInvalid` |
+| Type parameters | Single uppercase | `T`, `K`, `V` |
 
 ### Error Handling
-- Use custom error package `pkg/errors`
-- Define error codes as constants in `pkg/errors/errors.go`
-- Wrap errors with context using `errors.Wrap()`
-- Always check errors, return early on errors
 
-Example:
+Use custom error package `pkg/errors`:
 ```go
+// Define error codes in pkg/errors/errors.go
+const ErrSkillNotFound ErrorCode = "SKILL_NOT_FOUND"
+
+// Wrap errors with context
 func LoadSkill(id string) (*Skill, error) {
     skill, err := findSkill(id)
     if err != nil {
@@ -83,62 +82,108 @@ func LoadSkill(id string) (*Skill, error) {
     }
     return skill, nil
 }
+
+// Check errors early, return early
+func Process(path string) error {
+    if path == "" {
+        return errors.NewValidationError("path cannot be empty")
+    }
+    // ... continue processing
+}
 ```
 
 ### Logging
 - Use `log/slog` for structured logging (Go 1.21+)
-- Avoid using the older `log` package
-- Use contextual logging with `With()` and `WithGroup()`
+- Avoid the older `log` package
+- Use contextual logging: `logger.With("key", value)`
 
 ### Testing Patterns
-- Use table-driven tests with `t.Run()` for subtests
-- Use `t.TempDir()` for temporary directories
-- Mock dependencies using interfaces
-- Test both success and error cases
+```go
+// Table-driven tests with t.Run()
+func TestLoadSkill(t *testing.T) {
+    tests := []struct {
+        name    string
+        id      string
+        wantErr bool
+    }{
+        {"valid", "test-skill", false},
+        {"invalid", "", true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            dir := t.TempDir()  // Use t.TempDir() for temp directories
+            // Test implementation
+        })
+    }
+}
+```
 
 ### Formatting & Documentation
-- Use `gofmt` for consistent formatting
+- Use `gofmt` for formatting (run `make lint`)
 - Line length: 80-100 characters
+- **NO COMMENTS** unless explicitly requested
 - Document exported functions with GoDoc comments
-- Use Chinese comments for business logic, English for technical details
+
+### Comments Policy
+- **Do NOT add comments** unless explicitly asked by user
+- Chinese comments acceptable for business logic
+- English for technical details
+
+## Multi-Repository Architecture
+```
+~/.skill-hub/
+├── config.yaml          # Configuration
+├── state.json           # Project states
+└── repositories/main/skills/  # Archived skills
+```
+
+## Skill Structure
+```
+.agents/skills/{skill-id}/
+├── SKILL.md              # Required: skill definition with YAML frontmatter
+├── references/           # Optional: reference documents
+└── scripts/              # Optional: helper scripts
+```
+
+### SKILL.md Format
+```yaml
+---
+name: skill-name
+description: Brief description
+metadata:
+  version: "1.0.0"
+  author: "author-name"
+---
+# Skill content in Markdown
+```
+
+## Quality Assurance Checklist
+Before committing:
+1. `make test` - ensure tests pass
+2. `make lint` - check code style
+3. `make build` - ensure compilation succeeds
+
+## Project Structure
+```
+skill-hub/
+├── cmd/skill-hub/        # CLI entry point
+├── internal/             # Internal packages (cli, config, engine, state, multirepo)
+├── pkg/                  # Public packages (errors, spec, utils)
+├── tests/e2e/            # End-to-end tests (Python)
+└── .agents/              # Skill definitions
+```
 
 ## Available Skills
 
 ### go-refactor-pro
-A specialized skill for advanced Go refactoring. Use when:
+Advanced Go refactoring skill. Use when:
 - Code has significant duplication (DRY violations)
 - Need to migrate to modern Go features (slog, generics, errors.Join)
-- Performance optimization is needed
-- Code needs decoupling for testability
+- Performance optimization needed
 
-Located at: `.agents/skills/go-refactor-pro/SKILL.md`
+Location: `.agents/skills/go-refactor-pro/SKILL.md`
 
-## Multi-Repository Architecture
-- **Storage**: `~/.skill-hub/repositories/{repo-name}/`
-- **Default repository**: "main" as the archive repository
-- **Config**: `~/.skill-hub/config.yaml`
-- **State file**: `~/.skill-hub/state.json`
-
-## Skill Structure
-- Skills use path format IDs (e.g., `owner/skill-name`)
-- Each skill requires `SKILL.md` with YAML frontmatter
-- Variables use `{{.VARIABLE_NAME}}` syntax
-
-## Quality Assurance
-Before committing:
-1. Run `make test` - ensure tests pass
-2. Run `make lint` - check code style
-3. Run `make build` - ensure compilation succeeds
-
-## Project Structure
-- `cmd/`: Command-line interfaces
-- `internal/`: Internal packages (not for external use)
-- `pkg/`: Public packages
-- `examples/`: Example skills
-- `tests/`: Test files
-- `.agents/`: Skill definitions
-
-## Key Files
-- `Makefile`: Build and test commands
-- `go.mod`: Go module dependencies
-- `DEVELOPMENT.md`: Developer documentation
+## Key Dependencies
+- `github.com/spf13/cobra` - CLI framework
+- `gopkg.in/yaml.v3` - YAML parsing
+- `github.com/go-git/go-git/v5` - Git operations
