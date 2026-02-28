@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"gopkg.in/yaml.v3"
 	"skill-hub/internal/config"
 	"skill-hub/pkg/errors"
 	"skill-hub/pkg/fs"
+	"skill-hub/pkg/skill"
 	"skill-hub/pkg/spec"
 )
 
@@ -66,101 +65,13 @@ func (m *SkillManager) loadSkillFromDirectory(skillDir, skillID string) (*spec.S
 	return nil, errors.NewSkillError("not_found", "未找到SKILL.md文件")
 }
 
-// loadSkillFromMarkdown 从SKILL.md文件加载技能
 func (m *SkillManager) loadSkillFromMarkdown(mdPath, skillID string) (*spec.Skill, error) {
 	content, err := m.fs.ReadFile(mdPath)
 	if err != nil {
 		return nil, errors.WrapSkillError("io", "读取SKILL.md失败", err)
 	}
 
-	// 解析frontmatter
-	lines := strings.Split(string(content), "\n")
-	if len(lines) < 2 || lines[0] != "---" {
-		return nil, errors.NewSkillError("invalid", "无效的SKILL.md格式: 缺少frontmatter")
-	}
-
-	var frontmatterLines []string
-	for i := 1; i < len(lines); i++ {
-		if lines[i] == "---" {
-			break
-		}
-		frontmatterLines = append(frontmatterLines, lines[i])
-	}
-
-	frontmatter := strings.Join(frontmatterLines, "\n")
-
-	// 解析YAML frontmatter
-	var skillData map[string]interface{}
-	if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err != nil {
-		return nil, errors.WrapSkillError("invalid", "解析frontmatter失败", err)
-	}
-
-	// 转换为Skill对象
-	skill := &spec.Skill{
-		ID: skillID,
-	}
-
-	// 设置名称
-	if name, ok := skillData["name"].(string); ok {
-		skill.Name = name
-	} else {
-		skill.Name = skillID
-	}
-
-	// 设置描述
-	if desc, ok := skillData["description"].(string); ok {
-		skill.Description = desc
-	}
-
-	// 设置版本
-	skill.Version = "1.0.0"
-	if version, ok := skillData["version"].(string); ok {
-		skill.Version = version
-	}
-
-	// 设置作者
-	if source, ok := skillData["source"].(string); ok {
-		skill.Author = source
-	} else {
-		skill.Author = "unknown"
-	}
-
-	// 设置标签
-	if tagsStr, ok := skillData["tags"].(string); ok {
-		skill.Tags = strings.Split(tagsStr, ",")
-		for i, tag := range skill.Tags {
-			skill.Tags[i] = strings.TrimSpace(tag)
-		}
-	}
-
-	// 设置兼容性
-	// 从YAML读取兼容性设置（字符串格式）
-	if compatData, ok := skillData["compatibility"]; ok {
-		switch v := compatData.(type) {
-		case string:
-			skill.Compatibility = v
-		case map[string]interface{}:
-			// 向后兼容：将对象格式转换为字符串
-			var compatList []string
-			if cursorVal, ok := v["cursor"].(bool); ok && cursorVal {
-				compatList = append(compatList, "Cursor")
-			}
-			if claudeVal, ok := v["claude_code"].(bool); ok && claudeVal {
-				compatList = append(compatList, "Claude Code")
-			}
-			if openCodeVal, ok := v["open_code"].(bool); ok && openCodeVal {
-				compatList = append(compatList, "OpenCode")
-			}
-			if shellVal, ok := v["shell"].(bool); ok && shellVal {
-				compatList = append(compatList, "Shell")
-			}
-			if len(compatList) > 0 {
-				skill.Compatibility = "Designed for " + strings.Join(compatList, ", ") + " (or similar AI coding assistants)"
-			}
-		}
-	}
-
-	return skill, nil
+	return skill.ParseSkill(content, skillID)
 }
 
 // LoadAllSkills 加载所有技能

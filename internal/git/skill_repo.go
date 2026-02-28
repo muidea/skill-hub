@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"skill-hub/internal/adapter"
 	"skill-hub/internal/config"
+	"skill-hub/pkg/skill"
 	"skill-hub/pkg/spec"
 )
 
@@ -251,77 +252,13 @@ func (sr *SkillRepository) loadSkill(skillDir, skillID string) (*spec.Skill, err
 	return nil, fmt.Errorf("未找到SKILL.md文件")
 }
 
-// loadSkillFromMarkdown 从SKILL.md文件加载技能
 func (sr *SkillRepository) loadSkillFromMarkdown(mdPath, skillID string) (*spec.Skill, error) {
 	content, err := os.ReadFile(mdPath)
 	if err != nil {
 		return nil, fmt.Errorf("读取SKILL.md失败: %w", err)
 	}
 
-	// 解析frontmatter
-	lines := strings.Split(string(content), "\n")
-	if len(lines) < 2 || lines[0] != "---" {
-		return nil, fmt.Errorf("无效的SKILL.md格式: 缺少frontmatter")
-	}
-
-	var frontmatterLines []string
-	for i := 1; i < len(lines); i++ {
-		if lines[i] == "---" {
-			break
-		}
-		frontmatterLines = append(frontmatterLines, lines[i])
-	}
-
-	frontmatter := strings.Join(frontmatterLines, "\n")
-
-	// 解析YAML frontmatter
-	var skillData map[string]interface{}
-	if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err != nil {
-		return nil, fmt.Errorf("解析frontmatter失败: %w", err)
-	}
-
-	// 转换为Skill对象
-	skill := &spec.Skill{
-		ID: skillID,
-	}
-
-	// 设置名称
-	if name, ok := skillData["name"].(string); ok {
-		skill.Name = name
-	} else {
-		skill.Name = skillID
-	}
-
-	// 设置描述
-	if desc, ok := skillData["description"].(string); ok {
-		skill.Description = desc
-	}
-
-	// 设置版本
-	skill.Version = "1.0.0"
-	if version, ok := skillData["version"].(string); ok {
-		skill.Version = version
-	}
-
-	// 设置作者
-	if source, ok := skillData["source"].(string); ok {
-		skill.Author = source
-	} else {
-		skill.Author = "unknown"
-	}
-
-	// 设置标签
-	if tagsStr, ok := skillData["tags"].(string); ok {
-		skill.Tags = strings.Split(tagsStr, ",")
-		for i, tag := range skill.Tags {
-			skill.Tags[i] = strings.TrimSpace(tag)
-		}
-	}
-
-	// 设置兼容性（默认为所有工具）
-	skill.Compatibility = "Designed for Cursor and Claude Code (or similar AI coding assistants)"
-
-	return skill, nil
+	return skill.ParseSkill(content, skillID)
 }
 
 // ImportSkill 从远程仓库导入单个技能

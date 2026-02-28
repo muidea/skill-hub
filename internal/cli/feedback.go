@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"skill-hub/internal/config"
 	"skill-hub/internal/multirepo"
 	"skill-hub/internal/state"
-
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
+	"skill-hub/pkg/skill"
 	"skill-hub/pkg/utils"
 )
 
@@ -261,29 +261,7 @@ func runFeedback(skillID string) error {
 }
 
 func getSkillVersionFromContent(content []byte) string {
-	version := "1.0.0"
-	lines := strings.Split(string(content), "\n")
-	if len(lines) > 2 && lines[0] == "---" {
-		var frontmatterLines []string
-		for i := 1; i < len(lines); i++ {
-			if lines[i] == "---" {
-				break
-			}
-			frontmatterLines = append(frontmatterLines, lines[i])
-		}
-		frontmatter := strings.Join(frontmatterLines, "\n")
-		var skillData map[string]interface{}
-		if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err == nil {
-			if metadata, ok := skillData["metadata"].(map[string]interface{}); ok {
-				if v, ok := metadata["version"].(string); ok {
-					version = v
-				}
-			} else if v, ok := skillData["version"].(string); ok {
-				version = v
-			}
-		}
-	}
-	return version
+	return skill.ExtractVersion(content)
 }
 
 func bumpPatchVersion(version string) string {

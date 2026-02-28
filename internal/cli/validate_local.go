@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	"skill-hub/internal/state"
+	"skill-hub/pkg/skill"
 	"skill-hub/pkg/utils"
 )
 
@@ -84,29 +84,8 @@ func runValidate(skillID string) error {
 		return fmt.Errorf("读取SKILL.md失败: %w", err)
 	}
 
-	// 解析frontmatter
-	lines := strings.Split(string(content), "\n")
-	if len(lines) < 2 || lines[0] != "---" {
-		return fmt.Errorf("无效的SKILL.md格式: 缺少frontmatter分隔符")
-	}
-
-	var frontmatterLines []string
-	for i := 1; i < len(lines); i++ {
-		if lines[i] == "---" {
-			break
-		}
-		frontmatterLines = append(frontmatterLines, lines[i])
-	}
-
-	if len(frontmatterLines) == 0 {
-		return fmt.Errorf("无效的SKILL.md格式: frontmatter为空")
-	}
-
-	frontmatter := strings.Join(frontmatterLines, "\n")
-
-	// 解析YAML frontmatter
-	var skillData map[string]interface{}
-	if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err != nil {
+	skillData, err := skill.ParseFrontmatter(content)
+	if err != nil {
 		return fmt.Errorf("解析YAML frontmatter失败: %w", err)
 	}
 	fmt.Println("✓ YAML语法正确")

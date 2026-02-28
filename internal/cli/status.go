@@ -1,16 +1,16 @@
 package cli
 
 import (
-	"crypto/md5"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
+
 	"skill-hub/internal/config"
 	"skill-hub/internal/state"
+	"skill-hub/pkg/skill"
 	"skill-hub/pkg/spec"
 	"skill-hub/pkg/utils"
 )
@@ -327,32 +327,8 @@ func getLocalSkillInfo(skillMdPath string) (string, string, error) {
 		return "", "", utils.ReadFileErr(err, skillMdPath)
 	}
 
-	hash := md5.Sum(content)
-	hashStr := fmt.Sprintf("%x", hash)
-
-	version := "1.0.0"
-	lines := strings.Split(string(content), "\n")
-	if len(lines) > 2 && lines[0] == "---" {
-		var frontmatterLines []string
-		for i := 1; i < len(lines); i++ {
-			if lines[i] == "---" {
-				break
-			}
-			frontmatterLines = append(frontmatterLines, lines[i])
-		}
-
-		frontmatter := strings.Join(frontmatterLines, "\n")
-		var skillData map[string]interface{}
-		if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err == nil {
-			if metadata, ok := skillData["metadata"].(map[string]interface{}); ok {
-				if v, ok := metadata["version"].(string); ok {
-					version = v
-				}
-			} else if v, ok := skillData["version"].(string); ok {
-				version = v
-			}
-		}
-	}
+	version := skill.ExtractVersion(content)
+	hashStr := skill.ContentHash(content)
 
 	return version, hashStr, nil
 }

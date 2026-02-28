@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"skill-hub/internal/adapter"
 	"skill-hub/internal/git"
 	"skill-hub/internal/state"
 	"skill-hub/pkg/errors"
 	"skill-hub/pkg/logging"
+	"skill-hub/pkg/skill"
 	"skill-hub/pkg/spec"
 	"skill-hub/pkg/utils"
-
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var initCmd = &cobra.Command{
@@ -395,102 +395,13 @@ func createInitialRegistry(registryPath string) error {
 	return os.WriteFile(registryPath, []byte(registryContent), 0644)
 }
 
-// parseSkillMetadata 从SKILL.md文件解析技能元数据
 func parseSkillMetadata(mdPath, skillID string) (*spec.SkillMetadata, error) {
 	content, err := os.ReadFile(mdPath)
 	if err != nil {
 		return nil, errors.WrapWithCode(err, "parseSkillMetadata", errors.ErrFileOperation, "读取SKILL.md失败")
 	}
 
-	// 解析frontmatter
-	lines := strings.Split(string(content), "\n")
-	if len(lines) < 2 || lines[0] != "---" {
-		return nil, errors.NewWithCode("parseSkillMetadata", errors.ErrSkillInvalid, "无效的SKILL.md格式: 缺少frontmatter")
-	}
-
-	var frontmatterLines []string
-	for i := 1; i < len(lines); i++ {
-		if lines[i] == "---" {
-			break
-		}
-		frontmatterLines = append(frontmatterLines, lines[i])
-	}
-
-	frontmatter := strings.Join(frontmatterLines, "\n")
-
-	// 解析YAML frontmatter
-	var skillData map[string]interface{}
-	if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err != nil {
-		return nil, errors.WrapWithCode(err, "parseSkillMetadata", errors.ErrSkillInvalid, "解析frontmatter失败")
-	}
-
-	// 创建技能元数据对象
-	skillMeta := &spec.SkillMetadata{
-		ID: skillID,
-	}
-
-	// 设置名称
-	if name, ok := skillData["name"].(string); ok {
-		skillMeta.Name = name
-	} else {
-		skillMeta.Name = skillID
-	}
-
-	// 设置描述
-	if desc, ok := skillData["description"].(string); ok {
-		skillMeta.Description = desc
-	}
-
-	// 设置版本
-	skillMeta.Version = "1.0.0"
-	if version, ok := skillData["version"].(string); ok {
-		skillMeta.Version = version
-	}
-
-	// 设置作者
-	if author, ok := skillData["author"].(string); ok {
-		skillMeta.Author = author
-	} else if source, ok := skillData["source"].(string); ok {
-		skillMeta.Author = source
-	} else {
-		skillMeta.Author = "unknown"
-	}
-
-	// 设置标签
-	if tagsStr, ok := skillData["tags"].(string); ok {
-		skillMeta.Tags = strings.Split(tagsStr, ",")
-		for i, tag := range skillMeta.Tags {
-			skillMeta.Tags[i] = strings.TrimSpace(tag)
-		}
-	}
-
-	// 设置兼容性
-	if compatData, ok := skillData["compatibility"]; ok {
-		switch v := compatData.(type) {
-		case string:
-			skillMeta.Compatibility = v
-		case map[string]interface{}:
-			// 向后兼容：将对象格式转换为字符串
-			var compatList []string
-			if cursorVal, ok := v["cursor"].(bool); ok && cursorVal {
-				compatList = append(compatList, "Cursor")
-			}
-			if claudeVal, ok := v["claude_code"].(bool); ok && claudeVal {
-				compatList = append(compatList, "Claude Code")
-			}
-			if openCodeVal, ok := v["open_code"].(bool); ok && openCodeVal {
-				compatList = append(compatList, "OpenCode")
-			}
-			if shellVal, ok := v["shell"].(bool); ok && shellVal {
-				compatList = append(compatList, "Shell")
-			}
-			if len(compatList) > 0 {
-				skillMeta.Compatibility = "Designed for " + strings.Join(compatList, ", ") + " (or similar AI coding assistants)"
-			}
-		}
-	}
-
-	return skillMeta, nil
+	return skill.ParseSkillMetadata(content, skillID)
 }
 
 // isSameGitRepo 检查repo目录是否已经是相同的git仓库

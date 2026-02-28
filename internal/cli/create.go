@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	"skill-hub/internal/state"
+	"skill-hub/pkg/skill"
 	"skill-hub/pkg/spec"
 	"skill-hub/pkg/utils"
 )
@@ -328,56 +328,13 @@ func isValidTarget(target string) bool {
 	return validOptions[target]
 }
 
-// validateSkillFile 验证技能文件的基本合规性
 func validateSkillFile(filePath string) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("读取技能文件失败: %w", err)
 	}
 
-	// 检查文件是否包含YAML frontmatter
-	lines := strings.Split(string(content), "\n")
-	if len(lines) < 2 || lines[0] != "---" {
-		return fmt.Errorf("无效的SKILL.md格式: 缺少frontmatter")
-	}
-
-	// 查找frontmatter结束标记
-	foundEnd := false
-	for i := 1; i < len(lines); i++ {
-		if lines[i] == "---" {
-			foundEnd = true
-			break
-		}
-	}
-
-	if !foundEnd {
-		return fmt.Errorf("无效的SKILL.md格式: frontmatter未正确结束")
-	}
-
-	// 尝试解析YAML frontmatter
-	var frontmatterLines []string
-	for i := 1; i < len(lines); i++ {
-		if lines[i] == "---" {
-			break
-		}
-		frontmatterLines = append(frontmatterLines, lines[i])
-	}
-
-	frontmatter := strings.Join(frontmatterLines, "\n")
-	var skillData map[string]interface{}
-	if err := yaml.Unmarshal([]byte(frontmatter), &skillData); err != nil {
-		return fmt.Errorf("解析frontmatter失败: %w", err)
-	}
-
-	// 检查必需字段
-	if _, ok := skillData["name"].(string); !ok {
-		return fmt.Errorf("缺少必需字段: name")
-	}
-	if _, ok := skillData["description"].(string); !ok {
-		return fmt.Errorf("缺少必需字段: description")
-	}
-
-	return nil
+	return skill.ValidateSkillFile(content)
 }
 
 // refreshProjectState 刷新项目状态，将技能登记到state.json
