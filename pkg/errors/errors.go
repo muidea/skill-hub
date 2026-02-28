@@ -295,33 +295,21 @@ func NewMultiError() *MultiError {
 }
 
 // Combine 合并多个错误（兼容Go 1.20+的errors.Join）
+// 推荐使用 Join 函数替代以获得更好的标准库兼容性
 func Combine(errs ...error) error {
-	// 使用标准库的errors.Join如果可用
-	// 否则使用自定义实现
-	var nonNilErrs []error
-	for _, err := range errs {
-		if err != nil {
-			nonNilErrs = append(nonNilErrs, err)
-		}
-	}
-
-	if len(nonNilErrs) == 0 {
-		return nil
-	}
-	if len(nonNilErrs) == 1 {
-		return nonNilErrs[0]
-	}
-
-	// 如果Go版本>=1.20，使用errors.Join
-	// 这里使用自定义实现保持兼容性
-	return &MultiError{Errors: nonNilErrs}
+	return Join(errs...)
 }
 
-// JoinErrors 使用errors.Join合并错误（Go 1.20+）
+// Join 使用标准库 errors.Join 合并多个错误（Go 1.20+）
+// 返回的错误支持 errors.Is 和 errors.As 检查
+func Join(errs ...error) error {
+	return errors.Join(errs...)
+}
+
+// JoinErrors 已废弃，请使用 Join 函数
+// 保留此函数是为了向后兼容
 func JoinErrors(errs ...error) error {
-	// 在实际使用中，可以替换为标准的errors.Join
-	// 这里提供兼容性包装
-	return Combine(errs...)
+	return Join(errs...)
 }
 
 // New 创建新错误（兼容标准库）

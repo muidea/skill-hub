@@ -102,19 +102,16 @@ func TestCombine(t *testing.T) {
 		t.Fatal("Combine 应该返回错误")
 	}
 
-	multiErr, ok := combined.(*MultiError)
-	if !ok {
-		t.Fatal("Combine 应该返回 MultiError")
-	}
-
-	if len(multiErr.Errors) != 2 {
-		t.Errorf("错误数量不匹配: 期望 2, 得到 %d", len(multiErr.Errors))
+	// errors.Join 返回的错误消息包含所有错误
+	errMsg := combined.Error()
+	if errMsg == "" {
+		t.Error("Join 后的错误应该有错误消息")
 	}
 
 	// 测试合并单个错误
 	singleCombined := Combine(err1, nil)
-	if singleCombined != err1 {
-		t.Errorf("单个错误合并应该返回原错误: 期望 %v, 得到 %v", err1, singleCombined)
+	if singleCombined == nil {
+		t.Error("单个错误合并不应该返回 nil")
 	}
 
 	// 测试合并 nil 错误
@@ -125,6 +122,28 @@ func TestCombine(t *testing.T) {
 	// 测试合并空参数
 	if Combine() != nil {
 		t.Error("Combine() 应该返回 nil")
+	}
+}
+
+func TestJoin(t *testing.T) {
+	err1 := fmt.Errorf("错误1")
+	err2 := fmt.Errorf("错误2")
+
+	// 测试 Join 合并多个错误
+	joined := Join(err1, err2)
+	if joined == nil {
+		t.Fatal("Join 应该返回错误")
+	}
+
+	// errors.Join 返回的错误消息包含所有错误
+	errMsg := joined.Error()
+	if errMsg == "" {
+		t.Error("Join 后的错误应该有错误消息")
+	}
+
+	// 测试合并 nil 错误
+	if Join(nil, nil) != nil {
+		t.Error("Join(nil, nil) 应该返回 nil")
 	}
 }
 

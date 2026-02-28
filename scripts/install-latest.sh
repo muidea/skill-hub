@@ -478,7 +478,8 @@ main() {
         echo "  1. 查看帮助: $ACTUAL_BINARY --help"
         echo "  2. 初始化项目: $ACTUAL_BINARY init"
         echo "  3. 列出可用技能: $ACTUAL_BINARY list"
-        echo "  4. 启用技能: $ACTUAL_BINARY use <skill-name>"
+        echo "  4. 使用技能: $ACTUAL_BINARY use <skill-name>"
+        echo "  5. 技能应用: $ACTUAL_BINARY apply"
     else
         echo "⚠️  安装验证: 命令未在PATH中找到"
         echo ""
