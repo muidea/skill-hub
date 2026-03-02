@@ -102,6 +102,17 @@ func runStatus(skillID string, verbose bool) error {
 			continue
 		}
 
+		repoSkillDir, repoDirErr := getRepoSkillDirPath(currentSkillID)
+		if repoDirErr == nil {
+			equal, eqErr := skillDirsEqual(agentsSkillDir, repoSkillDir)
+			if eqErr == nil && !equal {
+				results[currentSkillID] = spec.SkillStatusModified
+				localVersion, _, _ := getLocalSkillInfo(skillMdPath)
+				updateSkillStatus(cwd, currentSkillID, spec.SkillStatusModified, localVersion)
+				continue
+			}
+		}
+
 		localVersion, localHash, err := getLocalSkillInfo(skillMdPath)
 		if err != nil {
 			fmt.Printf("⚠️  获取技能 %s 信息失败，标记为Modified: %v\n", currentSkillID, err)
@@ -333,28 +344,78 @@ func getLocalSkillInfo(skillMdPath string) (string, string, error) {
 	return version, hashStr, nil
 }
 
-func getRepoSkillInfo(skillID string) (string, string, error) {
+func getRepoSkillDirPath(skillID string) (string, error) {
 	cfg, err := config.GetConfig()
 	if err != nil {
-		return "", "", fmt.Errorf("获取配置失败: %w", err)
+		return "", fmt.Errorf("获取配置失败: %w", err)
 	}
+	if cfg.MultiRepo == nil {
+		return "", fmt.Errorf("多仓库配置未初始化")
+	}
+	rootDir, err := config.GetRootDir()
+	if err != nil {
+		return "", fmt.Errorf("获取根目录失败: %w", err)
+	}
+	repoPath := filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo)
+	repoSkillDir := filepath.Join(repoPath, "skills", skillID)
+	if _, err := os.Stat(repoSkillDir); os.IsNotExist(err) {
+		return "", fmt.Errorf("技能在仓库中不存在")
+	}
+	return repoSkillDir, nil
+}
 
-	var repoPath string
-	if cfg.MultiRepo != nil {
-		rootDir, err := config.GetRootDir()
-		if err != nil {
-			return "", "", fmt.Errorf("获取根目录失败: %w", err)
+func skillDirsEqual(dirA, dirB string) (bool, error) {
+	manifestA, err := buildSkillDirManifest(dirA)
+	if err != nil {
+		return false, err
+	}
+	manifestB, err := buildSkillDirManifest(dirB)
+	if err != nil {
+		return false, err
+	}
+	if len(manifestA) != len(manifestB) {
+		return false, nil
+	}
+	for relPath, hashA := range manifestA {
+		if hashB, ok := manifestB[relPath]; !ok || hashA != hashB {
+			return false, nil
 		}
-		repoPath = filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo)
-	} else {
-		return "", "", fmt.Errorf("多仓库配置未初始化")
 	}
+	return true, nil
+}
 
-	repoSkillPath := filepath.Join(repoPath, "skills", skillID, "SKILL.md")
+func buildSkillDirManifest(dir string) (map[string]string, error) {
+	out := make(map[string]string)
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		relPath, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		out[relPath] = skill.ContentHash(content)
+		return nil
+	})
+	return out, err
+}
+
+func getRepoSkillInfo(skillID string) (string, string, error) {
+	repoSkillDir, err := getRepoSkillDirPath(skillID)
+	if err != nil {
+		return "", "", err
+	}
+	repoSkillPath := filepath.Join(repoSkillDir, "SKILL.md")
 	if _, err := os.Stat(repoSkillPath); os.IsNotExist(err) {
 		return "", "", fmt.Errorf("技能在仓库中不存在")
 	}
-
 	return getLocalSkillInfo(repoSkillPath)
 }
 

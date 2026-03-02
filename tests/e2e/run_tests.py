@@ -110,6 +110,7 @@ def run_tests(scenarios=None, verbose=False, debug=False):
     additional_tests = [
         "test_feedback_apply_multifile.py",
         "test_feedback_version_upgrade.py",
+        "test_skill_content_commands.py",
     ]
     for test_name in additional_tests:
         test_file = Path(__file__).parent / test_name

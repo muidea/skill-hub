@@ -73,51 +73,47 @@ func runCreate(skillID string, target string) error {
 		}
 	}
 
-	// 检查技能是否已经在项目本地工作区存在
 	skillDir := filepath.Join(agentsDir, "skills", skillID)
 	skillFilePath := filepath.Join(skillDir, "SKILL.md")
 
-	// 检查技能文件是否存在
 	if _, err := os.Stat(skillFilePath); err == nil {
-		// 技能文件已存在，检查是否经过验证
 		fmt.Printf("ℹ️  技能文件已存在: %s\n", skillFilePath)
-
-		// 尝试验证技能文件
 		if err := validateSkillFile(skillFilePath); err != nil {
 			fmt.Printf("⚠️  技能文件验证失败: %v\n", err)
 			fmt.Print("是否重新创建？ [y/N]: ")
-
 			reader := bufio.NewReader(os.Stdin)
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(response)
-
 			if response != "y" && response != "Y" {
 				fmt.Println("❌ 取消操作")
 				return nil
 			}
-
-			// 用户选择重新创建，继续执行创建逻辑
 			fmt.Println("✅ 将重新创建技能文件")
 		} else {
-			// 技能文件验证通过，只需要刷新state.json
 			fmt.Println("✅ 技能文件验证通过")
+			if alreadyRegisteredAndSynced(cwd, skillID, skillDir) {
+				fmt.Printf("✅ 技能 '%s' 已在本地仓库登记且与仓库一致，无需操作\n", skillID)
+				return nil
+			}
 			fmt.Println("正在刷新项目状态...")
-
-			// 刷新state.json，标记当前项目工作区在使用该技能
 			if err := refreshProjectState(cwd, skillID, target); err != nil {
 				return fmt.Errorf("刷新项目状态失败: %w", err)
 			}
-
 			fmt.Printf("✅ 技能 '%s' 已成功登记到项目状态\n", skillID)
 			fmt.Println("\n下一步:")
 			fmt.Printf("1. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", skillID)
-
 			return nil
 		}
-	} else {
-		// 技能文件不存在，创建目录结构
-		if err := os.MkdirAll(skillDir, 0755); err != nil {
-			return fmt.Errorf("创建技能目录失败: %w", err)
+	}
+
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		return fmt.Errorf("创建技能目录失败: %w", err)
+	}
+
+	for _, sub := range []string{"scripts", "references", "assets"} {
+		subDir := filepath.Join(skillDir, sub)
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			return fmt.Errorf("创建子目录 %s 失败: %w", sub, err)
 		}
 	}
 
@@ -333,8 +329,27 @@ func validateSkillFile(filePath string) error {
 	if err != nil {
 		return fmt.Errorf("读取技能文件失败: %w", err)
 	}
-
 	return skill.ValidateSkillFile(content)
+}
+
+func alreadyRegisteredAndSynced(projectPath, skillID, skillDir string) bool {
+	stateManager, err := state.NewStateManager()
+	if err != nil {
+		return false
+	}
+	projectState, err := stateManager.LoadProjectState(projectPath)
+	if err != nil || projectState.Skills == nil {
+		return false
+	}
+	if _, inState := projectState.Skills[skillID]; !inState {
+		return false
+	}
+	repoSkillDir, err := getRepoSkillDirPath(skillID)
+	if err != nil {
+		return false
+	}
+	equal, err := skillDirsEqual(skillDir, repoSkillDir)
+	return err == nil && equal
 }
 
 // refreshProjectState 刷新项目状态，将技能登记到state.json

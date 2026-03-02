@@ -36,12 +36,15 @@ class CommandRunner:
             if not os.path.exists(self.skill_hub_bin):
                 raise RuntimeError(f"SKILL_HUB_BIN环境变量指定的二进制不存在: {self.skill_hub_bin}")
         else:
-            # 检查项目目录中的二进制
-            project_bin = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "skill-hub")
-            if os.path.exists(project_bin):
-                self.skill_hub_bin = project_bin
+            # 检查项目目录中的二进制（优先 bin/skill-hub，其次项目根目录 skill-hub）
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            bin_bin = os.path.join(project_root, "bin", "skill-hub")
+            root_bin = os.path.join(project_root, "skill-hub")
+            if os.path.exists(bin_bin):
+                self.skill_hub_bin = bin_bin
+            elif os.path.exists(root_bin):
+                self.skill_hub_bin = root_bin
             else:
-                # 回退到PATH中的二进制
                 self.skill_hub_bin = shutil.which("skill-hub")
                 if not self.skill_hub_bin:
                     raise RuntimeError("skill-hub未安装或不在PATH中")

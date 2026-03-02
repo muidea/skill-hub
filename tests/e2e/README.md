@@ -40,6 +40,13 @@ Based on the business scenarios defined in `docs/testCase.md`:
    - Invalid YAML detection
    - Outdated skill detection
 
+6. **Skill Content Commands** (`test_skill_content_commands.py`)
+   - **create**: New skill has standard structure (SKILL.md + scripts/, references/, assets/); when skill already exists, create validates and refreshes state for registration/archiving.
+   - **status**: Changes under scripts/references/assets are reflected as Modified.
+   - **feedback**: Full skill directory (including subdirs) is synced to repository.
+   - **apply** (open_code): Full skill directory is copied from repo to project (see also `test_feedback_apply_multifile.py`).
+   - **use**: Only updates state.json; skill files are not copied until `apply` is run.
+
 ## Architecture
 
 ### Directory Structure
@@ -72,7 +79,10 @@ tests/e2e/
 │               ├── README.md
 │               ├── skill_info.json
 │               └── skill_validate.json
-└── test_scenario[1-5].py       # Test scenario implementations
+├── test_scenario[1-5].py       # Test scenario implementations
+├── test_skill_content_commands.py  # create/status/feedback/apply/use skill content
+├── test_feedback_apply_multifile.py # Multi-file skill feedback & apply
+└── test_feedback_version_upgrade.py # Version upgrade on feedback
 ```
 
 ### Core Components
@@ -88,7 +98,7 @@ tests/e2e/
 
 ### System Requirements
 - Python 3.8 or higher
-- `skill-hub` command available in PATH
+- `skill-hub` binary: when running from the repo, `bin/skill-hub` is used if present (run `make build` first); otherwise PATH or `SKILL_HUB_BIN` is used
 - Network connectivity (for update tests)
 
 ### Python Dependencies
@@ -270,8 +280,8 @@ test-e2e:
 ## Contributing
 
 ### Adding New Test Scenarios
-1. Create `test_scenarioX.py` following existing patterns
-2. Add to `run_tests.py` scenario detection
+1. Create `test_scenarioX.py` or a dedicated test file (e.g. `test_skill_content_commands.py`) following existing patterns
+2. Add to `run_tests.py` in the `additional_tests` list if not a numbered scenario
 3. Update `README.md` documentation
 4. Add to Makefile if needed
 
