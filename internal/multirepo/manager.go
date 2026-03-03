@@ -30,7 +30,7 @@ func NewManager() (*Manager, error) {
 	}, nil
 }
 
-// ListRepositories 列出所有仓库
+// ListRepositories 列出所有启用的仓库
 func (m *Manager) ListRepositories() ([]config.RepositoryConfig, error) {
 	// 只支持多仓库模式
 	if m.config.MultiRepo == nil {
@@ -43,6 +43,26 @@ func (m *Manager) ListRepositories() ([]config.RepositoryConfig, error) {
 		if repo.Enabled {
 			repos = append(repos, repo)
 		}
+	}
+
+	// 按名称排序
+	sort.Slice(repos, func(i, j int) bool {
+		return repos[i].Name < repos[j].Name
+	})
+
+	return repos, nil
+}
+
+// ListAllRepositories 列出所有仓库（包括已禁用的）
+func (m *Manager) ListAllRepositories() ([]config.RepositoryConfig, error) {
+	// 只支持多仓库模式
+	if m.config.MultiRepo == nil {
+		return nil, errors.NewWithCode("ListAllRepositories", errors.ErrConfigInvalid, "多仓库配置未初始化")
+	}
+
+	var repos []config.RepositoryConfig
+	for _, repo := range m.config.MultiRepo.Repositories {
+		repos = append(repos, repo)
 	}
 
 	// 按名称排序

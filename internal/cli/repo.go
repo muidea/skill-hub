@@ -186,7 +186,7 @@ func runRepoList() error {
 		return errors.Wrap(err, "初始化多仓库管理器失败")
 	}
 
-	repos, err := manager.ListRepositories()
+	repos, err := manager.ListAllRepositories()
 	if err != nil {
 		return errors.Wrap(err, "获取仓库列表失败")
 	}
