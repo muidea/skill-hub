@@ -60,6 +60,18 @@ func NewRepository(repoPath string) (*Repository, error) {
 	return r, nil
 }
 
+func (r *Repository) GetRemote() ([]string, error) {
+	remote, err := r.repo.Remote(r.remoteName)
+	if err != nil {
+		return nil, err
+	}
+	cfg := remote.Config()
+	if cfg == nil || len(cfg.URLs) == 0 {
+		return nil, fmt.Errorf("未配置远程仓库 %s", r.remoteName)
+	}
+	return cfg.URLs, nil
+}
+
 // NewSkillsRepository 创建技能仓库实例
 func NewSkillsRepository() (*Repository, error) {
 	cfg, err := config.GetConfig()

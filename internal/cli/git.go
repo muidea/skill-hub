@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"skill-hub/internal/config"
 	"skill-hub/internal/git"
 )
 
@@ -14,16 +15,6 @@ var gitCmd = &cobra.Command{
 	Use:   "git",
 	Short: "Git仓库操作",
 	Long:  "管理技能Git仓库的克隆、同步、提交等操作。",
-}
-
-var gitCloneCmd = &cobra.Command{
-	Use:   "clone [url]",
-	Short: "克隆远程技能仓库",
-	Long:  "克隆指定的远程Git仓库到本地技能目录。",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runGitClone(args[0])
-	},
 }
 
 var gitSyncCmd = &cobra.Command{
@@ -73,36 +64,27 @@ var gitPullCmd = &cobra.Command{
 
 var gitRemoteCmd = &cobra.Command{
 	Use:   "remote [url]",
-	Short: "设置远程仓库",
-	Long:  "设置或更新技能仓库的远程URL。",
-	Args:  cobra.ExactArgs(1),
+	Short: "查看或设置远程仓库",
+	Long:  "查看当前默认技能仓库的远程配置，或设置/更新远程URL。",
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runGitRemote(args[0])
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		if len(args) == 0 {
+			return runGitRemoteView(verbose)
+		}
+		return runGitRemoteSet(args[0])
 	},
 }
 
 func init() {
-	gitCmd.AddCommand(gitCloneCmd)
 	gitCmd.AddCommand(gitSyncCmd)
 	gitCmd.AddCommand(gitStatusCmd)
 	gitCmd.AddCommand(gitCommitCmd)
 	gitCmd.AddCommand(gitPushCmd)
 	gitCmd.AddCommand(gitPullCmd)
 	gitCmd.AddCommand(gitRemoteCmd)
-}
 
-func runGitClone(url string) error {
-	// 检查init依赖（规范4.14：该命令依赖init命令）
-	if err := CheckInitDependency(); err != nil {
-		return err
-	}
-
-	repo, err := git.NewSkillRepository()
-	if err != nil {
-		return err
-	}
-
-	return repo.CloneRemote(url)
+	gitRemoteCmd.Flags().BoolP("verbose", "v", false, "显示详细远程仓库信息")
 }
 
 func runGitSync() error {
@@ -217,7 +199,7 @@ func runGitPull() error {
 	return repo.Sync()
 }
 
-func runGitRemote(url string) error {
+func runGitRemoteSet(url string) error {
 	// 检查init依赖（规范4.14：该命令依赖init命令）
 	if err := CheckInitDependency(); err != nil {
 		return err
@@ -232,7 +214,106 @@ func runGitRemote(url string) error {
 		return fmt.Errorf("设置远程仓库失败: %w", err)
 	}
 
+	cfg, err := config.GetConfig()
+	if err == nil && cfg.MultiRepo != nil {
+		if repoCfg, ok := cfg.MultiRepo.Repositories[cfg.MultiRepo.DefaultRepo]; ok {
+			repoCfg.URL = url
+			cfg.MultiRepo.Repositories[cfg.MultiRepo.DefaultRepo] = repoCfg
+			_ = config.SaveConfig(cfg)
+		}
+	}
+
 	fmt.Printf("✅ 远程仓库已设置为: %s\n", url)
 	fmt.Println("使用 'skill-hub git sync' 同步技能")
+	return nil
+}
+
+func runGitRemoteView(verbose bool) error {
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return fmt.Errorf("获取配置失败: %w", err)
+	}
+
+	if cfg.MultiRepo == nil || !cfg.MultiRepo.Enabled {
+		return fmt.Errorf("多仓库功能未启用，请先运行 'skill-hub init' 或使用 'skill-hub repo' 配置仓库")
+	}
+
+	defaultRepoName := cfg.MultiRepo.DefaultRepo
+	if defaultRepoName == "" {
+		defaultRepoName = "main"
+	}
+
+	repoCfg, ok := cfg.MultiRepo.Repositories[defaultRepoName]
+	if !ok {
+		return fmt.Errorf("默认仓库 '%s' 未在配置中找到，请检查 config.yaml", defaultRepoName)
+	}
+
+	repoPath, err := config.GetRepositoryPath(defaultRepoName)
+	if err != nil {
+		return fmt.Errorf("获取仓库路径失败: %w", err)
+	}
+
+	repo, err := git.NewRepository(repoPath)
+	if err != nil {
+		return fmt.Errorf("打开Git仓库失败: %w", err)
+	}
+
+	var remoteURLs []string
+	if urls, err := repo.GetRemote(); err == nil {
+		remoteURLs = urls
+	}
+
+	fmt.Printf("默认仓库: %s\n", defaultRepoName)
+	fmt.Printf("状态: %s\n", func() string {
+		if repoCfg.Enabled {
+			return "已启用"
+		}
+		return "已禁用"
+	}())
+
+	fmt.Printf("类型: %s\n", repoCfg.Type)
+	if repoCfg.IsArchive {
+		fmt.Println("角色: 归档仓库")
+	}
+
+	fmt.Println()
+	fmt.Println("远程配置:")
+	if len(remoteURLs) == 0 {
+		fmt.Println("  未检测到远程仓库(origin)，可以使用 'skill-hub git remote <url>' 进行设置")
+	} else {
+		for _, u := range remoteURLs {
+			fmt.Printf("  origin  %s (fetch)\n", u)
+			fmt.Printf("  origin  %s (push)\n", u)
+			if !verbose {
+				break
+			}
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("配置文件中的远程:")
+	if repoCfg.URL == "" {
+		fmt.Println("  URL:    未配置")
+	} else {
+		fmt.Printf("  URL:    %s\n", repoCfg.URL)
+	}
+	if repoCfg.Branch == "" {
+		fmt.Println("  分支:   main")
+	} else {
+		fmt.Printf("  分支:   %s\n", repoCfg.Branch)
+	}
+
+	fmt.Println("仓库路径:")
+	fmt.Printf("  %s\n", repoPath)
+
+	if len(remoteURLs) > 0 && repoCfg.URL != "" && remoteURLs[0] != repoCfg.URL {
+		fmt.Println()
+		fmt.Println("提示: 实际Git远程URL与配置文件不同，如有需要请更新 config.yaml 或重新运行 'skill-hub git remote <url>'")
+	}
+
 	return nil
 }
