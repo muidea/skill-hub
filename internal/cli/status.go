@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -231,6 +232,32 @@ func showSkillDetails(cwd, skillID, status string) {
 	}
 	repoSkillPath := filepath.Join(rootDir, "repositories", repoName, "skills", skillID, "SKILL.md")
 	fmt.Printf("仓库路径:   %s\n", repoSkillPath)
+
+	localInfo, localErr := os.Stat(localSkillMdPath)
+	repoInfo, repoErr := os.Stat(repoSkillPath)
+
+	if localErr == nil || repoErr == nil {
+		fmt.Println("更新时间对比:")
+		if localErr == nil {
+			fmt.Printf("  本地文件: %s\n", localInfo.ModTime().Format(time.RFC3339))
+		} else {
+			fmt.Println("  本地文件: 无法获取")
+		}
+		if repoErr == nil {
+			fmt.Printf("  仓库文件: %s\n", repoInfo.ModTime().Format(time.RFC3339))
+		} else {
+			fmt.Println("  仓库文件: 无法获取")
+		}
+		if localErr == nil && repoErr == nil {
+			fmt.Println("  注: 上述时间仅反映文件系统修改时间，可能与语义版本不完全一致，不代表版本新旧。")
+		}
+	}
+
+	if status != spec.SkillStatusMissing && localVersion != "N/A" && repoVersion != "N/A" {
+		if desc := describeChangeDirection(status, localVersion, repoVersion); desc != "" {
+			fmt.Println(desc)
+		}
+	}
 }
 
 func showSkillDiff(cwd, skillID string) {
@@ -280,8 +307,19 @@ func showSkillDiff(cwd, skillID string) {
 		return
 	}
 
+	localVersion, localHash, lvErr := getLocalSkillInfo(localSkillMdPath)
+	repoVersion, repoHash, rvErr := getLocalSkillInfo(repoSkillMdPath)
+	if lvErr == nil && rvErr == nil {
+		status := determineSkillStatus(localVersion, localHash, repoVersion, repoHash)
+		fmt.Printf("状态判定: %s\n", status)
+		if desc := describeChangeDirection(status, localVersion, repoVersion); desc != "" {
+			fmt.Println("变更方向:", desc)
+		}
+	}
+
 	fmt.Printf("差异统计: 本地 %d 行, 仓库 %d 行\n", len(localLines), len(repoLines))
 	fmt.Println("\n差异预览 (最多显示20行):")
+	fmt.Println("符号说明: '-' 表示仓库侧内容，'+' 表示项目本地工作区内容。")
 
 	diffLines := computeSimpleDiff(localLines, repoLines)
 	displayCount := 0
@@ -342,6 +380,19 @@ func getLocalSkillInfo(skillMdPath string) (string, string, error) {
 	hashStr := skill.ContentHash(content)
 
 	return version, hashStr, nil
+}
+
+func describeChangeDirection(status, localVersion, repoVersion string) string {
+	switch status {
+	case spec.SkillStatusModified:
+		return "当前以仓库为基线，本地在其基础上发生了修改（本地内容偏离仓库，需评估是否反馈）。"
+	case spec.SkillStatusOutdated:
+		return "当前以本地为基线，仓库中的技能内容比本地版本更新（仓库较新，建议同步更新）。"
+	case spec.SkillStatusSynced:
+		return "本地与仓库版本一致，若有差异仅为格式或元数据层面的轻微变动。"
+	default:
+		return ""
+	}
 }
 
 func getRepoSkillDirPath(skillID string) (string, error) {
