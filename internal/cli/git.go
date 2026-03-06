@@ -163,8 +163,11 @@ func runGitPush() error {
 	}
 
 	if strings.Contains(status, " M ") || strings.Contains(status, "?? ") {
-		fmt.Println("⚠️  检测到未提交的更改")
-		fmt.Print("是否先提交更改？ [y/N]: ")
+		fmt.Println("⚠️  检测到工作区存在未提交的更改（包含已跟踪文件修改或未跟踪文件）。")
+		fmt.Println("    - 选 Y: 先把当前更改一起提交并推送")
+		fmt.Println("    - 选 N: 仅推送已经存在的提交，保留本地未提交更改")
+		fmt.Println("    - 建议: 如需查看详细变更，请先运行 'skill-hub git status'")
+		fmt.Print("是否在推送前先提交所有本地更改？ [y/N]: ")
 
 		reader := bufio.NewReader(os.Stdin)
 		response, _ := reader.ReadString('\n')
@@ -175,8 +178,8 @@ func runGitPush() error {
 		}
 	}
 
-	// 直接推送
-	fmt.Println("正在推送到远程仓库...")
+	// 直接推送已存在的提交（工作区可能仍有未提交更改）
+	fmt.Println("推送到远程仓库...")
 	repoImpl, err := git.NewSkillsRepository()
 	if err != nil {
 		return err
