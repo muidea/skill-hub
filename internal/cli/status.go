@@ -97,9 +97,15 @@ func runStatus(skillID string, verbose bool) error {
 			equal, eqErr := skillDirsEqual(agentsSkillDir, repoSkillDir)
 			if eqErr == nil && !equal {
 				localVersion, _, _ := getLocalSkillInfo(skillMdPath)
-				results[currentSkillID] = spec.SkillStatusModified
+				status := spec.SkillStatusModified
+				if repoVersion, _, err := getRepoSkillInfo(currentSkillID); err == nil {
+					if compareVersions(repoVersion, localVersion) > 0 {
+						status = spec.SkillStatusOutdated
+					}
+				}
+				results[currentSkillID] = status
 				localVersions[currentSkillID] = localVersion
-				updateSkillStatus(ctx.Cwd, currentSkillID, spec.SkillStatusModified, localVersion)
+				updateSkillStatus(ctx.Cwd, currentSkillID, status, localVersion)
 				continue
 			}
 		}
