@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/errors"
 )
 
 // FileLockManager 文件锁管理器

@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 func ParseFrontmatter(content []byte) (map[string]interface{}, error) {

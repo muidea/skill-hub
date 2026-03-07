@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
-	"skill-hub/pkg/logging"
-	"skill-hub/pkg/utils"
+	"github.com/muidea/skill-hub/pkg/logging"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 // Clone 克隆远程仓库到本地目录

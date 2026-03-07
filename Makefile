@@ -8,9 +8,9 @@ COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Build flags
-LDFLAGS = -X 'skill-hub/internal/cli.version=$(VERSION)' \
-          -X 'skill-hub/internal/cli.commit=$(COMMIT)' \
-          -X 'skill-hub/internal/cli.date=$(DATE)'
+LDFLAGS = -X 'github.com/muidea/skill-hub/internal/cli.version=$(VERSION)' \
+          -X 'github.com/muidea/skill-hub/internal/cli.commit=$(COMMIT)' \
+          -X 'github.com/muidea/skill-hub/internal/cli.date=$(DATE)'
 
 # Build the binary
 build:

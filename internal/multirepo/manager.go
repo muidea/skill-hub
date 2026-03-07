@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"sort"
 
-	"skill-hub/internal/config"
-	"skill-hub/internal/git"
-	"skill-hub/pkg/errors"
-	"skill-hub/pkg/skill"
-	"skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/internal/git"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/skill"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 // Manager 多仓库管理器

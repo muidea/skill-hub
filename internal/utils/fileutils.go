@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"skill-hub/pkg/errors"
-	"skill-hub/pkg/utils"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 // FileExists 检查文件是否存在

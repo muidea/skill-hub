@@ -1,4 +1,4 @@
-module skill-hub
+module github.com/muidea/skill-hub
 
 go 1.24.0
 

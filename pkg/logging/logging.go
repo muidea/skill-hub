@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"time"
 
-	"skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/errors"
 )
 
 // LogLevel 日志级别

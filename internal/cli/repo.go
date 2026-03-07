@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"skill-hub/internal/config"
-	"skill-hub/internal/multirepo"
-	"skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/internal/multirepo"
+	"github.com/muidea/skill-hub/pkg/errors"
 
 	"github.com/spf13/cobra"
 )

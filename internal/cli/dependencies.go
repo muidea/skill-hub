@@ -7,12 +7,55 @@ import (
 	"path/filepath"
 	"strings"
 
-	"skill-hub/internal/config"
-	"skill-hub/internal/multirepo"
-	"skill-hub/internal/state"
-	"skill-hub/pkg/errors"
-	"skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/internal/multirepo"
+	"github.com/muidea/skill-hub/internal/state"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
+
+// RunContext 命令运行上下文，包含 init + 可选 workspace + StateManager 的公共结果
+type RunContext struct {
+	Cwd          string
+	ProjectState *spec.ProjectState
+	StateManager *state.StateManager
+}
+
+// RequireInitAndWorkspace 执行 CheckInitDependency、EnsureProjectWorkspace 并创建 StateManager，返回 RunContext
+func RequireInitAndWorkspace(cwd, target string) (*RunContext, error) {
+	if err := CheckInitDependency(); err != nil {
+		return nil, err
+	}
+	if cwd == "" {
+		var err error
+		cwd, err = os.Getwd()
+		if err != nil {
+			return nil, utils.GetCwdErr(err)
+		}
+	}
+	projectState, err := EnsureProjectWorkspace(cwd, target)
+	if err != nil {
+		return nil, err
+	}
+	stateManager, err := state.NewStateManager()
+	if err != nil {
+		return nil, errors.WrapWithCode(err, "RequireInitAndWorkspace", errors.ErrSystem, "创建状态管理器失败")
+	}
+	return &RunContext{Cwd: cwd, ProjectState: projectState, StateManager: stateManager}, nil
+}
+
+// RequireInitOnly 仅执行 CheckInitDependency 并获取当前目录，不要求 workspace
+func RequireInitOnly() (*RunContext, error) {
+	if err := CheckInitDependency(); err != nil {
+		return nil, err
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, utils.GetCwdErr(err)
+	}
+	return &RunContext{Cwd: cwd}, nil
+}
 
 // CheckInitDependency 检查init依赖，如果本地仓库不存在则返回错误
 // 符合规范要求：所有命令（除init外）都需要检查本地仓库是否存在

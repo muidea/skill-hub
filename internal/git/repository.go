@@ -12,8 +12,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
-	"skill-hub/internal/config"
-	"skill-hub/pkg/utils"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 // Repository 表示一个Git仓库

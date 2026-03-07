@@ -3,10 +3,10 @@ package adapter
 import (
 	"testing"
 
-	"skill-hub/internal/adapter/claude"
-	"skill-hub/internal/adapter/common"
-	"skill-hub/internal/adapter/cursor"
-	"skill-hub/internal/adapter/opencode"
+	"github.com/muidea/skill-hub/internal/adapter/claude"
+	"github.com/muidea/skill-hub/internal/adapter/common"
+	"github.com/muidea/skill-hub/internal/adapter/cursor"
+	"github.com/muidea/skill-hub/internal/adapter/opencode"
 )
 
 func TestAdapterIntegration(t *testing.T) {

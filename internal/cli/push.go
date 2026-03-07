@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"skill-hub/internal/git"
+
+	"github.com/muidea/skill-hub/internal/git"
+	"github.com/muidea/skill-hub/pkg/errors"
 )
 
 var (
@@ -49,7 +51,7 @@ func runPush() error {
 	// 获取仓库状态
 	status, err := repo.GetStatus()
 	if err != nil {
-		return fmt.Errorf("获取仓库状态失败: %w", err)
+		return errors.Wrap(err, "获取仓库状态失败")
 	}
 
 	// 检查是否有未提交的更改
@@ -110,7 +112,7 @@ func runPush() error {
 
 	// 使用技能仓库的PushChanges方法
 	if err := repo.PushChanges(message); err != nil {
-		return fmt.Errorf("推送失败: %w", err)
+		return errors.Wrap(err, "推送失败")
 	}
 
 	fmt.Println("✅ 更改已成功推送到远程仓库")

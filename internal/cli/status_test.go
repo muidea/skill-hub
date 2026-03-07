@@ -4,17 +4,17 @@ import (
 	"strings"
 	"testing"
 
-	"skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 func TestDetermineSkillStatus(t *testing.T) {
 	tests := []struct {
-		name        string
-		localVer    string
-		localHash   string
-		repoVer     string
-		repoHash    string
-		wantStatus  string
+		name       string
+		localVer   string
+		localHash  string
+		repoVer    string
+		repoHash   string
+		wantStatus string
 	}{
 		{
 			name:       "outdated_when_repo_version_higher_and_content_differs",
@@ -103,4 +103,3 @@ func TestDescribeChangeDirection(t *testing.T) {
 		})
 	}
 }
-

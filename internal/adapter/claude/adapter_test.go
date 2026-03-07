@@ -3,7 +3,7 @@ package claude
 import (
 	"testing"
 
-	"skill-hub/internal/adapter/common"
+	"github.com/muidea/skill-hub/internal/adapter/common"
 )
 
 func TestClaudeAdapterBasic(t *testing.T) {

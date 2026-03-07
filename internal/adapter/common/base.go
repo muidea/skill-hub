@@ -1,7 +1,7 @@
 package common
 
 import (
-	"skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/errors"
 )
 
 // BaseAdapter 提供适配器的公共基础功能

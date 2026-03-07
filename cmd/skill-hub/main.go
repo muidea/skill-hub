@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"skill-hub/internal/cli"
+	"github.com/muidea/skill-hub/internal/cli"
 )
 
 func main() {

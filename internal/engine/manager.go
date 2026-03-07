@@ -5,11 +5,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"skill-hub/internal/config"
-	"skill-hub/pkg/errors"
-	"skill-hub/pkg/fs"
-	"skill-hub/pkg/skill"
-	"skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/fs"
+	"github.com/muidea/skill-hub/pkg/skill"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 // SkillManager 管理技能加载和操作

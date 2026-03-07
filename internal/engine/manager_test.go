@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"skill-hub/pkg/fs"
+	"github.com/muidea/skill-hub/pkg/fs"
 )
 
 func TestSkillManager(t *testing.T) {

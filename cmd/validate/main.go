@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"skill-hub/pkg/validator"
+	"github.com/muidea/skill-hub/pkg/validator"
 )
 
 var (

@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"skill-hub/internal/adapter/common"
-	"skill-hub/internal/config"
-	"skill-hub/pkg/utils"
+	"github.com/muidea/skill-hub/internal/adapter/common"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 // Adapter 本地接口定义（避免循环导入）

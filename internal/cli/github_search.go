@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/muidea/skill-hub/pkg/errors"
 )
 
 // GitHubSearchResult 表示GitHub搜索结果的单个项目
@@ -40,7 +42,7 @@ func searchGitHubRepositories(keyword string, limit int) ([]GitHubSearchResult, 
 	// 创建HTTP请求
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("创建请求失败: %w", err)
+		return nil, errors.Wrap(err, "创建请求失败")
 	}
 
 	// 设置User-Agent（GitHub API要求）
@@ -50,20 +52,20 @@ func searchGitHubRepositories(keyword string, limit int) ([]GitHubSearchResult, 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("发送请求失败: %w", err)
+		return nil, errors.Wrap(err, "发送请求失败")
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API返回错误: %s - %s", resp.Status, string(body))
+		return nil, errors.NewWithCodef("searchGitHubRepositories", errors.ErrAPIRequest, "GitHub API返回错误: %s - %s", resp.Status, string(body))
 	}
 
 	// 解析响应
 	var searchResp GitHubSearchResponse
 	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
-		return nil, fmt.Errorf("解析响应失败: %w", err)
+		return nil, errors.Wrap(err, "解析响应失败")
 	}
 
 	return searchResp.Items, nil

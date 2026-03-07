@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"skill-hub/internal/adapter/common"
-	"skill-hub/internal/config"
-	"skill-hub/pkg/utils"
+	"github.com/muidea/skill-hub/internal/adapter/common"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 // OpenCodeAdapter 实现OpenCode适配器

@@ -3,7 +3,7 @@ package opencode
 import (
 	"testing"
 
-	"skill-hub/internal/adapter/common"
+	"github.com/muidea/skill-hub/internal/adapter/common"
 )
 
 func TestOpenCodeAdapterBasic(t *testing.T) {

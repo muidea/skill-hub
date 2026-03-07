@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"skill-hub/internal/testutils"
-	"skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/internal/testutils"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 func TestCheckInitDependency(t *testing.T) {
@@ -508,4 +508,54 @@ func TestInitializeTargetFiles(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRequireInitOnly(t *testing.T) {
+	t.Run("已初始化时返回带Cwd的上下文", func(t *testing.T) {
+		skillHubHome, _, _ := testutils.SetupTestSkillHub(t)
+		originalHome := os.Getenv("SKILL_HUB_HOME")
+		os.Setenv("SKILL_HUB_HOME", skillHubHome)
+		defer os.Setenv("SKILL_HUB_HOME", originalHome)
+
+		ctx, err := RequireInitOnly()
+		if err != nil {
+			t.Fatalf("RequireInitOnly() error = %v", err)
+		}
+		if ctx == nil || ctx.Cwd == "" {
+			t.Error("RequireInitOnly() expected non-empty Cwd")
+		}
+		if ctx.StateManager != nil || ctx.ProjectState != nil {
+			t.Error("RequireInitOnly() expected nil StateManager and ProjectState")
+		}
+	})
+}
+
+func TestRequireInitAndWorkspace(t *testing.T) {
+	t.Run("已初始化且项目在状态中时返回完整上下文", func(t *testing.T) {
+		skillHubHome, _, projectDir := testutils.SetupTestSkillHub(t)
+		originalHome := os.Getenv("SKILL_HUB_HOME")
+		os.Setenv("SKILL_HUB_HOME", skillHubHome)
+		defer os.Setenv("SKILL_HUB_HOME", originalHome)
+
+		statePath := filepath.Join(skillHubHome, "state.json")
+		stateContent := `{
+  "` + projectDir + `": {
+    "project_path": "` + projectDir + `",
+    "preferred_target": "open_code",
+    "skills": {}
+  }
+}`
+		if err := os.WriteFile(statePath, []byte(stateContent), 0644); err != nil {
+			t.Fatalf("写入状态文件失败: %v", err)
+		}
+
+		ctx, err := RequireInitAndWorkspace(projectDir, "")
+		if err != nil {
+			t.Fatalf("RequireInitAndWorkspace() error = %v", err)
+		}
+		if ctx == nil || ctx.Cwd == "" || ctx.StateManager == nil || ctx.ProjectState == nil {
+			t.Errorf("RequireInitAndWorkspace() expected full context, got Cwd=%q StateManager=%v ProjectState=%v",
+				ctx.Cwd, ctx.StateManager != nil, ctx.ProjectState != nil)
+		}
+	})
 }

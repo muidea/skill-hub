@@ -3,7 +3,7 @@ package cursor
 import (
 	"testing"
 
-	"skill-hub/internal/adapter/common"
+	"github.com/muidea/skill-hub/internal/adapter/common"
 )
 
 func TestCursorAdapterBasic(t *testing.T) {

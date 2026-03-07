@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/errors"
 )
 
 func TestErrorHandling(t *testing.T) {

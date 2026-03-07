@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"skill-hub/internal/config"
-	"skill-hub/internal/multirepo"
-	"skill-hub/internal/state"
-	"skill-hub/pkg/skill"
-	"skill-hub/pkg/utils"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/internal/multirepo"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/skill"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 var (
@@ -46,70 +46,56 @@ func init() {
 }
 
 func runFeedback(skillID string) error {
-	if err := CheckInitDependency(); err != nil {
+	ctx, err := RequireInitAndWorkspace("", "")
+	if err != nil {
 		return err
 	}
 
 	fmt.Printf("收集技能 '%s' 的反馈...\n", skillID)
 
-	cwd, err := os.Getwd()
+	hasSkill, err := ctx.StateManager.ProjectHasSkill(ctx.Cwd, skillID)
 	if err != nil {
-		return utils.GetCwdErr(err)
-	}
-
-	_, err = EnsureProjectWorkspace(cwd, "")
-	if err != nil {
-		return fmt.Errorf("检查项目工作区失败: %w", err)
-	}
-
-	stateManager, err := state.NewStateManager()
-	if err != nil {
-		return fmt.Errorf("初始化状态管理器失败: %w", err)
-	}
-
-	hasSkill, err := stateManager.ProjectHasSkill(cwd, skillID)
-	if err != nil {
-		return fmt.Errorf("检查项目技能状态失败: %w", err)
+		return errors.Wrap(err, "检查项目技能状态失败")
 	}
 
 	if !hasSkill {
-		return fmt.Errorf("技能 '%s' 未在项目工作区中启用", skillID)
+		return errors.NewWithCodef("runFeedback", errors.ErrSkillNotFound, "技能 '%s' 未在项目工作区中启用", skillID)
 	}
 
-	projectSkillDir := filepath.Join(cwd, ".agents", "skills", skillID)
+	projectSkillDir := filepath.Join(ctx.Cwd, ".agents", "skills", skillID)
 	projectSkillPath := filepath.Join(projectSkillDir, "SKILL.md")
 	if _, err := os.Stat(projectSkillPath); os.IsNotExist(err) {
-		return fmt.Errorf("项目工作区中未找到技能文件: %s", projectSkillPath)
+		return errors.NewWithCodef("runFeedback", errors.ErrFileNotFound, "项目工作区中未找到技能文件: %s", projectSkillPath)
 	}
 
 	projectContent, err := os.ReadFile(projectSkillPath)
 	if err != nil {
-		return fmt.Errorf("读取项目工作区文件失败: %w", err)
+		return errors.WrapWithCode(err, "runFeedback", errors.ErrFileOperation, "读取项目工作区文件失败")
 	}
 
 	repoManager, err := multirepo.NewManager()
 	if err != nil {
-		return fmt.Errorf("初始化多仓库管理器失败: %w", err)
+		return errors.Wrap(err, "初始化多仓库管理器失败")
 	}
 
 	skillExists, err := repoManager.CheckSkillInDefaultRepository(skillID)
 	if err != nil {
-		return fmt.Errorf("检查技能存在状态失败: %w", err)
+		return errors.Wrap(err, "检查技能存在状态失败")
 	}
 
 	cfg, err := config.GetConfig()
 	if err != nil {
-		return fmt.Errorf("获取配置失败: %w", err)
+		return errors.Wrap(err, "获取配置失败")
 	}
 
 	defaultRepo, err := cfg.GetArchiveRepository()
 	if err != nil {
-		return fmt.Errorf("获取默认仓库失败: %w", err)
+		return errors.Wrap(err, "获取默认仓库失败")
 	}
 
 	repoDir, err := config.GetRepositoryPath(defaultRepo.Name)
 	if err != nil {
-		return fmt.Errorf("获取仓库路径失败: %w", err)
+		return errors.Wrap(err, "获取仓库路径失败")
 	}
 
 	repoSkillDir := filepath.Join(repoDir, "skills", skillID)
@@ -119,7 +105,7 @@ func runFeedback(skillID string) error {
 	if skillExists {
 		repoContent, err = os.ReadFile(repoSkillPath)
 		if err != nil {
-			return fmt.Errorf("读取本地仓库文件失败: %w", err)
+			return errors.WrapWithCode(err, "runFeedback", errors.ErrFileOperation, "读取本地仓库文件失败")
 		}
 	} else {
 		fmt.Printf("ℹ️  技能 '%s' 在本地仓库中不存在，将作为新技能创建\n", skillID)
@@ -131,7 +117,7 @@ func runFeedback(skillID string) error {
 
 	changes, err := compareSkillDirectories(projectSkillDir, repoSkillDir, skillExists)
 	if err != nil {
-		return fmt.Errorf("比较技能目录失败: %w", err)
+		return errors.Wrap(err, "比较技能目录失败")
 	}
 
 	hasContentChanges := projectStr != repoStr
@@ -192,10 +178,10 @@ func runFeedback(skillID string) error {
 
 	versionUpdated := false
 	if (hasContentChanges || len(changes) > 0) && !feedbackDryRun {
-		projectVersion := getSkillVersionFromContent(projectContent)
+		projectVersion := normalizeVersionToXYZ(getSkillVersionFromContent(projectContent))
 		repoVersion := "0.0.0"
 		if skillExists && len(repoContent) > 0 {
-			repoVersion = getSkillVersionFromContent(repoContent)
+			repoVersion = normalizeVersionToXYZ(getSkillVersionFromContent(repoContent))
 		}
 
 		if compareVersions(projectVersion, repoVersion) <= 0 {
@@ -203,13 +189,13 @@ func runFeedback(skillID string) error {
 			fmt.Printf("\n🔧 自动升级版本号: %s -> %s\n", projectVersion, newVersion)
 
 			if err := updateSkillMdVersion(projectSkillPath, newVersion); err != nil {
-				return fmt.Errorf("更新版本号失败: %w", err)
+				return errors.Wrap(err, "更新版本号失败")
 			}
 			fmt.Printf("✓ 已更新项目工作区 SKILL.md 版本号\n")
 
 			_, err = os.ReadFile(projectSkillPath)
 			if err != nil {
-				return fmt.Errorf("重新读取项目文件失败: %w", err)
+				return errors.Wrap(err, "重新读取项目文件失败")
 			}
 			versionUpdated = true
 		} else {
@@ -239,11 +225,11 @@ func runFeedback(skillID string) error {
 	}
 
 	if err := os.MkdirAll(repoSkillDir, 0755); err != nil {
-		return fmt.Errorf("创建技能目录失败: %w", err)
+		return errors.WrapWithCode(err, "runFeedback", errors.ErrFileOperation, "创建技能目录失败")
 	}
 
 	if err := copySkillDirectory(projectSkillDir, repoSkillDir); err != nil {
-		return fmt.Errorf("复制技能目录失败: %w", err)
+		return errors.Wrap(err, "复制技能目录失败")
 	}
 
 	fmt.Println("✓ 更新本地仓库文件")
@@ -264,12 +250,46 @@ func getSkillVersionFromContent(content []byte) string {
 	return skill.ExtractVersion(content)
 }
 
-func bumpPatchVersion(version string) string {
+func normalizeVersionToXYZ(version string) string {
 	version = strings.Trim(version, `" `)
-	parts := strings.Split(version, ".")
-	for len(parts) < 3 {
-		parts = append(parts, "0")
+	if version == "" {
+		return "0.0.0"
 	}
+	if strings.HasPrefix(version, "v") || strings.HasPrefix(version, "V") {
+		version = version[1:]
+	}
+	parts := strings.Split(version, ".")
+	var major, minor, patch int
+	for i := 0; i < 3; i++ {
+		var numStr string
+		if i < len(parts) {
+			for _, c := range parts[i] {
+				if c >= '0' && c <= '9' {
+					numStr += string(c)
+				} else {
+					break
+				}
+			}
+		}
+		if numStr == "" {
+			numStr = "0"
+		}
+		n, _ := strconv.Atoi(numStr)
+		switch i {
+		case 0:
+			major = n
+		case 1:
+			minor = n
+		case 2:
+			patch = n
+		}
+	}
+	return fmt.Sprintf("%d.%d.%d", major, minor, patch)
+}
+
+func bumpPatchVersion(version string) string {
+	version = normalizeVersionToXYZ(version)
+	parts := strings.Split(version, ".")
 	patch, _ := strconv.Atoi(parts[2])
 	parts[2] = strconv.Itoa(patch + 1)
 	return strings.Join(parts[:3], ".")
@@ -348,7 +368,22 @@ func updateSkillMdVersion(skillMdPath, newVersion string) error {
 	}
 
 	if !updated {
-		return fmt.Errorf("未找到版本号字段")
+		closingFence := -1
+		fenceCount := 0
+		for i, line := range lines {
+			if line == "---" {
+				fenceCount++
+				if fenceCount == 2 {
+					closingFence = i
+					break
+				}
+			}
+		}
+		if closingFence < 0 {
+			return errors.NewWithCode("updateSkillMdVersion", errors.ErrSkillInvalid, "未找到版本号字段")
+		}
+		insertLine := fmt.Sprintf("version: %s", newVersion)
+		lines = append(lines[:closingFence], append([]string{insertLine}, lines[closingFence:]...)...)
 	}
 
 	return os.WriteFile(skillMdPath, []byte(strings.Join(lines, "\n")), 0644)
@@ -438,7 +473,7 @@ func compareSkillDirectories(projectDir, repoDir string, repoExists bool) ([]str
 
 func copySkillDirectory(srcDir, dstDir string) error {
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
-		return fmt.Errorf("创建目标目录失败: %w", err)
+		return errors.WrapWithCode(err, "copySkillDirectory", errors.ErrFileOperation, "创建目标目录失败")
 	}
 
 	srcFiles := make(map[string]bool)
@@ -457,7 +492,7 @@ func copySkillDirectory(srcDir, dstDir string) error {
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("遍历源目录失败: %w", err)
+		return errors.Wrap(err, "遍历源目录失败")
 	}
 
 	dstFiles := make(map[string]bool)
@@ -476,7 +511,7 @@ func copySkillDirectory(srcDir, dstDir string) error {
 		return nil
 	})
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("遍历目标目录失败: %w", err)
+		return errors.Wrap(err, "遍历目标目录失败")
 	}
 
 	for relPath := range srcFiles {
@@ -484,7 +519,7 @@ func copySkillDirectory(srcDir, dstDir string) error {
 		dstPath := filepath.Join(dstDir, relPath)
 
 		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
-			return fmt.Errorf("创建目录失败 %s: %w", filepath.Dir(dstPath), err)
+			return errors.Wrapf(err, "创建目录失败 %s", filepath.Dir(dstPath))
 		}
 
 		content, err := os.ReadFile(srcPath)
@@ -494,7 +529,7 @@ func copySkillDirectory(srcDir, dstDir string) error {
 
 		info, err := os.Stat(srcPath)
 		if err != nil {
-			return fmt.Errorf("获取文件权限失败 %s: %w", srcPath, err)
+			return errors.Wrapf(err, "获取文件权限失败 %s", srcPath)
 		}
 
 		if err := os.WriteFile(dstPath, content, info.Mode()); err != nil {

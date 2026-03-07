@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"skill-hub/internal/adapter"
+	"github.com/muidea/skill-hub/internal/adapter"
 )
 
 func TestCleanupTimestampedBackupDirs(t *testing.T) {

@@ -7,11 +7,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"skill-hub/internal/multirepo"
-	"skill-hub/internal/state"
-	"skill-hub/pkg/errors"
-	"skill-hub/pkg/spec"
-	"skill-hub/pkg/utils"
+	"github.com/muidea/skill-hub/internal/multirepo"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 var useCmd = &cobra.Command{
@@ -33,21 +31,18 @@ func init() {
 }
 
 func runUse(skillID string, target string) error {
-	// 检查init依赖（规范4.8：该命令依赖init命令）
 	if err := CheckInitDependency(); err != nil {
 		return err
 	}
 
-	// 创建多仓库管理器
 	repoManager, err := multirepo.NewManager()
 	if err != nil {
-		return fmt.Errorf("创建多仓库管理器失败: %w", err)
+		return errors.Wrap(err, "创建多仓库管理器失败")
 	}
 
-	// 在所有仓库中查找技能
 	skills, err := repoManager.FindSkill(skillID)
 	if err != nil {
-		return fmt.Errorf("查找技能失败: %w", err)
+		return errors.Wrap(err, "查找技能失败")
 	}
 
 	// 如果没有找到任何技能
@@ -73,7 +68,7 @@ func runUse(skillID string, target string) error {
 
 		var choice int
 		if _, err := fmt.Sscanf(input, "%d", &choice); err != nil || choice < 1 || choice > len(skills) {
-			return fmt.Errorf("无效的选择")
+			return errors.NewWithCode("runUse", errors.ErrInvalidInput, "无效的选择")
 		}
 
 		selectedSkill = skills[choice-1]
@@ -82,7 +77,7 @@ func runUse(skillID string, target string) error {
 	// 加载完整技能信息
 	fullSkill, err := repoManager.LoadSkill(skillID, selectedSkill.Repository)
 	if err != nil {
-		return fmt.Errorf("加载技能详情失败: %w", err)
+		return errors.Wrap(err, "加载技能详情失败")
 	}
 
 	fmt.Printf("启用技能: %s (%s)\n", fullSkill.Name, skillID)
@@ -93,25 +88,12 @@ func runUse(skillID string, target string) error {
 		fmt.Printf("标签: %s\n", strings.Join(fullSkill.Tags, ", "))
 	}
 
-	// 获取当前目录
-	cwd, err := os.Getwd()
-	if err != nil {
-		return utils.GetCwdErr(err)
-	}
-
-	// 检查项目工作区状态（规范4.8：检查当前目录是否存在于state.json中）
-	_, err = EnsureProjectWorkspace(cwd, target)
-	if err != nil {
-		return fmt.Errorf("检查项目工作区失败: %w", err)
-	}
-
-	// 检查项目是否已启用该技能
-	stateManager, err := state.NewStateManager()
+	ctx, err := RequireInitAndWorkspace("", target)
 	if err != nil {
 		return err
 	}
 
-	hasSkill, err := stateManager.ProjectHasSkill(cwd, skillID)
+	hasSkill, err := ctx.StateManager.ProjectHasSkill(ctx.Cwd, skillID)
 	if err != nil {
 		return err
 	}
@@ -157,9 +139,8 @@ func runUse(skillID string, target string) error {
 		fmt.Println("\n该技能没有可配置的变量")
 	}
 
-	// 保存到项目状态
-	if err := stateManager.AddSkillToProjectWithTarget(cwd, skillID, fullSkill.Version, variables, target); err != nil {
-		return fmt.Errorf("保存项目状态失败: %w", err)
+	if err := ctx.StateManager.AddSkillToProjectWithTarget(ctx.Cwd, skillID, fullSkill.Version, variables, target); err != nil {
+		return errors.Wrap(err, "保存项目状态失败")
 	}
 
 	fmt.Printf("\n✅ 技能 '%s' 已成功标记为使用！\n", skillID)

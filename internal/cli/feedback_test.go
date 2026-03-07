@@ -3,9 +3,10 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"skill-hub/internal/testutils"
+	"github.com/muidea/skill-hub/internal/testutils"
 )
 
 func TestCompareSkillDirectories(t *testing.T) {
@@ -256,6 +257,86 @@ func TestCopySkillDirectory(t *testing.T) {
 				if !tt.verify(t, srcDir, dstDir) {
 					t.Errorf("copySkillDirectory() 验证失败")
 				}
+			}
+		})
+	}
+}
+
+func TestUpdateSkillMdVersion_InsertWhenMissing(t *testing.T) {
+	content := `---
+name: go-refactor-pro
+description: 资深 Go 语言架构重构专家。
+---
+
+# Content
+`
+	dir := testutils.TempDir(t, "update-version-")
+	skillMdPath := filepath.Join(dir, "SKILL.md")
+	if err := os.WriteFile(skillMdPath, []byte(content), 0644); err != nil {
+		t.Fatalf("写入测试文件失败: %v", err)
+	}
+
+	err := updateSkillMdVersion(skillMdPath, "1.0.1")
+	if err != nil {
+		t.Fatalf("updateSkillMdVersion() error = %v", err)
+	}
+
+	got, err := os.ReadFile(skillMdPath)
+	if err != nil {
+		t.Fatalf("读取文件失败: %v", err)
+	}
+	gotStr := string(got)
+	if !strings.Contains(gotStr, "version: 1.0.1") {
+		t.Errorf("frontmatter 中应包含 version: 1.0.1，实际内容:\n%s", gotStr)
+	}
+	beforeFence := strings.Split(gotStr, "---")[1]
+	if !strings.Contains(beforeFence, "version: 1.0.1") {
+		t.Errorf("version 应在 frontmatter 内，实际 frontmatter:\n%s", beforeFence)
+	}
+}
+
+func TestNormalizeVersionToXYZ(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"1.0.0", "1.0.0"},
+		{"1.2.3", "1.2.3"},
+		{"v1.0.0", "1.0.0"},
+		{"V2.3.4", "2.3.4"},
+		{"1", "1.0.0"},
+		{"1.2", "1.2.0"},
+		{"\"1.0.0\"", "1.0.0"},
+		{"  1.0.0  ", "1.0.0"},
+		{"1.0.0-beta", "1.0.0"},
+		{"2.3.4-SNAPSHOT", "2.3.4"},
+		{"", "0.0.0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			got := normalizeVersionToXYZ(tt.in)
+			if got != tt.want {
+				t.Errorf("normalizeVersionToXYZ(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBumpPatchVersion_NormalizesThenBumps(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"1.0.0", "1.0.1"},
+		{"v1.0.0", "1.0.1"},
+		{"1.2", "1.2.1"},
+		{"1", "1.0.1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			got := bumpPatchVersion(tt.in)
+			if got != tt.want {
+				t.Errorf("bumpPatchVersion(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}

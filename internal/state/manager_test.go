@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"skill-hub/pkg/fs"
-	"skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/pkg/fs"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 func TestStateManager(t *testing.T) {

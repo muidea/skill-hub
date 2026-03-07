@@ -4,7 +4,9 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"skill-hub/internal/git"
+
+	"github.com/muidea/skill-hub/internal/git"
+	"github.com/muidea/skill-hub/pkg/errors"
 )
 
 var (
@@ -53,7 +55,7 @@ func runPull() error {
 
 	// 同步仓库
 	if err := repo.Sync(); err != nil {
-		return fmt.Errorf("同步技能仓库失败: %w", err)
+		return errors.Wrap(err, "同步技能仓库失败")
 	}
 
 	// 更新技能注册表
@@ -66,7 +68,7 @@ func runPull() error {
 	// 获取更新后的技能列表
 	skills, err := repo.ListSkillsFromRemote()
 	if err != nil {
-		return fmt.Errorf("获取技能列表失败: %w", err)
+		return errors.Wrap(err, "获取技能列表失败")
 	}
 
 	fmt.Printf("\n✅ 技能仓库更新完成，共 %d 个技能\n", len(skills))

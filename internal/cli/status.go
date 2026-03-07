@@ -9,11 +9,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"skill-hub/internal/config"
-	"skill-hub/internal/state"
-	"skill-hub/pkg/skill"
-	"skill-hub/pkg/spec"
-	"skill-hub/pkg/utils"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/internal/state"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/skill"
+	"github.com/muidea/skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 var statusCmd = &cobra.Command{
@@ -39,28 +40,14 @@ func init() {
 }
 
 func runStatus(skillID string, verbose bool) error {
-	if err := CheckInitDependency(); err != nil {
+	ctx, err := RequireInitAndWorkspace("", "")
+	if err != nil {
 		return err
 	}
 
 	fmt.Println("检查技能状态...")
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return utils.GetCwdErr(err)
-	}
-
-	_, err = EnsureProjectWorkspace(cwd, "")
-	if err != nil {
-		return fmt.Errorf("检查项目工作区失败: %w", err)
-	}
-
-	stateManager, err := state.NewStateManager()
-	if err != nil {
-		return err
-	}
-
-	projectState, err := stateManager.LoadProjectState(cwd)
+	projectState, err := ctx.StateManager.LoadProjectState(ctx.Cwd)
 	if err != nil {
 		return err
 	}
@@ -74,7 +61,7 @@ func runStatus(skillID string, verbose bool) error {
 	targetSkillID := skillID
 	if skillID != "" {
 		if _, exists := skills[skillID]; !exists {
-			return fmt.Errorf("技能 %s 未在当前项目中启用", skillID)
+			return errors.NewWithCodef("runStatus", errors.ErrSkillNotFound, "技能 %s 未在当前项目中启用", skillID)
 		}
 		singleSkill := map[string]spec.SkillVars{
 			skillID: skills[skillID],
@@ -82,7 +69,7 @@ func runStatus(skillID string, verbose bool) error {
 		skills = singleSkill
 	}
 
-	fmt.Printf("项目路径: %s\n", cwd)
+	fmt.Printf("项目路径: %s\n", ctx.Cwd)
 	fmt.Printf("启用技能数: %d\n", len(skills))
 	if skillID != "" {
 		fmt.Printf("检查特定技能: %s\n", skillID)
@@ -92,14 +79,16 @@ func runStatus(skillID string, verbose bool) error {
 	fmt.Println("检查项目本地工作区文件...")
 
 	results := make(map[string]string)
+	localVersions := make(map[string]string)
 
 	for currentSkillID, skillVars := range skills {
-		agentsSkillDir := filepath.Join(cwd, ".agents", "skills", currentSkillID)
+		agentsSkillDir := filepath.Join(ctx.Cwd, ".agents", "skills", currentSkillID)
 		skillMdPath := filepath.Join(agentsSkillDir, "SKILL.md")
 
 		if _, err := os.Stat(skillMdPath); os.IsNotExist(err) {
 			results[currentSkillID] = spec.SkillStatusMissing
-			updateSkillStatus(cwd, currentSkillID, spec.SkillStatusMissing, skillVars.Version)
+			localVersions[currentSkillID] = "—"
+			updateSkillStatus(ctx.Cwd, currentSkillID, spec.SkillStatusMissing, skillVars.Version)
 			continue
 		}
 
@@ -107,9 +96,10 @@ func runStatus(skillID string, verbose bool) error {
 		if repoDirErr == nil {
 			equal, eqErr := skillDirsEqual(agentsSkillDir, repoSkillDir)
 			if eqErr == nil && !equal {
-				results[currentSkillID] = spec.SkillStatusModified
 				localVersion, _, _ := getLocalSkillInfo(skillMdPath)
-				updateSkillStatus(cwd, currentSkillID, spec.SkillStatusModified, localVersion)
+				results[currentSkillID] = spec.SkillStatusModified
+				localVersions[currentSkillID] = localVersion
+				updateSkillStatus(ctx.Cwd, currentSkillID, spec.SkillStatusModified, localVersion)
 				continue
 			}
 		}
@@ -118,36 +108,43 @@ func runStatus(skillID string, verbose bool) error {
 		if err != nil {
 			fmt.Printf("⚠️  获取技能 %s 信息失败，标记为Modified: %v\n", currentSkillID, err)
 			results[currentSkillID] = spec.SkillStatusModified
-			updateSkillStatus(cwd, currentSkillID, spec.SkillStatusModified, "unknown")
+			localVersions[currentSkillID] = "unknown"
+			updateSkillStatus(ctx.Cwd, currentSkillID, spec.SkillStatusModified, "unknown")
 			continue
 		}
 
 		repoVersion, repoHash, err := getRepoSkillInfo(currentSkillID)
 		if err != nil {
 			results[currentSkillID] = spec.SkillStatusModified
+			localVersions[currentSkillID] = localVersion
 			if verbose {
 				fmt.Printf("  ℹ️  技能 %s 在仓库中不存在，标记为 Modified\n", currentSkillID)
 			}
-			updateSkillStatus(cwd, currentSkillID, spec.SkillStatusModified, localVersion)
+			updateSkillStatus(ctx.Cwd, currentSkillID, spec.SkillStatusModified, localVersion)
 			continue
 		}
 
 		status := determineSkillStatus(localVersion, localHash, repoVersion, repoHash)
 		results[currentSkillID] = status
-		updateSkillStatus(cwd, currentSkillID, status, localVersion)
+		localVersions[currentSkillID] = localVersion
+		updateSkillStatus(ctx.Cwd, currentSkillID, status, localVersion)
 	}
 
 	fmt.Println("\n=== 技能状态 ===")
 
 	maxIDLength := 2
+	maxVersionLength := 7
 	for currentSkillID := range results {
 		if len(currentSkillID) > maxIDLength {
 			maxIDLength = len(currentSkillID)
 		}
+		if v := localVersions[currentSkillID]; len(v) > maxVersionLength {
+			maxVersionLength = len(v)
+		}
 	}
 
-	fmt.Printf("%-*s 状态\n", maxIDLength, "ID")
-	fmt.Println(strings.Repeat("-", maxIDLength+4))
+	fmt.Printf("%-*s %-*s 状态\n", maxIDLength, "ID", maxVersionLength, "本地版本")
+	fmt.Println(strings.Repeat("-", maxIDLength+1+maxVersionLength+1+2))
 
 	for currentSkillID, status := range results {
 		statusSymbol := "❓"
@@ -161,13 +158,14 @@ func runStatus(skillID string, verbose bool) error {
 		case spec.SkillStatusMissing:
 			statusSymbol = "❌"
 		}
-		fmt.Printf("%-*s %s %s\n", maxIDLength, currentSkillID, statusSymbol, status)
+		ver := localVersions[currentSkillID]
+		fmt.Printf("%-*s %-*s %s %s\n", maxIDLength, currentSkillID, maxVersionLength, ver, statusSymbol, status)
 	}
 
 	if verbose {
 		fmt.Println("\n=== 详细差异信息 ===")
 		for currentSkillID := range results {
-			showSkillDiff(cwd, currentSkillID)
+			showSkillDiff(ctx.Cwd, currentSkillID)
 		}
 	}
 
@@ -178,7 +176,7 @@ func runStatus(skillID string, verbose bool) error {
 	fmt.Println("❌ Missing: 技能已启用但本地文件缺失")
 
 	if targetSkillID != "" {
-		showSkillDetails(cwd, targetSkillID, results[targetSkillID])
+		showSkillDetails(ctx.Cwd, targetSkillID, results[targetSkillID])
 	} else if !verbose {
 		fmt.Println("\n使用 'skill-hub status <id>' 检查特定技能状态")
 		fmt.Println("使用 'skill-hub status --verbose' 显示详细差异")
@@ -398,19 +396,19 @@ func describeChangeDirection(status, localVersion, repoVersion string) string {
 func getRepoSkillDirPath(skillID string) (string, error) {
 	cfg, err := config.GetConfig()
 	if err != nil {
-		return "", fmt.Errorf("获取配置失败: %w", err)
+		return "", errors.Wrap(err, "获取配置失败")
 	}
 	if cfg.MultiRepo == nil {
-		return "", fmt.Errorf("多仓库配置未初始化")
+		return "", errors.NewWithCode("getRepoSkillDirPath", errors.ErrConfigInvalid, "多仓库配置未初始化")
 	}
 	rootDir, err := config.GetRootDir()
 	if err != nil {
-		return "", fmt.Errorf("获取根目录失败: %w", err)
+		return "", errors.Wrap(err, "获取根目录失败")
 	}
 	repoPath := filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo)
 	repoSkillDir := filepath.Join(repoPath, "skills", skillID)
 	if _, err := os.Stat(repoSkillDir); os.IsNotExist(err) {
-		return "", fmt.Errorf("技能在仓库中不存在")
+		return "", errors.NewWithCode("getRepoSkillDirPath", errors.ErrSkillNotFound, "技能在仓库中不存在")
 	}
 	return repoSkillDir, nil
 }
@@ -465,7 +463,7 @@ func getRepoSkillInfo(skillID string) (string, string, error) {
 	}
 	repoSkillPath := filepath.Join(repoSkillDir, "SKILL.md")
 	if _, err := os.Stat(repoSkillPath); os.IsNotExist(err) {
-		return "", "", fmt.Errorf("技能在仓库中不存在")
+		return "", "", errors.NewWithCode("getRepoSkillInfo", errors.ErrSkillNotFound, "技能在仓库中不存在")
 	}
 	return getLocalSkillInfo(repoSkillPath)
 }
@@ -525,12 +523,12 @@ func compareVersions(v1, v2 string) int {
 func updateSkillStatus(projectPath, skillID, status, version string) error {
 	stateManager, err := state.NewStateManager()
 	if err != nil {
-		return fmt.Errorf("创建状态管理器失败: %w", err)
+		return errors.WrapWithCode(err, "updateSkillStatus", errors.ErrSystem, "创建状态管理器失败")
 	}
 
 	projectState, err := stateManager.LoadProjectState(projectPath)
 	if err != nil {
-		return fmt.Errorf("加载项目状态失败: %w", err)
+		return errors.Wrap(err, "加载项目状态失败")
 	}
 
 	if skillVars, exists := projectState.Skills[skillID]; exists {
@@ -549,7 +547,7 @@ func updateSkillStatus(projectPath, skillID, status, version string) error {
 	}
 
 	if err := stateManager.SaveProjectState(projectState); err != nil {
-		return fmt.Errorf("保存项目状态失败: %w", err)
+		return errors.Wrap(err, "保存项目状态失败")
 	}
 
 	return nil

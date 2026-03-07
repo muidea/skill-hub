@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"skill-hub/pkg/logging"
+	"github.com/muidea/skill-hub/pkg/logging"
 )
 
 // TempDir 创建临时目录并在测试后清理

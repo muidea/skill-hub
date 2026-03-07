@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"skill-hub/internal/config"
+	"github.com/muidea/skill-hub/internal/config"
 )
 
 func TestRunGitRemoteView_NoRemote(t *testing.T) {
@@ -71,4 +71,3 @@ func TestRunGitRemoteView_NoRemote(t *testing.T) {
 		t.Fatalf("expected output to contain default repo name, got: %s", output)
 	}
 }
-

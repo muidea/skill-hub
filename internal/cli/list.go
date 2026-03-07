@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"skill-hub/internal/config"
-	"skill-hub/internal/multirepo"
-	"skill-hub/pkg/errors"
-	"skill-hub/pkg/logging"
-	"skill-hub/pkg/skill"
-	"skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/internal/multirepo"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/logging"
+	"github.com/muidea/skill-hub/pkg/skill"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 var listCmd = &cobra.Command{
@@ -44,7 +44,7 @@ func runList(target string, verbose bool, repoFilters []string) error {
 	// 创建多仓库管理器
 	repoManager, err := multirepo.NewManager()
 	if err != nil {
-		return fmt.Errorf("创建多仓库管理器失败: %w", err)
+		return errors.Wrap(err, "创建多仓库管理器失败")
 	}
 
 	// 获取技能列表，支持按仓库过滤
@@ -53,13 +53,13 @@ func runList(target string, verbose bool, repoFilters []string) error {
 		// 如果没有指定仓库过滤器，获取所有技能
 		skillsMetadata, err = repoManager.ListSkills("")
 		if err != nil {
-			return fmt.Errorf("获取技能列表失败: %w", err)
+			return errors.Wrap(err, "获取技能列表失败")
 		}
 	} else {
 		// 获取所有可用仓库以验证过滤器
 		availableRepos, err := repoManager.ListRepositories()
 		if err != nil {
-			return fmt.Errorf("获取仓库列表失败: %w", err)
+			return errors.Wrap(err, "获取仓库列表失败")
 		}
 
 		// 验证仓库过滤器
@@ -70,13 +70,13 @@ func runList(target string, verbose bool, repoFilters []string) error {
 
 		for _, repoFilter := range repoFilters {
 			if !validRepos[repoFilter] {
-				return fmt.Errorf("仓库 '%s' 不存在或已禁用", repoFilter)
+				return errors.NewWithCodef("runList", errors.ErrConfigInvalid, "仓库 '%s' 不存在或已禁用", repoFilter)
 			}
 
 			// 获取指定仓库的技能
 			repoSkills, err := repoManager.ListSkills(repoFilter)
 			if err != nil {
-				return fmt.Errorf("获取仓库 '%s' 的技能列表失败: %w", repoFilter, err)
+				return errors.Wrapf(err, "获取仓库 '%s' 的技能列表失败", repoFilter)
 			}
 			skillsMetadata = append(skillsMetadata, repoSkills...)
 		}

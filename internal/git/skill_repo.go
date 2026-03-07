@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-	"skill-hub/internal/adapter"
-	"skill-hub/internal/config"
-	"skill-hub/pkg/skill"
-	"skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/internal/adapter"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/pkg/skill"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 // SkillRepository 管理技能Git仓库

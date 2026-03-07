@@ -3,7 +3,7 @@ package multirepo
 import (
 	"testing"
 
-	"skill-hub/internal/config"
+	"github.com/muidea/skill-hub/internal/config"
 )
 
 func TestManager_ListRepositories(t *testing.T) {

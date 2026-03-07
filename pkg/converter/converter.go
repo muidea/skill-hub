@@ -8,7 +8,7 @@ import (
 	"unicode"
 
 	"gopkg.in/yaml.v3"
-	"skill-hub/pkg/validator"
+	"github.com/muidea/skill-hub/pkg/validator"
 )
 
 // Fix represents a single fix that can be applied to a skill

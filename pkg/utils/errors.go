@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/errors"
 )
 
 // WrapErr wraps an error with a formatted message

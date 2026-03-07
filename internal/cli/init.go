@@ -11,14 +11,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"skill-hub/internal/adapter"
-	"skill-hub/internal/git"
-	"skill-hub/internal/state"
-	"skill-hub/pkg/errors"
-	"skill-hub/pkg/logging"
-	"skill-hub/pkg/skill"
-	"skill-hub/pkg/spec"
-	"skill-hub/pkg/utils"
+	"github.com/muidea/skill-hub/internal/adapter"
+	"github.com/muidea/skill-hub/internal/git"
+	"github.com/muidea/skill-hub/internal/state"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/logging"
+	"github.com/muidea/skill-hub/pkg/skill"
+	"github.com/muidea/skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 var initCmd = &cobra.Command{
@@ -483,7 +483,7 @@ func setDefaultTargetIfEmpty(target string) error {
 			target = spec.TargetOpenCode
 		}
 		if err := stateManager.SetPreferredTarget(cwd, target); err != nil {
-			return fmt.Errorf("设置默认目标失败: %w", err)
+			return errors.Wrap(err, "设置默认目标失败")
 		}
 		fmt.Printf("✅ 已为当前项目设置默认目标: %s\n", target)
 	}
@@ -496,7 +496,7 @@ func getRemoteURLFromGit(repoPath string) (string, error) {
 	// 检查.git目录是否存在
 	gitDir := filepath.Join(repoPath, ".git")
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
-		return "", fmt.Errorf("Git仓库不存在")
+		return "", errors.NewWithCode("getRemoteURLFromGit", errors.ErrGitOperation, "Git仓库不存在")
 	}
 
 	// 使用git命令读取远程URL
@@ -504,7 +504,7 @@ func getRemoteURLFromGit(repoPath string) (string, error) {
 	cmd.Dir = repoPath
 	output, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("读取Git远程URL失败: %w", err)
+		return "", errors.Wrap(err, "读取Git远程URL失败")
 	}
 
 	return strings.TrimSpace(string(output)), nil
@@ -530,7 +530,7 @@ func refreshSkillRegistry(repoPath string) error {
 	// 扫描skills目录下的所有子目录
 	entries, err := os.ReadDir(skillsDir)
 	if err != nil {
-		return fmt.Errorf("读取skills目录失败: %w", err)
+		return errors.Wrap(err, "读取skills目录失败")
 	}
 
 	var skills []spec.SkillMetadata
@@ -567,12 +567,11 @@ func refreshSkillRegistry(repoPath string) error {
 	// 转换为JSON
 	registryJSON, err := json.MarshalIndent(registry, "", "  ")
 	if err != nil {
-		return fmt.Errorf("序列化registry失败: %w", err)
+		return errors.Wrap(err, "序列化registry失败")
 	}
 
-	// 写入文件
 	if err := os.WriteFile(registryPath, registryJSON, 0644); err != nil {
-		return fmt.Errorf("写入registry.json失败: %w", err)
+		return errors.Wrap(err, "写入registry.json失败")
 	}
 
 	fmt.Printf("✓ 已索引 %d 个技能\n", len(skills))

@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/errors"
 
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"

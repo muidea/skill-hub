@@ -5,14 +5,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"skill-hub/internal/adapter"
-	"skill-hub/internal/config"
-	"skill-hub/internal/state"
-	"skill-hub/pkg/errors"
-	"skill-hub/pkg/spec"
-
 	"github.com/spf13/cobra"
-	"skill-hub/pkg/utils"
+
+	"github.com/muidea/skill-hub/internal/adapter"
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 var applyCmd = &cobra.Command{
@@ -35,37 +33,14 @@ func init() {
 }
 
 func runApply(dryRun bool, force bool) error {
-	// 检查init依赖（规范4.10：该命令依赖init命令）
-	if err := CheckInitDependency(); err != nil {
+	ctx, err := RequireInitAndWorkspace("", "")
+	if err != nil {
 		return err
 	}
 
 	fmt.Println("正在应用技能到项目...")
 
-	// 获取当前目录
-	cwd, err := os.Getwd()
-	if err != nil {
-		return utils.GetCwdErrWithCode(err, "runApply")
-	}
-
-	// 检查项目工作区状态（规范4.10：检查当前目录是否存在于state.json中）
-	_, err = EnsureProjectWorkspace(cwd, "")
-	if err != nil {
-		return errors.Wrap(err, "runApply: 检查项目工作区失败")
-	}
-
-	// 创建状态管理器
-	stateMgr, err := state.NewStateManager()
-	if err != nil {
-		return errors.Wrap(err, "runApply: 创建状态管理器失败")
-	}
-
-	// 获取项目状态
-	projectState, err := stateMgr.FindProjectByPath(cwd)
-	if err != nil {
-		return errors.WrapWithCode(err, "runApply", errors.ErrSystem, "查找项目状态失败")
-	}
-
+	projectState := ctx.ProjectState
 	if projectState == nil || projectState.PreferredTarget == "" {
 		return errors.NewWithCode("runApply", errors.ErrProjectInvalid,
 			"项目未设置目标环境，请先使用 'skill-hub set-target <value>' 设置目标环境")
@@ -73,10 +48,9 @@ func runApply(dryRun bool, force bool) error {
 
 	target := spec.NormalizeTarget(projectState.PreferredTarget)
 	fmt.Printf("项目目标环境: %s\n", target)
-	fmt.Printf("项目路径: %s\n", cwd)
+	fmt.Printf("项目路径: %s\n", ctx.Cwd)
 
-	// 获取项目启用的技能
-	skills, err := stateMgr.GetProjectSkills(cwd)
+	skills, err := ctx.StateManager.GetProjectSkills(ctx.Cwd)
 	if err != nil {
 		return errors.Wrap(err, "runApply: 获取项目技能失败")
 	}
@@ -136,38 +110,32 @@ func runApply(dryRun bool, force bool) error {
 	return nil
 }
 
-// getSkillContent 从仓库获取技能内容
 func getSkillContent(skillID string) (string, error) {
-	// 获取配置
 	cfg, err := config.GetConfig()
 	if err != nil {
-		return "", fmt.Errorf("获取配置失败: %w", err)
+		return "", errors.Wrap(err, "获取配置失败")
 	}
 
-	// 多仓库模式：获取默认仓库路径
 	var repoPath string
 	if cfg.MultiRepo != nil {
 		rootDir, err := config.GetRootDir()
 		if err != nil {
-			return "", fmt.Errorf("获取根目录失败: %w", err)
+			return "", errors.Wrap(err, "获取根目录失败")
 		}
 		repoPath = filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo)
 	} else {
-		return "", fmt.Errorf("多仓库配置未初始化")
+		return "", errors.NewWithCode("getSkillContent", errors.ErrConfigInvalid, "多仓库配置未初始化")
 	}
 
-	// 构建源文件路径
 	srcPath := filepath.Join(repoPath, "skills", skillID, "SKILL.md")
 
-	// 检查源文件是否存在
 	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-		return "", fmt.Errorf("技能文件在仓库中不存在: %s", srcPath)
+		return "", errors.NewWithCodef("getSkillContent", errors.ErrFileNotFound, "技能文件在仓库中不存在: %s", srcPath)
 	}
 
-	// 读取文件内容
 	content, err := os.ReadFile(srcPath)
 	if err != nil {
-		return "", fmt.Errorf("读取技能文件失败: %w", err)
+		return "", errors.WrapWithCode(err, "getSkillContent", errors.ErrFileOperation, "读取技能文件失败")
 	}
 
 	return string(content), nil

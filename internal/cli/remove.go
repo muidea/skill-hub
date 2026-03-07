@@ -7,10 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"skill-hub/internal/state"
-
 	"github.com/spf13/cobra"
-	"skill-hub/pkg/utils"
+
+	"github.com/muidea/skill-hub/pkg/errors"
 )
 
 var removeCmd = &cobra.Command{
@@ -29,38 +28,19 @@ var removeCmd = &cobra.Command{
 }
 
 func runRemove(skillID string) error {
-	// 检查init依赖（规范4.6：该命令依赖init命令）
-	if err := CheckInitDependency(); err != nil {
+	ctx, err := RequireInitAndWorkspace("", "")
+	if err != nil {
 		return err
 	}
 
 	fmt.Printf("正在从当前项目移除技能: %s\n", skillID)
 
-	// 获取当前目录
-	cwd, err := os.Getwd()
+	hasSkill, err := ctx.StateManager.ProjectHasSkill(ctx.Cwd, skillID)
 	if err != nil {
-		return utils.GetCwdErr(err)
-	}
-
-	// 检查项目工作区状态（规范4.6：检查当前目录是否存在于state.json中）
-	_, err = EnsureProjectWorkspace(cwd, "")
-	if err != nil {
-		return fmt.Errorf("检查项目工作区失败: %w", err)
-	}
-
-	// 创建状态管理器
-	stateMgr, err := state.NewStateManager()
-	if err != nil {
-		return err
-	}
-
-	// 检查技能是否在项目中启用
-	hasSkill, err := stateMgr.ProjectHasSkill(cwd, skillID)
-	if err != nil {
-		return fmt.Errorf("检查技能状态失败: %w", err)
+		return errors.Wrap(err, "检查技能状态失败")
 	}
 	if !hasSkill {
-		return fmt.Errorf("技能 %s 未在当前项目中启用", skillID)
+		return errors.NewWithCodef("runRemove", errors.ErrSkillNotFound, "技能 %s 未在当前项目中启用", skillID)
 	}
 
 	// TODO: 安全检查 - 检测本地有未反馈的修改
@@ -74,18 +54,16 @@ func runRemove(skillID string) error {
 		return nil
 	}
 
-	// 从状态文件中移除技能标记
 	fmt.Println("\n=== 更新状态 ===")
-	if err := stateMgr.RemoveSkillFromProject(cwd, skillID); err != nil {
-		return fmt.Errorf("从状态文件移除技能失败: %w", err)
+	if err := ctx.StateManager.RemoveSkillFromProject(ctx.Cwd, skillID); err != nil {
+		return errors.Wrap(err, "从状态文件移除技能失败")
 	}
 	fmt.Printf("✓ 成功从 state.json 移除技能标记: %s\n", skillID)
 
 	// 物理删除项目本地工作区对应的文件/配置
 	fmt.Println("\n=== 物理清理 ===")
 
-	// 1. 删除.agents/skills/[skillID]目录
-	agentsSkillDir := filepath.Join(cwd, ".agents", "skills", skillID)
+	agentsSkillDir := filepath.Join(ctx.Cwd, ".agents", "skills", skillID)
 	if _, err := os.Stat(agentsSkillDir); err == nil {
 		if err := os.RemoveAll(agentsSkillDir); err != nil {
 			fmt.Printf("⚠️  删除 .agents/skills/%s 目录失败: %v\n", skillID, err)

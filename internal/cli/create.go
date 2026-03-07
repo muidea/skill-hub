@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"skill-hub/internal/state"
-	"skill-hub/pkg/skill"
-	"skill-hub/pkg/spec"
-	"skill-hub/pkg/utils"
+
+	"github.com/muidea/skill-hub/internal/state"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/skill"
+	"github.com/muidea/skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 var createCmd = &cobra.Command{
@@ -37,39 +39,29 @@ func init() {
 }
 
 func runCreate(skillID string, target string) error {
-	// 检查init依赖（规范4.5：该命令依赖init命令）
 	if err := CheckInitDependency(); err != nil {
 		return err
 	}
 
-	// 验证技能ID格式
 	if !isValidSkillName(skillID) {
-		return fmt.Errorf("技能ID '%s' 格式无效。应使用小写字母、数字和连字符，例如：my-logic-skill", skillID)
+		return errors.NewWithCodef("runCreate", errors.ErrValidation, "技能ID '%s' 格式无效。应使用小写字母、数字和连字符，例如：my-logic-skill", skillID)
 	}
 
-	// 获取当前工作目录
-	cwd, err := os.Getwd()
+	ctx, err := RequireInitAndWorkspace("", target)
 	if err != nil {
-		return utils.GetCwdErr(err)
+		return err
 	}
 
-	// 检查项目工作区状态（规范4.5：检查当前目录是否存在于state.json中）
-	_, err = EnsureProjectWorkspace(cwd, target)
-	if err != nil {
-		return fmt.Errorf("检查项目工作区失败: %w", err)
-	}
-
-	// 检查.agents目录是否存在，如果不存在则创建
-	agentsDir := filepath.Join(cwd, ".agents")
+	agentsDir := filepath.Join(ctx.Cwd, ".agents")
 	if _, err := os.Stat(agentsDir); os.IsNotExist(err) {
 		// 当target为open_code时，允许直接创建.agents目录
 		if target == "open_code" {
 			if err := os.MkdirAll(agentsDir, 0755); err != nil {
-				return fmt.Errorf("创建.agents目录失败: %w", err)
+				return errors.WrapWithCode(err, "runCreate", errors.ErrFileOperation, "创建.agents目录失败")
 			}
 			fmt.Printf("✓ 创建.agents目录: %s\n", agentsDir)
 		} else {
-			return fmt.Errorf("项目未初始化，请先运行 'skill-hub init' 命令")
+			return errors.NewWithCode("runCreate", errors.ErrConfigNotFound, "项目未初始化，请先运行 'skill-hub init' 命令")
 		}
 	}
 
@@ -91,13 +83,13 @@ func runCreate(skillID string, target string) error {
 			fmt.Println("✅ 将重新创建技能文件")
 		} else {
 			fmt.Println("✅ 技能文件验证通过")
-			if alreadyRegisteredAndSynced(cwd, skillID, skillDir) {
+			if alreadyRegisteredAndSynced(ctx.Cwd, skillID, skillDir) {
 				fmt.Printf("✅ 技能 '%s' 已在本地仓库登记且与仓库一致，无需操作\n", skillID)
 				return nil
 			}
 			fmt.Println("正在刷新项目状态...")
-			if err := refreshProjectState(cwd, skillID, target); err != nil {
-				return fmt.Errorf("刷新项目状态失败: %w", err)
+			if err := refreshProjectState(ctx.Cwd, skillID, target); err != nil {
+				return errors.Wrap(err, "刷新项目状态失败")
 			}
 			fmt.Printf("✅ 技能 '%s' 已成功登记到项目状态\n", skillID)
 			fmt.Println("\n下一步:")
@@ -107,13 +99,13 @@ func runCreate(skillID string, target string) error {
 	}
 
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
-		return fmt.Errorf("创建技能目录失败: %w", err)
+		return errors.WrapWithCode(err, "runCreate", errors.ErrFileOperation, "创建技能目录失败")
 	}
 
 	for _, sub := range []string{"scripts", "references", "assets"} {
 		subDir := filepath.Join(skillDir, sub)
 		if err := os.MkdirAll(subDir, 0755); err != nil {
-			return fmt.Errorf("创建子目录 %s 失败: %w", sub, err)
+			return errors.Wrapf(err, "创建子目录 %s 失败", sub)
 		}
 	}
 
@@ -130,13 +122,12 @@ func runCreate(skillID string, target string) error {
 
 	// 验证目标选项
 	if !isValidTarget(target) {
-		return fmt.Errorf("无效的目标选项: %s。可用选项: cursor, claude, open_code", target)
+		return errors.NewWithCodef("runCreate", errors.ErrInvalidInput, "无效的目标选项: %s。可用选项: cursor, claude, open_code", target)
 	}
 
-	// 生成技能内容
 	content, err := generateSkillContent(skillID, description, target)
 	if err != nil {
-		return fmt.Errorf("生成技能内容失败: %w", err)
+		return errors.Wrap(err, "生成技能内容失败")
 	}
 
 	// 写入文件
@@ -146,10 +137,9 @@ func runCreate(skillID string, target string) error {
 
 	fmt.Printf("✅ 技能模板创建成功: %s\n", skillFilePath)
 
-	// 刷新state.json，标记当前项目工作区在使用该技能
 	fmt.Println("正在刷新项目状态...")
-	if err := refreshProjectState(cwd, skillID, target); err != nil {
-		return fmt.Errorf("刷新项目状态失败: %w", err)
+	if err := refreshProjectState(ctx.Cwd, skillID, target); err != nil {
+		return errors.Wrap(err, "刷新项目状态失败")
 	}
 
 	fmt.Println("\n下一步:")
@@ -327,7 +317,7 @@ func isValidTarget(target string) bool {
 func validateSkillFile(filePath string) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("读取技能文件失败: %w", err)
+		return errors.WrapWithCode(err, "validateSkillFile", errors.ErrFileOperation, "读取技能文件失败")
 	}
 	return skill.ValidateSkillFile(content)
 }
@@ -352,18 +342,15 @@ func alreadyRegisteredAndSynced(projectPath, skillID, skillDir string) bool {
 	return err == nil && equal
 }
 
-// refreshProjectState 刷新项目状态，将技能登记到state.json
 func refreshProjectState(projectPath, skillID, target string) error {
-	// 创建状态管理器
 	stateManager, err := state.NewStateManager()
 	if err != nil {
-		return fmt.Errorf("创建状态管理器失败: %w", err)
+		return errors.WrapWithCode(err, "refreshProjectState", errors.ErrSystem, "创建状态管理器失败")
 	}
 
-	// 加载当前项目状态
 	projectState, err := stateManager.LoadProjectState(projectPath)
 	if err != nil {
-		return fmt.Errorf("加载项目状态失败: %w", err)
+		return errors.Wrap(err, "加载项目状态失败")
 	}
 
 	// 更新技能状态
@@ -379,9 +366,8 @@ func refreshProjectState(projectPath, skillID, target string) error {
 		},
 	}
 
-	// 保存项目状态
 	if err := stateManager.SaveProjectState(projectState); err != nil {
-		return fmt.Errorf("保存项目状态失败: %w", err)
+		return errors.Wrap(err, "保存项目状态失败")
 	}
 
 	return nil

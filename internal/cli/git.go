@@ -7,8 +7,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"skill-hub/internal/config"
-	"skill-hub/internal/git"
+
+	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/internal/git"
+	"github.com/muidea/skill-hub/pkg/errors"
 )
 
 var gitCmd = &cobra.Command{
@@ -109,12 +111,12 @@ func runGitStatus() error {
 
 	repo, err := git.NewSkillRepository()
 	if err != nil {
-		return fmt.Errorf("创建技能仓库失败: %w", err)
+		return errors.Wrap(err, "创建技能仓库失败")
 	}
 
 	status, err := repo.GetStatus()
 	if err != nil {
-		return fmt.Errorf("获取状态失败: %w", err)
+		return errors.Wrap(err, "获取状态失败")
 	}
 
 	fmt.Println(status)
@@ -214,7 +216,7 @@ func runGitRemoteSet(url string) error {
 	}
 
 	if err := repo.SetRemote(url); err != nil {
-		return fmt.Errorf("设置远程仓库失败: %w", err)
+		return errors.Wrap(err, "设置远程仓库失败")
 	}
 
 	cfg, err := config.GetConfig()
@@ -238,11 +240,11 @@ func runGitRemoteView(verbose bool) error {
 
 	cfg, err := config.GetConfig()
 	if err != nil {
-		return fmt.Errorf("获取配置失败: %w", err)
+		return errors.Wrap(err, "获取配置失败")
 	}
 
 	if cfg.MultiRepo == nil || !cfg.MultiRepo.Enabled {
-		return fmt.Errorf("多仓库功能未启用，请先运行 'skill-hub init' 或使用 'skill-hub repo' 配置仓库")
+		return errors.NewWithCode("runGitRemoteView", errors.ErrConfigNotFound, "多仓库功能未启用，请先运行 'skill-hub init' 或使用 'skill-hub repo' 配置仓库")
 	}
 
 	defaultRepoName := cfg.MultiRepo.DefaultRepo
@@ -252,17 +254,17 @@ func runGitRemoteView(verbose bool) error {
 
 	repoCfg, ok := cfg.MultiRepo.Repositories[defaultRepoName]
 	if !ok {
-		return fmt.Errorf("默认仓库 '%s' 未在配置中找到，请检查 config.yaml", defaultRepoName)
+		return errors.NewWithCodef("runGitRemoteView", errors.ErrConfigInvalid, "默认仓库 '%s' 未在配置中找到，请检查 config.yaml", defaultRepoName)
 	}
 
 	repoPath, err := config.GetRepositoryPath(defaultRepoName)
 	if err != nil {
-		return fmt.Errorf("获取仓库路径失败: %w", err)
+		return errors.Wrap(err, "获取仓库路径失败")
 	}
 
 	repo, err := git.NewRepository(repoPath)
 	if err != nil {
-		return fmt.Errorf("打开Git仓库失败: %w", err)
+		return errors.Wrap(err, "打开Git仓库失败")
 	}
 
 	var remoteURLs []string
