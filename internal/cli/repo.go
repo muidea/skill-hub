@@ -49,11 +49,12 @@ var repoListCmd = &cobra.Command{
 }
 
 var repoRemoveCmd = &cobra.Command{
-	Use:     "remove <name>",
-	Aliases: []string{"rm"},
-	Short:   "移除仓库",
-	Long:    `从配置中移除指定的Git仓库。注意：这不会删除本地仓库文件。`,
-	Args:    cobra.ExactArgs(1),
+	Use:               "remove <name>",
+	Aliases:           []string{"rm"},
+	Short:             "移除仓库",
+	Long:              `从配置中移除指定的Git仓库。注意：这不会删除本地仓库文件。`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeRepoNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runRepoRemove(args[0])
 	},
@@ -66,7 +67,8 @@ var repoSyncCmd = &cobra.Command{
 
 如果没有指定仓库名称，则同步所有启用的仓库。
 使用 --all 参数强制同步所有仓库（包括禁用的）。`,
-	Args: cobra.MaximumNArgs(1),
+	Args:              cobra.MaximumNArgs(1),
+	ValidArgsFunction: completeRepoNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		syncAll, _ := cmd.Flags().GetBool("all")
 		return runRepoSync(args, syncAll)
@@ -74,20 +76,22 @@ var repoSyncCmd = &cobra.Command{
 }
 
 var repoEnableCmd = &cobra.Command{
-	Use:   "enable <name>",
-	Short: "启用仓库",
-	Long:  `启用之前被禁用的仓库。`,
-	Args:  cobra.ExactArgs(1),
+	Use:               "enable <name>",
+	Short:             "启用仓库",
+	Long:              `启用之前被禁用的仓库。`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeRepoNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runRepoEnable(args[0])
 	},
 }
 
 var repoDisableCmd = &cobra.Command{
-	Use:   "disable <name>",
-	Short: "禁用仓库",
-	Long:  `禁用指定仓库，禁用后该仓库的技能将不可用。`,
-	Args:  cobra.ExactArgs(1),
+	Use:               "disable <name>",
+	Short:             "禁用仓库",
+	Long:              `禁用指定仓库，禁用后该仓库的技能将不可用。`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeRepoNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runRepoDisable(args[0])
 	},
@@ -100,7 +104,8 @@ var repoDefaultCmd = &cobra.Command{
 
 所有通过 feedback 命令修改的技能都会归档到默认仓库。
 如果技能在默认仓库中不存在则新增，存在则覆盖更新。`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeRepoNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runRepoDefault(args[0])
 	},

@@ -34,7 +34,8 @@ var feedbackCmd = &cobra.Command{
 
 使用 --dry-run 参数演习模式，仅显示将要同步的差异。
 使用 --force 参数强制更新，即使有冲突也继续执行。`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeEnabledSkillIDsForCwd,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runFeedback(args[0])
 	},

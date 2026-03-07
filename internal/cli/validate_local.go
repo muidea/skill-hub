@@ -13,13 +13,11 @@ import (
 )
 
 var validateCmd = &cobra.Command{
-	Use:   "validate <id>",
-	Short: "验证技能合规性",
-	Long: `验证指定技能的项目本地工作区的文件是否合规，包括检查 SKILL.md 的 YAML 语法、必需字段、文件结构等。
-验证范围包括项目本地文件和仓库源文件。
-
-如果该技能未在state.json里项目工作区登记，则提示该技能非法`,
-	Args: cobra.ExactArgs(1),
+	Use:               "validate <id>",
+	Short:             "验证技能合规性",
+	Long:              `验证指定技能的项目本地工作区的文件是否合规，包括检查 SKILL.md 的 YAML 语法、必需字段、文件结构等。验证范围包括项目本地文件和仓库源文件。如果该技能未在state.json里项目工作区登记，则提示该技能非法`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeEnabledSkillIDsForCwd,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runValidate(args[0])
 	},

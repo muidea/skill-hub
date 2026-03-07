@@ -23,7 +23,8 @@ var setTargetCmd = &cobra.Command{
 示例:
   skill-hub set-target open_code   # 设置项目为 OpenCode 环境
   skill-hub set-target cursor      # 设置项目为 Cursor 环境`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeTargetValues,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runSetTarget(args[0])
 	},

@@ -1,8 +1,6 @@
 package adapter
 
 import (
-	"fmt"
-
 	"github.com/muidea/skill-hub/internal/adapter/claude"
 	"github.com/muidea/skill-hub/internal/adapter/cursor"
 	"github.com/muidea/skill-hub/internal/adapter/opencode"
@@ -22,6 +20,4 @@ func init() {
 	// 注册Cursor Adapter
 	cursorAdapter := cursor.NewCursorAdapter()
 	RegisterAdapter(spec.TargetCursor, cursorAdapter)
-
-	fmt.Printf("已注册适配器: %v\n", GetSupportedTargets())
 }

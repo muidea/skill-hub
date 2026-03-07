@@ -227,3 +227,9 @@ func SaveConfig(cfg *Config) error {
 
 	return nil
 }
+
+// ResetForTest resets config globals. For use in tests only to avoid polluting other tests.
+func ResetForTest() {
+	configLoaded = false
+	globalConfig = nil
+}

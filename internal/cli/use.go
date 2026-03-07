@@ -6,10 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/muidea/skill-hub/internal/multirepo"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
+	"github.com/spf13/cobra"
 )
 
 var useCmd = &cobra.Command{
@@ -28,6 +28,8 @@ var useCmd = &cobra.Command{
 
 func init() {
 	useCmd.Flags().String("target", "open_code", "技能目标环境，默认为 open_code")
+	useCmd.ValidArgsFunction = completeSkillIDs
+	_ = useCmd.RegisterFlagCompletionFunc("target", completeTargetValues)
 }
 
 func runUse(skillID string, target string) error {

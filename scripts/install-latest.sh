@@ -1,8 +1,17 @@
 #!/bin/bash
 # skill-hub 自动安装脚本（无颜色版本）
-# 用法: curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
-# 备用用法: bash <(curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh)
-
+#
+# 功能：从 GitHub Releases 下载最新版 skill-hub，安装到 ~/.local/bin，配置 PATH 与多 Shell 补全。
+# 支持的 Shell：Bash、Zsh、Fish（根据系统已存在的 rc 配置补全，可多次执行不重复追加）。
+# 可多次执行：脚本会检测已有配置，不会重复向 shell 配置文件追加 PATH 或补全加载行。
+#
+# 用法:
+#   curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
+#   bash <(curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh)
+# 若希望安装后补全在当前终端立即生效（仅 Bash），可改用 source 执行：
+#   source <(curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh)
+#
+# 避免重复：若各 shell 的 rc 中已有 skill-hub 的 PATH 或补全相关配置，将跳过对应追加。
 set -e
 
 # 调试模式
@@ -381,10 +390,13 @@ main() {
             esac
             
             if [ -n "$shell_rc" ]; then
-            # 检查是否已经添加（避免重复）
-            # 只匹配实际的PATH设置，忽略注释
+            # 避免重复：已有 PATH 或曾由本安装脚本添加过则不再追加
             if grep -E '^(export\s+PATH=.*\.local/bin|PATH=.*\.local/bin)' "$shell_rc" 2>/dev/null; then
-                echo "  ✅ $shell_rc 中已包含 ~/.local/bin"
+                echo "  ✅ $shell_rc 中已包含 ~/.local/bin（跳过）"
+                return 0
+            fi
+            if grep -q "Added by skill-hub installer" "$shell_rc" 2>/dev/null; then
+                echo "  ✅ $shell_rc 中已有 skill-hub 安装块（跳过，避免重复）"
                 return 0
             fi
                 
@@ -411,6 +423,75 @@ main() {
             else
                 echo "  ⚠️  无法自动配置PATH，请手动添加:"
                 echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+            fi
+        fi
+
+        # 安装多 Shell 补全（Bash / Zsh / Fish），避免重复追加 rc
+        SKILL_HUB_BIN="$HOME/.local/bin/$ACTUAL_BINARY"
+        echo ""
+        echo "🔧 安装 Shell 补全（Bash / Zsh / Fish）..."
+        if [[ ! -x "$SKILL_HUB_BIN" ]]; then
+            echo "  ⚠️  未找到可执行文件，跳过补全安装"
+        else
+            # Bash
+            BASH_COMPLETION_DIR="$HOME/.local/share/bash-completion/completions"
+            BASH_COMPLETION_FILE="$BASH_COMPLETION_DIR/skill-hub"
+            BASH_RC_MARKER="# skill-hub completion (deploy-completion.sh)"
+            mkdir -p "$BASH_COMPLETION_DIR"
+            if "$SKILL_HUB_BIN" completion bash > "$BASH_COMPLETION_FILE" 2>/dev/null; then
+                COMPLETION_BASH_FILE="$BASH_COMPLETION_FILE"
+                echo "  ✅ Bash: $BASH_COMPLETION_FILE"
+                if [[ -f "$HOME/.bashrc" ]]; then
+                    if grep -q "$BASH_RC_MARKER" "$HOME/.bashrc" 2>/dev/null; then
+                        echo "      .bashrc 已包含补全加载（跳过）"
+                    else
+                        echo "" >> "$HOME/.bashrc"
+                        echo "$BASH_RC_MARKER" >> "$HOME/.bashrc"
+                        echo "[[ -f $BASH_COMPLETION_FILE ]] && source $BASH_COMPLETION_FILE" >> "$HOME/.bashrc"
+                        echo "      已追加到 .bashrc"
+                    fi
+                fi
+                if [[ "${BASH_SOURCE[0]:-}" != "" && "${BASH_SOURCE[0]}" != "${0}" ]]; then
+                    [[ -f "$BASH_COMPLETION_FILE" ]] && source "$BASH_COMPLETION_FILE"
+                    echo "      当前 shell（Bash）补全已生效（source 方式执行）"
+                fi
+            else
+                echo "  ⚠️  Bash 补全生成失败"
+            fi
+
+            # Zsh
+            ZSH_SITE_FUNCTIONS="$HOME/.local/share/zsh/site-functions"
+            ZSH_COMPLETION_FILE="$ZSH_SITE_FUNCTIONS/_skill-hub"
+            ZSH_RC_MARKER="# skill-hub completion (install-latest.sh)"
+            mkdir -p "$ZSH_SITE_FUNCTIONS"
+            if "$SKILL_HUB_BIN" completion zsh > "$ZSH_COMPLETION_FILE" 2>/dev/null; then
+                echo "  ✅ Zsh:  $ZSH_COMPLETION_FILE"
+                if [[ -f "$HOME/.zshrc" ]]; then
+                    if grep -q "$ZSH_RC_MARKER" "$HOME/.zshrc" 2>/dev/null; then
+                        echo "      .zshrc 已包含 fpath（跳过）"
+                    else
+                        echo "" >> "$HOME/.zshrc"
+                        echo "$ZSH_RC_MARKER" >> "$HOME/.zshrc"
+                        echo 'fpath=("$HOME/.local/share/zsh/site-functions" $fpath)' >> "$HOME/.zshrc"
+                        echo "      已追加 fpath 到 .zshrc（需 compinit 已启用）"
+                    fi
+                else
+                    echo "      未找到 .zshrc，可手动将 fpath 加入配置"
+                fi
+                COMPLETION_ZSH_FILE="$ZSH_COMPLETION_FILE"
+            else
+                echo "  ⚠️  Zsh 补全生成失败"
+            fi
+
+            # Fish（仅写文件，无需改 rc，fish 自动加载）
+            FISH_COMPLETIONS_DIR="$HOME/.config/fish/completions"
+            FISH_COMPLETION_FILE="$FISH_COMPLETIONS_DIR/skill-hub.fish"
+            mkdir -p "$FISH_COMPLETIONS_DIR"
+            if "$SKILL_HUB_BIN" completion fish > "$FISH_COMPLETION_FILE" 2>/dev/null; then
+                echo "  ✅ Fish: $FISH_COMPLETION_FILE（自动加载，无需改配置）"
+                COMPLETION_FISH_FILE="$FISH_COMPLETION_FILE"
+            else
+                echo "  ⚠️  Fish 补全生成失败"
             fi
         fi
         
@@ -517,6 +598,13 @@ main() {
     echo "安装完成后可手动删除: rm -rf $TEMP_DIR"
     echo ""
     echo "🎉 skill-hub 安装完成！开始使用吧！"
+    if [[ -n "${COMPLETION_BASH_FILE:-}" || -n "${COMPLETION_ZSH_FILE:-}" || -n "${COMPLETION_FISH_FILE:-}" ]]; then
+        echo ""
+        echo "💡 补全已安装。若要在当前终端立即生效，请按当前 Shell 执行:"
+        [[ -n "${COMPLETION_BASH_FILE:-}" ]] && echo "   Bash:  source $COMPLETION_BASH_FILE"
+        [[ -n "${COMPLETION_ZSH_FILE:-}" ]] && echo "   Zsh:   source ~/.zshrc  或重新打开终端"
+        [[ -n "${COMPLETION_FISH_FILE:-}" ]] && echo "   Fish: 补全已自动加载，或执行 source ~/.config/fish/config.fish"
+    fi
 }
 
 # 运行主函数

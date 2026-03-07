@@ -21,7 +21,8 @@ var removeCmd = &cobra.Command{
 3. 保留仓库中的源文件不受影响
 
 安全机制: 如果检测到本地有未反馈的修改，会弹出警告并要求确认。`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeEnabledSkillIDsForCwd,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runRemove(args[0])
 	},
