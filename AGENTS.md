@@ -166,7 +166,8 @@ Before committing:
 ## Project Structure
 ```
 skill-hub/
-├── cmd/skill-hub/        # CLI entry point
+├── application/skill-hub/ # Main application entry
+├── application/skill-validate/ # Validation tool entry
 ├── internal/             # Internal packages (cli, config, engine, state, multirepo)
 ├── pkg/                  # Public packages (errors, spec, utils)
 ├── tests/e2e/            # End-to-end tests (Python)

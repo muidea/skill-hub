@@ -91,7 +91,11 @@
 
 如提供了`git_url` 参数，则克隆远程技能仓库到默认仓库；否则创建空的本地仓库。初始化后默认 target 为 `open_code`。
 
-完成本地仓库初始化后，`registry.json`根据实际仓库里管理的skill进行刷新，保持与仓库里管理的列表一致。
+完成本地仓库初始化后，会刷新技能索引。当前实现中：
+
+- 每个仓库目录维护自己的 `registry.json`
+- 根目录 `~/.skill-hub/registry.json` 继续保留为兼容索引
+- `list` 和联想补全优先读取 repo 级索引，索引不可用时回退到仓库扫描
 
 如果多次执行`init`，在出现冲突时，会提示用户选择是否覆盖。
 
@@ -408,7 +412,9 @@ skill-hub feedback git-expert --dry-run
 
 **功能描述**:
 
-从远程技能仓库拉取最新更改到本地仓库（`~/.skill-hub/repositories/`），并更新技能注册表（`registry.json`）。此命令仅同步仓库层，不涉及项目工作目录的更新。
+从远程技能仓库拉取最新更改到本地仓库（`~/.skill-hub/repositories/`），并更新技能索引。此命令仅同步仓库层，不涉及项目工作目录的更新。
+
+`git sync`、`git pull` 以及 `repo sync` 也遵循同样的索引刷新原则：仓库内容变化后会重建对应 repo 的 `registry.json`，默认仓库同时会刷新根目录兼容索引。
 
 **多仓库说明**：默认同步所有已启用的仓库。可使用 `skill-hub repo sync` 命令同步特定仓库。
 

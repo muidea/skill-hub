@@ -120,13 +120,17 @@ fix: 修复登录页面样式错位问题
 
 ---
 
-## 5. 源代码项目结构 (Standard Go Layout)
+## 5. 源代码项目结构
 
 ```text
 skill-hub/
-├── cmd/
-│   └── skill-hub/          # 程序唯一入口
-│       └── main.go
+├── application/
+│   ├── skill-hub/
+│   │   └── cmd/            # 主应用入口
+│   │       └── main.go
+│   └── skill-validate/
+│       └── cmd/            # 独立校验工具入口
+│           └── main.go
 ├── internal/               # 私有逻辑，禁止外部引用
 │   ├── adapter/            # 各工具适配器 (实现写入与提取逻辑)
 │   │   ├── adapter.go      # 统一接口定义

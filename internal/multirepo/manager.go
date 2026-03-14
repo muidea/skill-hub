@@ -1,10 +1,13 @@
 package multirepo
 
 import (
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"sync"
 
 	"github.com/muidea/skill-hub/internal/config"
 	"github.com/muidea/skill-hub/internal/git"
@@ -148,6 +151,10 @@ func (m *Manager) AddRepository(repoConfig config.RepositoryConfig) error {
 		return errors.Wrap(err, "AddRepository: 保存配置失败")
 	}
 
+	if err := m.RebuildRepositoryIndex(repoConfig.Name); err != nil {
+		return errors.Wrap(err, "AddRepository: 重建仓库索引失败")
+	}
+
 	return nil
 }
 
@@ -201,6 +208,10 @@ func (m *Manager) SyncRepository(name string) error {
 	// 执行git pull
 	if err := git.Pull(repoDir); err != nil {
 		return errors.WrapWithCode(err, "SyncRepository", errors.ErrGitOperation, "同步仓库失败")
+	}
+
+	if err := m.RebuildRepositoryIndex(name); err != nil {
+		return errors.Wrap(err, "SyncRepository: 重建仓库索引失败")
 	}
 
 	// 更新最后同步时间
@@ -388,65 +399,238 @@ func (m *Manager) SearchSkills(query string, repoFilter string) ([]spec.SkillMet
 
 // ListSkills 列出所有技能
 func (m *Manager) ListSkills(repoFilter string) ([]spec.SkillMetadata, error) {
-	var allSkills []spec.SkillMetadata
-
 	repos, err := m.ListRepositories()
 	if err != nil {
 		return nil, err
 	}
 
+	selectedRepos := filterRepositories(repos, repoFilter)
+	return m.listSkillsForRepositories(selectedRepos), nil
+}
+
+func (m *Manager) ListSkillsInRepositories(repoNames []string) ([]spec.SkillMetadata, error) {
+	repos, err := m.ListRepositories()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(repoNames) == 0 {
+		return m.listSkillsForRepositories(repos), nil
+	}
+
+	repoSet := make(map[string]struct{}, len(repoNames))
+	for _, name := range repoNames {
+		if name == "" {
+			continue
+		}
+		repoSet[name] = struct{}{}
+	}
+
+	var selectedRepos []config.RepositoryConfig
 	for _, repo := range repos {
-		// 如果指定了仓库过滤器，跳过不匹配的仓库
-		if repoFilter != "" && repo.Name != repoFilter {
-			continue
-		}
-
-		repoDir, err := config.GetRepositoryPath(repo.Name)
-		if err != nil {
-			// 跳过出错的仓库，继续处理其他仓库
-			continue
-		}
-
-		skillsDir := filepath.Join(repoDir, "skills")
-		if _, err := os.Stat(skillsDir); os.IsNotExist(err) {
-			// 仓库没有skills目录，跳过
-			continue
-		}
-
-		// 递归扫描所有SKILL.md文件
-		skillFiles, err := scanSkillsRecursively(skillsDir)
-		if err != nil {
-			// 跳过出错的仓库，继续处理其他仓库
-			continue
-		}
-
-		for _, skillFile := range skillFiles {
-			// 生成技能ID（相对于skills目录的路径）
-			skillID, err := getSkillIDFromPath(skillFile, skillsDir)
-			if err != nil {
-				// 跳过路径解析失败的技能
-				continue
-			}
-
-			// 读取技能文件
-			content, err := os.ReadFile(skillFile)
-			if err != nil {
-				// 跳过无法读取的技能，继续处理其他技能
-				continue
-			}
-
-			// 解析技能元数据
-			skill, err := parseSkillMetadata(content, repo.Name, skillID, skillFile)
-			if err != nil {
-				// 跳过解析失败的技能，继续处理其他技能
-				continue
-			}
-
-			allSkills = append(allSkills, *skill)
+		if _, ok := repoSet[repo.Name]; ok {
+			selectedRepos = append(selectedRepos, repo)
 		}
 	}
 
-	return allSkills, nil
+	return m.listSkillsForRepositories(selectedRepos), nil
+}
+
+func filterRepositories(repos []config.RepositoryConfig, repoFilter string) []config.RepositoryConfig {
+	if repoFilter == "" {
+		return repos
+	}
+
+	var selected []config.RepositoryConfig
+	for _, repo := range repos {
+		if repo.Name == repoFilter {
+			selected = append(selected, repo)
+		}
+	}
+
+	return selected
+}
+
+func (m *Manager) listSkillsForRepositories(repos []config.RepositoryConfig) []spec.SkillMetadata {
+	if len(repos) == 0 {
+		return nil
+	}
+
+	results := make([][]spec.SkillMetadata, len(repos))
+	var wg sync.WaitGroup
+
+	for idx, repo := range repos {
+		wg.Add(1)
+		go func(i int, repository config.RepositoryConfig) {
+			defer wg.Done()
+			results[i] = listSkillsInRepository(repository)
+		}(idx, repo)
+	}
+
+	wg.Wait()
+
+	var allSkills []spec.SkillMetadata
+	for _, repoSkills := range results {
+		allSkills = append(allSkills, repoSkills...)
+	}
+
+	sort.Slice(allSkills, func(i, j int) bool {
+		if allSkills[i].Repository == allSkills[j].Repository {
+			return allSkills[i].ID < allSkills[j].ID
+		}
+		return allSkills[i].Repository < allSkills[j].Repository
+	})
+
+	return allSkills
+}
+
+func listSkillsInRepository(repo config.RepositoryConfig) []spec.SkillMetadata {
+	if registrySkills, ok := loadRegistrySkills(repo); ok {
+		return registrySkills
+	}
+
+	return scanSkillsInRepository(repo)
+}
+
+func scanSkillsInRepository(repo config.RepositoryConfig) []spec.SkillMetadata {
+	repoDir, err := config.GetRepositoryPath(repo.Name)
+	if err != nil {
+		return nil
+	}
+
+	skillsDir := filepath.Join(repoDir, "skills")
+	if _, err := os.Stat(skillsDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	skillFiles, err := scanSkillsRecursively(skillsDir)
+	if err != nil || len(skillFiles) == 0 {
+		return nil
+	}
+
+	parsedSkills := make([]*spec.SkillMetadata, len(skillFiles))
+	parallelism := runtime.GOMAXPROCS(0)
+	if parallelism < 1 {
+		parallelism = 1
+	}
+
+	sem := make(chan struct{}, parallelism)
+	var wg sync.WaitGroup
+
+	for idx, skillFile := range skillFiles {
+		wg.Add(1)
+		go func(i int, path string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			skillID, err := getSkillIDFromPath(path, skillsDir)
+			if err != nil {
+				return
+			}
+
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return
+			}
+
+			skill, err := parseSkillMetadata(content, repo.Name, skillID, path)
+			if err != nil {
+				return
+			}
+
+			parsedSkills[i] = skill
+		}(idx, skillFile)
+	}
+
+	wg.Wait()
+
+	var skills []spec.SkillMetadata
+	for _, metadata := range parsedSkills {
+		if metadata != nil {
+			skills = append(skills, *metadata)
+		}
+	}
+
+	return skills
+}
+
+func (m *Manager) RebuildRepositoryIndex(name string) error {
+	if m.config.MultiRepo == nil {
+		return errors.NewWithCode("RebuildRepositoryIndex", errors.ErrConfigInvalid, "多仓库配置未初始化")
+	}
+
+	repo, exists := m.config.MultiRepo.Repositories[name]
+	if !exists {
+		return errors.NewWithCodef("RebuildRepositoryIndex", errors.ErrConfigInvalid, "仓库 '%s' 不存在", name)
+	}
+
+	registry := spec.Registry{
+		Version: "1.0.0",
+		Skills:  scanSkillsInRepository(repo),
+	}
+
+	registryData, err := json.MarshalIndent(registry, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "RebuildRepositoryIndex: 序列化索引失败")
+	}
+
+	repoRegistryPath, err := config.GetRepositoryRegistryPath(name)
+	if err != nil {
+		return errors.Wrap(err, "RebuildRepositoryIndex: 获取仓库索引路径失败")
+	}
+
+	if err := os.WriteFile(repoRegistryPath, registryData, 0644); err != nil {
+		return errors.Wrap(err, "RebuildRepositoryIndex: 写入仓库索引失败")
+	}
+
+	if m.config.MultiRepo.DefaultRepo == name {
+		rootRegistryPath, err := config.GetRegistryPath()
+		if err == nil {
+			if err := os.WriteFile(rootRegistryPath, registryData, 0644); err != nil {
+				return errors.Wrap(err, "RebuildRepositoryIndex: 写入根索引失败")
+			}
+		}
+	}
+
+	return nil
+}
+
+func loadRegistrySkills(repo config.RepositoryConfig) ([]spec.SkillMetadata, bool) {
+	registryPath, err := config.GetRepositoryRegistryPath(repo.Name)
+	if err != nil {
+		return nil, false
+	}
+
+	data, err := os.ReadFile(registryPath)
+	if err != nil {
+		return nil, false
+	}
+
+	var registry spec.Registry
+	if err := json.Unmarshal(data, &registry); err != nil {
+		return nil, false
+	}
+
+	if len(registry.Skills) == 0 {
+		return []spec.SkillMetadata{}, true
+	}
+
+	skills := make([]spec.SkillMetadata, 0, len(registry.Skills))
+	for _, metadata := range registry.Skills {
+		if metadata.ID == "" {
+			continue
+		}
+		if metadata.Repository == "" {
+			metadata.Repository = repo.Name
+		}
+		if metadata.RepositoryPath == "" {
+			metadata.RepositoryPath = filepath.Join("skills", metadata.ID)
+		}
+		skills = append(skills, metadata)
+	}
+
+	return skills, true
 }
 
 // CheckSkillInDefaultRepository 检查技能是否在默认仓库中存在
@@ -491,6 +675,10 @@ func (m *Manager) ArchiveToDefaultRepository(skillID, sourcePath string) error {
 	// 复制技能文件
 	if err := copyDirectory(sourcePath, targetDir); err != nil {
 		return errors.WrapWithCode(err, "ArchiveToDefaultRepository", errors.ErrFileOperation, "复制技能文件失败")
+	}
+
+	if err := m.RebuildRepositoryIndex(defaultRepo.Name); err != nil {
+		return errors.Wrap(err, "ArchiveToDefaultRepository: 重建默认仓库索引失败")
 	}
 
 	return nil

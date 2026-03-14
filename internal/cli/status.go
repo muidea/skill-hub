@@ -9,8 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/muidea/skill-hub/internal/config"
-	"github.com/muidea/skill-hub/internal/state"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
@@ -228,13 +226,7 @@ func showSkillDetails(cwd, skillID, status string) {
 
 	fmt.Printf("本地路径:   %s\n", localSkillMdPath)
 
-	rootDir, _ := config.GetRootDir()
-	cfg, _ := config.GetConfig()
-	repoName := "main"
-	if cfg != nil && cfg.MultiRepo != nil && cfg.MultiRepo.DefaultRepo != "" {
-		repoName = cfg.MultiRepo.DefaultRepo
-	}
-	repoSkillPath := filepath.Join(rootDir, "repositories", repoName, "skills", skillID, "SKILL.md")
+	repoSkillPath, _ := getRepoSkillPath(skillID)
 	fmt.Printf("仓库路径:   %s\n", repoSkillPath)
 
 	localInfo, localErr := os.Stat(localSkillMdPath)
@@ -269,17 +261,7 @@ func showSkillDiff(cwd, skillID string) {
 	localSkillMdPath := filepath.Join(agentsSkillDir, "SKILL.md")
 	repoSkillMdPath := ""
 
-	rootDir, err := config.GetRootDir()
-	if err == nil {
-		cfg, cfgErr := config.GetConfig()
-		if cfgErr == nil && cfg.MultiRepo != nil {
-			repoName := cfg.MultiRepo.DefaultRepo
-			if repoName == "" {
-				repoName = "main"
-			}
-			repoSkillMdPath = filepath.Join(rootDir, "repositories", repoName, "skills", skillID, "SKILL.md")
-		}
-	}
+	repoSkillMdPath, _ = getRepoSkillPath(skillID)
 
 	localContent, localErr := os.ReadFile(localSkillMdPath)
 	repoContent, repoErr := os.ReadFile(repoSkillMdPath)
@@ -400,23 +382,27 @@ func describeChangeDirection(status, localVersion, repoVersion string) string {
 }
 
 func getRepoSkillDirPath(skillID string) (string, error) {
-	cfg, err := config.GetConfig()
+	defaultRepo, err := defaultRepository()
 	if err != nil {
-		return "", errors.Wrap(err, "获取配置失败")
+		return "", errors.Wrap(err, "获取默认仓库失败")
 	}
-	if cfg.MultiRepo == nil {
-		return "", errors.NewWithCode("getRepoSkillDirPath", errors.ErrConfigInvalid, "多仓库配置未初始化")
-	}
-	rootDir, err := config.GetRootDir()
+	repoPath, err := repositoryPath(defaultRepo.Name)
 	if err != nil {
-		return "", errors.Wrap(err, "获取根目录失败")
+		return "", errors.Wrap(err, "获取仓库路径失败")
 	}
-	repoPath := filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo)
 	repoSkillDir := filepath.Join(repoPath, "skills", skillID)
 	if _, err := os.Stat(repoSkillDir); os.IsNotExist(err) {
 		return "", errors.NewWithCode("getRepoSkillDirPath", errors.ErrSkillNotFound, "技能在仓库中不存在")
 	}
 	return repoSkillDir, nil
+}
+
+func getRepoSkillPath(skillID string) (string, error) {
+	repoSkillDir, err := getRepoSkillDirPath(skillID)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(repoSkillDir, "SKILL.md"), nil
 }
 
 func skillDirsEqual(dirA, dirB string) (bool, error) {
@@ -527,7 +513,7 @@ func compareVersions(v1, v2 string) int {
 }
 
 func updateSkillStatus(projectPath, skillID, status, version string) error {
-	stateManager, err := state.NewStateManager()
+	stateManager, err := newStateManager()
 	if err != nil {
 		return errors.WrapWithCode(err, "updateSkillStatus", errors.ErrSystem, "创建状态管理器失败")
 	}

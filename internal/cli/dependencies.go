@@ -7,7 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	adapterpkg "github.com/muidea/skill-hub/internal/adapter"
 	"github.com/muidea/skill-hub/internal/config"
+	gitpkg "github.com/muidea/skill-hub/internal/git"
+	runtimemodule "github.com/muidea/skill-hub/internal/modules/kernel/runtime"
 	"github.com/muidea/skill-hub/internal/multirepo"
 	"github.com/muidea/skill-hub/internal/state"
 	"github.com/muidea/skill-hub/pkg/errors"
@@ -20,6 +23,124 @@ type RunContext struct {
 	Cwd          string
 	ProjectState *spec.ProjectState
 	StateManager *state.StateManager
+}
+
+var runtimeSvc = runtimemodule.New().Service()
+
+func loadHubConfig() (*config.Config, error) {
+	return runtimeSvc.Config()
+}
+
+func defaultRepository() (*config.RepositoryConfig, error) {
+	return runtimeSvc.DefaultRepository()
+}
+
+func listRepositories(includeDisabled bool) ([]config.RepositoryConfig, error) {
+	return runtimeSvc.ListRepositories(includeDisabled)
+}
+
+func getHubRootDir() (string, error) {
+	return runtimeSvc.RootDir()
+}
+
+func repositoryPath(repoName string) (string, error) {
+	return runtimeSvc.RepositoryPath(repoName)
+}
+
+func newStateManager() (*state.StateManager, error) {
+	return runtimeSvc.StateManager()
+}
+
+func newRepositoryManager() (*multirepo.Manager, error) {
+	return runtimeSvc.RepositoryManager()
+}
+
+func getTargetAdapter(target string) (adapterpkg.Adapter, error) {
+	return runtimeSvc.Adapter(target)
+}
+
+func readDefaultRepositorySkillContent(skillID string) (string, error) {
+	return runtimeSvc.ReadDefaultRepositorySkillContent(skillID)
+}
+
+func listSkillMetadata(repoNames []string) ([]spec.SkillMetadata, error) {
+	return runtimeSvc.ListSkillMetadata(repoNames)
+}
+
+func rebuildRepositoryIndex(repoName string) error {
+	return runtimeSvc.RebuildRepositoryIndex(repoName)
+}
+
+func archiveToDefaultRepository(skillID, sourcePath string) error {
+	return runtimeSvc.ArchiveToDefaultRepository(skillID, sourcePath)
+}
+
+func addRepository(repoConfig config.RepositoryConfig) error {
+	return runtimeSvc.AddRepository(repoConfig)
+}
+
+func removeRepository(name string) error {
+	return runtimeSvc.RemoveRepository(name)
+}
+
+func syncRepository(name string) error {
+	return runtimeSvc.SyncRepository(name)
+}
+
+func enableRepository(name string) error {
+	return runtimeSvc.EnableRepository(name)
+}
+
+func disableRepository(name string) error {
+	return runtimeSvc.DisableRepository(name)
+}
+
+func getRepository(name string) (*config.RepositoryConfig, error) {
+	return runtimeSvc.GetRepository(name)
+}
+
+func setDefaultRepository(name string) error {
+	return runtimeSvc.SetDefaultRepository(name)
+}
+
+func updateRepositoryURL(name, url string) error {
+	return runtimeSvc.UpdateRepositoryURL(name, url)
+}
+
+func newGitRepository(repoPath string) (*gitpkg.Repository, error) {
+	return runtimeSvc.GitRepository(repoPath)
+}
+
+func newSkillsRepository() (*gitpkg.Repository, error) {
+	return runtimeSvc.SkillsRepository()
+}
+
+func newSkillRepository() (*gitpkg.SkillRepository, error) {
+	return runtimeSvc.SkillRepository()
+}
+
+func cleanupTimestampedBackupDirs(basePath string) error {
+	return runtimeSvc.CleanupTimestampedBackupDirs(basePath)
+}
+
+func syncSkillRepositoryAndRefresh() error {
+	return runtimeSvc.SyncSkillRepositoryAndRefresh()
+}
+
+func skillRepositoryStatus() (string, error) {
+	return runtimeSvc.SkillRepositoryStatus()
+}
+
+func pushSkillRepositoryChanges(message string) error {
+	return runtimeSvc.PushSkillRepositoryChanges(message)
+}
+
+func pushSkillRepositoryCommits() error {
+	return runtimeSvc.PushSkillRepositoryCommits()
+}
+
+func setSkillRepositoryRemote(url string) error {
+	return runtimeSvc.SetSkillRepositoryRemote(url)
 }
 
 // RequireInitAndWorkspace 执行 CheckInitDependency、EnsureProjectWorkspace 并创建 StateManager，返回 RunContext
@@ -38,7 +159,7 @@ func RequireInitAndWorkspace(cwd, target string) (*RunContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	stateManager, err := state.NewStateManager()
+	stateManager, err := newStateManager()
 	if err != nil {
 		return nil, errors.WrapWithCode(err, "RequireInitAndWorkspace", errors.ErrSystem, "创建状态管理器失败")
 	}
@@ -61,7 +182,7 @@ func RequireInitOnly() (*RunContext, error) {
 // 符合规范要求：所有命令（除init外）都需要检查本地仓库是否存在
 func CheckInitDependency() error {
 	// 尝试加载配置，如果失败说明未初始化
-	_, err := config.GetConfig()
+	_, err := loadHubConfig()
 	if err != nil {
 		return errors.NewWithCode("CheckInitDependency", errors.ErrConfigNotFound, "本地仓库未初始化，请先运行 'skill-hub init'")
 	}
@@ -71,7 +192,7 @@ func CheckInitDependency() error {
 // CheckProjectWorkspace 检查项目工作区状态
 // 符合规范要求：检查当前目录是否存在于state.json中
 func CheckProjectWorkspace(cwd string) (*spec.ProjectState, error) {
-	stateManager, err := state.NewStateManager()
+	stateManager, err := newStateManager()
 	if err != nil {
 		return nil, errors.WrapWithCode(err, "CheckProjectWorkspace", errors.ErrSystem, "创建状态管理器失败")
 	}
@@ -87,7 +208,7 @@ func CheckProjectWorkspace(cwd string) (*spec.ProjectState, error) {
 // EnsureProjectWorkspace 确保项目工作区存在
 // 符合规范要求：如果当前目录不存在于state.json中，则提示是否需要新建项目工作区
 func EnsureProjectWorkspace(cwd, target string) (*spec.ProjectState, error) {
-	stateManager, err := state.NewStateManager()
+	stateManager, err := newStateManager()
 	if err != nil {
 		return nil, errors.WrapWithCode(err, "EnsureProjectWorkspace", errors.ErrSystem, "创建状态管理器失败")
 	}
@@ -218,7 +339,7 @@ func CheckSkillExists(skillID string) error {
 	}
 
 	// 创建多仓库管理器
-	repoManager, err := multirepo.NewManager()
+	repoManager, err := newRepositoryManager()
 	if err != nil {
 		return errors.Wrap(err, "CheckSkillExists: 创建多仓库管理器失败")
 	}
@@ -239,7 +360,7 @@ func CheckSkillExists(skillID string) error {
 
 // CheckSkillInProject 检查技能是否在项目中
 func CheckSkillInProject(cwd, skillID string) (bool, error) {
-	stateManager, err := state.NewStateManager()
+	stateManager, err := newStateManager()
 	if err != nil {
 		return false, errors.Wrap(err, "CheckSkillInProject: 创建状态管理器失败")
 	}

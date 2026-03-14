@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/muidea/skill-hub/internal/multirepo"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
 	"github.com/spf13/cobra"
@@ -37,7 +36,7 @@ func runUse(skillID string, target string) error {
 		return err
 	}
 
-	repoManager, err := multirepo.NewManager()
+	repoManager, err := newRepositoryManager()
 	if err != nil {
 		return errors.Wrap(err, "创建多仓库管理器失败")
 	}

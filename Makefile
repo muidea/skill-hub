@@ -14,7 +14,7 @@ LDFLAGS = -X 'github.com/muidea/skill-hub/internal/cli.version=$(VERSION)' \
 
 # Build the binary
 build:
-	go build -ldflags="$(LDFLAGS)" -o bin/skill-hub ./cmd/skill-hub
+	go build -ldflags="$(LDFLAGS)" -o bin/skill-hub ./application/skill-hub/cmd
 
 # Clean build artifacts
 clean:
@@ -105,7 +105,7 @@ release-all: clean
 	# Linux amd64
 	@echo "Building linux-amd64..."
 	@mkdir -p dist/tmp-linux-amd64
-	GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-linux-amd64/skill-hub ./cmd/skill-hub
+	GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-linux-amd64/skill-hub ./application/skill-hub/cmd
 	cp README.md dist/tmp-linux-amd64/
 	cp LICENSE dist/tmp-linux-amd64/
 	cd dist/tmp-linux-amd64 && tar -czf ../skill-hub-linux-amd64.tar.gz .
@@ -116,7 +116,7 @@ release-all: clean
 	# Linux arm64
 	@echo "Building linux-arm64..."
 	@mkdir -p dist/tmp-linux-arm64
-	GOOS=linux GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-linux-arm64/skill-hub ./cmd/skill-hub
+	GOOS=linux GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-linux-arm64/skill-hub ./application/skill-hub/cmd
 	cp README.md dist/tmp-linux-arm64/
 	cp LICENSE dist/tmp-linux-arm64/
 	cd dist/tmp-linux-arm64 && tar -czf ../skill-hub-linux-arm64.tar.gz .
@@ -127,7 +127,7 @@ release-all: clean
 	# macOS amd64
 	@echo "Building darwin-amd64..."
 	@mkdir -p dist/tmp-darwin-amd64
-	GOOS=darwin GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-darwin-amd64/skill-hub ./cmd/skill-hub
+	GOOS=darwin GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-darwin-amd64/skill-hub ./application/skill-hub/cmd
 	cp README.md dist/tmp-darwin-amd64/
 	cp LICENSE dist/tmp-darwin-amd64/
 	cd dist/tmp-darwin-amd64 && tar -czf ../skill-hub-darwin-amd64.tar.gz .
@@ -138,7 +138,7 @@ release-all: clean
 	# macOS arm64
 	@echo "Building darwin-arm64..."
 	@mkdir -p dist/tmp-darwin-arm64
-	GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-darwin-arm64/skill-hub ./cmd/skill-hub
+	GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-darwin-arm64/skill-hub ./application/skill-hub/cmd
 	cp README.md dist/tmp-darwin-arm64/
 	cp LICENSE dist/tmp-darwin-arm64/
 	cd dist/tmp-darwin-arm64 && tar -czf ../skill-hub-darwin-arm64.tar.gz .
@@ -149,7 +149,7 @@ release-all: clean
 	# Windows amd64
 	@echo "Building windows-amd64..."
 	@mkdir -p dist/tmp-windows-amd64
-	GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-windows-amd64/skill-hub.exe ./cmd/skill-hub
+	GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-windows-amd64/skill-hub.exe ./application/skill-hub/cmd
 	cp README.md dist/tmp-windows-amd64/
 	cp LICENSE dist/tmp-windows-amd64/
 	cd dist/tmp-windows-amd64 && tar -czf ../skill-hub-windows-amd64.tar.gz .
@@ -160,7 +160,7 @@ release-all: clean
 	# Windows arm64
 	@echo "Building windows-arm64..."
 	@mkdir -p dist/tmp-windows-arm64
-	GOOS=windows GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-windows-arm64/skill-hub.exe ./cmd/skill-hub
+	GOOS=windows GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-windows-arm64/skill-hub.exe ./application/skill-hub/cmd
 	cp README.md dist/tmp-windows-arm64/
 	cp LICENSE dist/tmp-windows-arm64/
 	cd dist/tmp-windows-arm64 && tar -czf ../skill-hub-windows-arm64.tar.gz .

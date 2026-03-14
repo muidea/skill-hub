@@ -1,20 +1,16 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-	"github.com/muidea/skill-hub/internal/config"
-	"github.com/muidea/skill-hub/internal/multirepo"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/logging"
 	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
+	"github.com/spf13/cobra"
 )
 
 var listCmd = &cobra.Command{
@@ -42,28 +38,26 @@ func runList(target string, verbose bool, repoFilters []string) error {
 	}
 
 	// 创建多仓库管理器
-	repoManager, err := multirepo.NewManager()
+	repoManager, err := newRepositoryManager()
 	if err != nil {
 		return errors.Wrap(err, "创建多仓库管理器失败")
 	}
 
-	// 获取技能列表，支持按仓库过滤
+	repoFilters = normalizeRepoFilters(repoFilters)
+
 	var skillsMetadata []spec.SkillMetadata
 	if len(repoFilters) == 0 {
-		// 如果没有指定仓库过滤器，获取所有技能
 		skillsMetadata, err = repoManager.ListSkills("")
 		if err != nil {
 			return errors.Wrap(err, "获取技能列表失败")
 		}
 	} else {
-		// 获取所有可用仓库以验证过滤器
 		availableRepos, err := repoManager.ListRepositories()
 		if err != nil {
 			return errors.Wrap(err, "获取仓库列表失败")
 		}
 
-		// 验证仓库过滤器
-		validRepos := make(map[string]bool)
+		validRepos := make(map[string]bool, len(availableRepos))
 		for _, repo := range availableRepos {
 			validRepos[repo.Name] = true
 		}
@@ -72,22 +66,20 @@ func runList(target string, verbose bool, repoFilters []string) error {
 			if !validRepos[repoFilter] {
 				return errors.NewWithCodef("runList", errors.ErrConfigInvalid, "仓库 '%s' 不存在或已禁用", repoFilter)
 			}
+		}
 
-			// 获取指定仓库的技能
-			repoSkills, err := repoManager.ListSkills(repoFilter)
-			if err != nil {
-				return errors.Wrapf(err, "获取仓库 '%s' 的技能列表失败", repoFilter)
-			}
-			skillsMetadata = append(skillsMetadata, repoSkills...)
+		skillsMetadata, err = repoManager.ListSkillsInRepositories(repoFilters)
+		if err != nil {
+			return errors.Wrap(err, "获取技能列表失败")
 		}
 	}
 
 	// 按目标环境过滤技能
+	targetLower := strings.ToLower(target)
 	var filteredSkills []spec.SkillMetadata
 	if target != "" {
 		for _, skill := range skillsMetadata {
 			compatLower := strings.ToLower(skill.Compatibility)
-			targetLower := strings.ToLower(target)
 
 			// 检查技能是否兼容指定的目标环境
 			isCompatible := false
@@ -239,104 +231,43 @@ func runList(target string, verbose bool, repoFilters []string) error {
 	return nil
 }
 
-// refreshRegistry 刷新技能索引，确保registry.json与skills目录同步
-func refreshRegistry() error {
-	// 获取日志记录器
-	logger := logging.GetGlobalLogger().WithOperation("refreshRegistry")
-	startTime := time.Now()
-
-	// 获取repo目录
-	repoPath, err := config.GetRepoPath()
-	if err != nil {
-		return errors.Wrap(err, "refreshRegistry: 获取repo路径失败")
-	}
-
-	// registry.json在根目录
-	rootDir, err := config.GetRootDir()
-	if err != nil {
-		return errors.Wrap(err, "refreshRegistry: 获取根目录失败")
-	}
-	registryPath := filepath.Join(rootDir, "registry.json")
-	skillsDir := filepath.Join(repoPath, "skills")
-
-	// 检查skills目录是否存在
-	if _, err := os.Stat(skillsDir); os.IsNotExist(err) {
-		// 如果skills目录不存在，创建空的registry.json
-		registryContent := `{
-  "version": "1.0.0",
-  "skills": []
-}`
-		if err := os.WriteFile(registryPath, []byte(registryContent), 0644); err != nil {
-			return errors.Wrap(err, "refreshRegistry: 创建空registry.json失败")
-		}
-		logger.Info("创建空registry.json", "registry_path", registryPath)
+func normalizeRepoFilters(repoFilters []string) []string {
+	if len(repoFilters) == 0 {
 		return nil
 	}
 
-	// 扫描skills目录下的所有子目录
-	entries, err := os.ReadDir(skillsDir)
+	seen := make(map[string]struct{}, len(repoFilters))
+	var normalized []string
+	for _, repo := range repoFilters {
+		if repo == "" {
+			continue
+		}
+		if _, ok := seen[repo]; ok {
+			continue
+		}
+		seen[repo] = struct{}{}
+		normalized = append(normalized, repo)
+	}
+
+	return normalized
+}
+
+// refreshRegistry 刷新技能索引，确保registry.json与skills目录同步
+func refreshRegistry() error {
+	logger := logging.GetGlobalLogger().WithOperation("refreshRegistry")
+	startTime := time.Now()
+
+	defaultRepo, err := defaultRepository()
 	if err != nil {
-		return errors.Wrap(err, "refreshRegistry: 读取skills目录失败")
+		return errors.Wrap(err, "refreshRegistry: 获取默认仓库失败")
 	}
 
-	logger.Debug("开始扫描skills目录", "skills_dir", skillsDir, "entry_count", len(entries))
-
-	var skills []spec.SkillMetadata
-	validCount := 0
-	invalidCount := 0
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		skillID := entry.Name()
-		skillDir := filepath.Join(skillsDir, skillID)
-		skillMdPath := filepath.Join(skillDir, "SKILL.md")
-
-		// 检查是否存在SKILL.md文件
-		if _, err := os.Stat(skillMdPath); os.IsNotExist(err) {
-			logger.Debug("跳过无SKILL.md文件的技能目录", "skill_id", skillID)
-			invalidCount++
-			continue
-		}
-
-		skillMeta, err := parseSkillMetadataFromFile(skillMdPath, skillID)
-		if err != nil {
-			// 不输出错误，继续处理其他技能
-			logger.Debug("解析技能元数据失败", "skill_id", skillID, "error", err.Error())
-			invalidCount++
-			continue
-		}
-
-		skills = append(skills, *skillMeta)
-		validCount++
-		logger.Debug("成功解析技能", "skill_id", skillID, "name", skillMeta.Name, "version", skillMeta.Version)
+	if err := rebuildRepositoryIndex(defaultRepo.Name); err != nil {
+		return errors.Wrap(err, "refreshRegistry: 重建仓库索引失败")
 	}
 
-	logger.Info("技能扫描完成", "total_entries", len(entries), "valid_skills", validCount, "invalid_entries", invalidCount)
-
-	// 创建registry对象
-	registry := spec.Registry{
-		Version: "1.0.0",
-		Skills:  skills,
-	}
-
-	// 转换为JSON
-	registryJSON, err := json.MarshalIndent(registry, "", "  ")
-	if err != nil {
-		return errors.Wrap(err, "refreshRegistry: 序列化registry失败")
-	}
-
-	// 写入文件
-	if err := os.WriteFile(registryPath, registryJSON, 0644); err != nil {
-		return errors.Wrap(err, "refreshRegistry: 写入registry.json失败")
-	}
-
-	// 记录成功日志
 	logger.Info("registry.json刷新成功",
-		"registry_path", registryPath,
-		"skill_count", len(skills),
+		"repo_name", defaultRepo.Name,
 		"duration_ms", time.Since(startTime).Milliseconds())
 
 	return nil

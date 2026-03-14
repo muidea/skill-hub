@@ -1,13 +1,13 @@
 package git
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
 	"github.com/muidea/skill-hub/internal/adapter"
 	"github.com/muidea/skill-hub/internal/config"
 	"github.com/muidea/skill-hub/pkg/skill"
@@ -192,6 +192,11 @@ func (sr *SkillRepository) ListSkillsFromRemote() ([]*spec.Skill, error) {
 		return nil, err
 	}
 
+	return sr.ListLocalSkills()
+}
+
+// ListLocalSkills 从本地仓库列出技能
+func (sr *SkillRepository) ListLocalSkills() ([]*spec.Skill, error) {
 	// 加载所有技能
 	skillsDir, err := config.GetSkillsDir()
 	if err != nil {
@@ -347,6 +352,9 @@ description: %s
 	}
 
 	fmt.Printf("✅ 技能 '%s' 创建成功\n", skill.ID)
+	if err := sr.UpdateRegistry(); err != nil {
+		fmt.Printf("⚠️  技能索引刷新失败: %v\n", err)
+	}
 
 	// 推送到远程仓库
 	if sr.repo.IsInitialized() {
@@ -362,52 +370,55 @@ description: %s
 
 // UpdateRegistry 更新技能注册表
 func (sr *SkillRepository) UpdateRegistry() error {
-	skills, err := sr.ListSkillsFromRemote()
+	skills, err := sr.ListLocalSkills()
 	if err != nil {
 		return err
 	}
 
-	// 创建注册表
+	registry := buildRegistryFromSkills(skills)
+
+	repoPath := sr.repo.GetPath()
+	registryData, err := json.MarshalIndent(registry, "", "  ")
+	if err != nil {
+		return fmt.Errorf("序列化注册表失败: %w", err)
+	}
+
+	repoRegistryPath := filepath.Join(repoPath, "registry.json")
+	if err := os.WriteFile(repoRegistryPath, registryData, 0644); err != nil {
+		return fmt.Errorf("保存仓库注册表失败: %w", err)
+	}
+
+	rootRegistryPath, err := config.GetRegistryPath()
+	if err == nil {
+		if err := os.WriteFile(rootRegistryPath, registryData, 0644); err != nil {
+			return fmt.Errorf("保存根注册表失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func buildRegistryFromSkills(skills []*spec.Skill) spec.Registry {
 	registry := spec.Registry{
-		Version: "1.0",
+		Version: "1.0.0",
 		Skills:  make([]spec.SkillMetadata, 0, len(skills)),
 	}
 
 	for _, skill := range skills {
 		metadata := spec.SkillMetadata{
-			ID:            skill.ID,
-			Name:          skill.Name,
-			Version:       skill.Version,
-			Author:        skill.Author,
-			Description:   skill.Description,
-			Tags:          skill.Tags,
-			Compatibility: skill.Compatibility,
+			ID:               skill.ID,
+			Name:             skill.Name,
+			Version:          skill.Version,
+			Author:           skill.Author,
+			Description:      skill.Description,
+			Tags:             skill.Tags,
+			Compatibility:    skill.Compatibility,
+			Repository:       skill.Repository,
+			RepositoryPath:   skill.RepositoryPath,
+			RepositoryCommit: skill.RepositoryCommit,
 		}
 		registry.Skills = append(registry.Skills, metadata)
 	}
 
-	// 保存注册表
-	registryPath, err := config.GetRegistryPath()
-	if err != nil {
-		return err
-	}
-
-	registryData, err := yaml.Marshal(registry)
-	if err != nil {
-		return fmt.Errorf("序列化注册表失败: %w", err)
-	}
-
-	if err := os.WriteFile(registryPath, registryData, 0644); err != nil {
-		return fmt.Errorf("保存注册表失败: %w", err)
-	}
-
-	// 提交更改
-	if sr.repo.IsInitialized() {
-		message := "更新技能注册表"
-		if err := sr.PushChanges(message); err != nil {
-			fmt.Printf("⚠️  注册表更新成功，但推送到远程失败: %v\n", err)
-		}
-	}
-
-	return nil
+	return registry
 }

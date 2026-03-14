@@ -47,6 +47,7 @@ func TestCompleter_WithEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SKILL_HUB_HOME", tmpDir)
 	defer config.ResetForTest()
+	resetCompletionCache()
 
 	configPath := filepath.Join(tmpDir, "config.yaml")
 	configContent := `multi_repo:

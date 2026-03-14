@@ -8,6 +8,29 @@
 
 ## 简介
 
+## 项目结构
+
+当前推荐结构已经对齐为多模块应用入口：
+
+```text
+skill-hub/
+├── application/skill-hub/      # 主应用入口
+│   ├── cmd/                    # 推荐构建入口
+│   └── docker/                 # Docker 启动定义
+├── internal/modules/kernel/    # 核心模块壳层
+├── internal/cli/               # CLI 命令实现
+├── internal/adapter/           # 外部工具适配器
+├── internal/engine/            # 技能引擎
+├── internal/state/             # 状态管理
+└── pkg/                        # 公共包
+```
+
+当前推荐构建命令：
+
+```bash
+go build -o bin/skill-hub ./application/skill-hub/cmd
+```
+
 ### 核心理念
 
 - **Git 为中心**：所有技能存储在Git仓库中，作为单一可信源

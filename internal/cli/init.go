@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,12 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/muidea/skill-hub/internal/adapter"
-	"github.com/muidea/skill-hub/internal/git"
-	"github.com/muidea/skill-hub/internal/state"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/logging"
-	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
 	"github.com/muidea/skill-hub/pkg/utils"
 )
@@ -238,7 +233,7 @@ multi_repo:
 			}
 
 			// 创建临时Repository对象用于克隆
-			tempRepo, err := git.NewRepository(repoPath)
+			tempRepo, err := newGitRepository(repoPath)
 			if err != nil {
 				return errors.WrapWithCode(err, "runInit", errors.ErrGitOperation, "创建仓库对象失败")
 			}
@@ -257,7 +252,7 @@ multi_repo:
 				fmt.Println("\n将创建本地空仓库")
 
 				// 如果克隆失败，创建本地空仓库
-				return initLocalEmptyRepository(repoPath, skillHubDir)
+				return initLocalEmptyRepository(repoPath)
 			}
 
 			fmt.Println("✅ 远程技能仓库克隆完成")
@@ -265,7 +260,7 @@ multi_repo:
 
 		// 刷新技能索引
 		fmt.Println("\n正在刷新技能索引...")
-		if err := refreshSkillRegistry(repoPath); err != nil {
+		if err := rebuildRepositoryIndex(repoName); err != nil {
 			fmt.Printf("⚠️  刷新技能索引失败: %v\n", err)
 		} else {
 			fmt.Println("✓ 技能索引已刷新")
@@ -279,7 +274,7 @@ multi_repo:
 			repoAlreadyValid = true
 		} else {
 			// 初始化新的本地空git仓库
-			if err := initLocalEmptyRepository(repoPath, skillHubDir); err != nil {
+			if err := initLocalEmptyRepository(repoPath); err != nil {
 				return err
 			}
 		}
@@ -308,7 +303,7 @@ multi_repo:
 
 	// 清理可能创建的备份目录
 	if gitURL != "" {
-		if err := adapter.CleanupTimestampedBackupDirs(repoPath); err != nil {
+		if err := cleanupTimestampedBackupDirs(repoPath); err != nil {
 			fmt.Printf("⚠️  清理备份目录失败: %v\n", err)
 			logger.Warn("清理备份目录失败", "error", err.Error())
 		}
@@ -351,7 +346,7 @@ func isRepoDirectoryValid(repoPath string) bool {
 }
 
 // initLocalEmptyRepository 在repo目录初始化本地空git仓库
-func initLocalEmptyRepository(repoPath, skillHubDir string) error {
+func initLocalEmptyRepository(repoPath string) error {
 	fmt.Println("\n正在初始化本地空技能仓库...")
 
 	// 创建必要的子目录
@@ -368,40 +363,19 @@ func initLocalEmptyRepository(repoPath, skillHubDir string) error {
 	}
 
 	// 初始化git仓库（NewRepository会自动初始化如果不存在）
-	_, err := git.NewRepository(repoPath)
+	_, err := newGitRepository(repoPath)
 	if err != nil {
 		return errors.WrapWithCode(err, "initLocalEmptyRepository", errors.ErrGitOperation, "初始化git仓库失败")
 	}
 	fmt.Println("✓ 初始化git仓库")
 
-	// 创建初始registry.json（空的技能索引）- 在根目录
-	registryPath := filepath.Join(skillHubDir, "registry.json")
-	if err := createInitialRegistry(registryPath); err != nil {
+	repoName := filepath.Base(repoPath)
+	if err := rebuildRepositoryIndex(repoName); err != nil {
 		return errors.WrapWithCode(err, "initLocalEmptyRepository", errors.ErrFileOperation, "创建技能索引失败")
 	}
-	fmt.Printf("✓ 创建技能索引: %s\n", registryPath)
+	fmt.Printf("✓ 创建仓库技能索引: %s\n", filepath.Join(repoPath, "registry.json"))
 
 	return nil
-}
-
-// createInitialRegistry 创建初始技能索引
-func createInitialRegistry(registryPath string) error {
-	registryContent := `{
-  "version": "1.0.0",
-  "skills": []
-}
-`
-
-	return os.WriteFile(registryPath, []byte(registryContent), 0644)
-}
-
-func parseSkillMetadata(mdPath, skillID string) (*spec.SkillMetadata, error) {
-	content, err := os.ReadFile(mdPath)
-	if err != nil {
-		return nil, errors.WrapWithCode(err, "parseSkillMetadata", errors.ErrFileOperation, "读取SKILL.md失败")
-	}
-
-	return skill.ParseSkillMetadata(content, skillID)
 }
 
 // isSameGitRepo 检查repo目录是否已经是相同的git仓库
@@ -470,7 +444,7 @@ func setDefaultTargetIfEmpty(target string) error {
 	}
 
 	// 创建状态管理器
-	stateManager, err := state.NewStateManager()
+	stateManager, err := newStateManager()
 	if err != nil {
 		return err
 	}
@@ -508,72 +482,4 @@ func getRemoteURLFromGit(repoPath string) (string, error) {
 	}
 
 	return strings.TrimSpace(string(output)), nil
-}
-
-// refreshSkillRegistry 刷新技能索引
-func refreshSkillRegistry(repoPath string) error {
-	// registry.json现在在根目录
-	skillHubDir := filepath.Dir(repoPath)
-	registryPath := filepath.Join(skillHubDir, "registry.json")
-	skillsDir := filepath.Join(repoPath, "skills")
-
-	// 检查skills目录是否存在
-	if _, err := os.Stat(skillsDir); os.IsNotExist(err) {
-		// 如果skills目录不存在，创建空的registry.json
-		registryContent := `{
-  "version": "1.0.0",
-  "skills": []
-}`
-		return os.WriteFile(registryPath, []byte(registryContent), 0644)
-	}
-
-	// 扫描skills目录下的所有子目录
-	entries, err := os.ReadDir(skillsDir)
-	if err != nil {
-		return errors.Wrap(err, "读取skills目录失败")
-	}
-
-	var skills []spec.SkillMetadata
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		skillID := entry.Name()
-		skillDir := filepath.Join(skillsDir, skillID)
-		skillMdPath := filepath.Join(skillDir, "SKILL.md")
-
-		// 检查是否存在SKILL.md文件
-		if _, err := os.Stat(skillMdPath); os.IsNotExist(err) {
-			continue
-		}
-
-		// 解析SKILL.md文件
-		skillMeta, err := parseSkillMetadata(skillMdPath, skillID)
-		if err != nil {
-			fmt.Printf("⚠️  解析技能 %s 失败: %v\n", skillID, err)
-			continue
-		}
-
-		skills = append(skills, *skillMeta)
-	}
-
-	// 创建registry对象
-	registry := spec.Registry{
-		Version: "1.0.0",
-		Skills:  skills,
-	}
-
-	// 转换为JSON
-	registryJSON, err := json.MarshalIndent(registry, "", "  ")
-	if err != nil {
-		return errors.Wrap(err, "序列化registry失败")
-	}
-
-	if err := os.WriteFile(registryPath, registryJSON, 0644); err != nil {
-		return errors.Wrap(err, "写入registry.json失败")
-	}
-
-	fmt.Printf("✓ 已索引 %d 个技能\n", len(skills))
-	return nil
 }

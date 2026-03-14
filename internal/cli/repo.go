@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/muidea/skill-hub/internal/config"
-	"github.com/muidea/skill-hub/internal/multirepo"
 	"github.com/muidea/skill-hub/pkg/errors"
 
 	"github.com/spf13/cobra"
@@ -160,12 +159,7 @@ func runRepoAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// 添加仓库
-	manager, err := multirepo.NewManager()
-	if err != nil {
-		return errors.Wrap(err, "初始化多仓库管理器失败")
-	}
-
-	if err := manager.AddRepository(repoConfig); err != nil {
+	if err := addRepository(repoConfig); err != nil {
 		return errors.Wrap(err, "添加仓库失败")
 	}
 
@@ -186,12 +180,7 @@ func runRepoAdd(cmd *cobra.Command, args []string) error {
 
 // runRepoList 执行列出仓库操作
 func runRepoList() error {
-	manager, err := multirepo.NewManager()
-	if err != nil {
-		return errors.Wrap(err, "初始化多仓库管理器失败")
-	}
-
-	repos, err := manager.ListAllRepositories()
+	repos, err := listRepositories(true)
 	if err != nil {
 		return errors.Wrap(err, "获取仓库列表失败")
 	}
@@ -202,7 +191,7 @@ func runRepoList() error {
 	}
 
 	// 获取默认仓库
-	cfg, err := config.GetConfig()
+	cfg, err := loadHubConfig()
 	if err != nil {
 		return errors.Wrap(err, "获取配置失败")
 	}
@@ -261,11 +250,6 @@ func runRepoList() error {
 
 // runRepoRemove 执行移除仓库操作
 func runRepoRemove(name string) error {
-	manager, err := multirepo.NewManager()
-	if err != nil {
-		return errors.Wrap(err, "初始化多仓库管理器失败")
-	}
-
 	// 确认操作
 	fmt.Printf("确定要移除仓库 '%s' 吗？(y/N): ", name)
 	var confirm string
@@ -276,7 +260,7 @@ func runRepoRemove(name string) error {
 		return nil
 	}
 
-	if err := manager.RemoveRepository(name); err != nil {
+	if err := removeRepository(name); err != nil {
 		return errors.Wrap(err, "移除仓库失败")
 	}
 
@@ -288,24 +272,19 @@ func runRepoRemove(name string) error {
 
 // runRepoSync 执行同步仓库操作
 func runRepoSync(args []string, syncAll bool) error {
-	manager, err := multirepo.NewManager()
-	if err != nil {
-		return errors.Wrap(err, "初始化多仓库管理器失败")
-	}
-
 	if len(args) > 0 {
 		// 同步指定仓库
 		name := args[0]
 		fmt.Printf("正在同步仓库 '%s'...\n", name)
 
-		if err := manager.SyncRepository(name); err != nil {
+		if err := syncRepository(name); err != nil {
 			return errors.Wrapf(err, "同步仓库 '%s' 失败", name)
 		}
 
 		fmt.Printf("✅ 仓库 '%s' 同步完成\n", name)
 	} else {
 		// 同步所有仓库
-		repos, err := manager.ListRepositories()
+		repos, err := listRepositories(false)
 		if err != nil {
 			return errors.Wrap(err, "获取仓库列表失败")
 		}
@@ -327,7 +306,7 @@ func runRepoSync(args []string, syncAll bool) error {
 			}
 
 			fmt.Printf("\n同步仓库: %s\n", repo.Name)
-			if err := manager.SyncRepository(repo.Name); err != nil {
+			if err := syncRepository(repo.Name); err != nil {
 				fmt.Printf("❌ 同步失败: %v\n", err)
 				failedRepos = append(failedRepos, repo.Name)
 			} else {
@@ -348,12 +327,7 @@ func runRepoSync(args []string, syncAll bool) error {
 
 // runRepoEnable 执行启用仓库操作
 func runRepoEnable(name string) error {
-	manager, err := multirepo.NewManager()
-	if err != nil {
-		return errors.Wrap(err, "初始化多仓库管理器失败")
-	}
-
-	if err := manager.EnableRepository(name); err != nil {
+	if err := enableRepository(name); err != nil {
 		return errors.Wrap(err, "启用仓库失败")
 	}
 
@@ -363,11 +337,6 @@ func runRepoEnable(name string) error {
 
 // runRepoDisable 执行禁用仓库操作
 func runRepoDisable(name string) error {
-	manager, err := multirepo.NewManager()
-	if err != nil {
-		return errors.Wrap(err, "初始化多仓库管理器失败")
-	}
-
 	// 确认操作
 	fmt.Printf("确定要禁用仓库 '%s' 吗？禁用后该仓库的技能将不可用。(y/N): ", name)
 	var confirm string
@@ -378,7 +347,7 @@ func runRepoDisable(name string) error {
 		return nil
 	}
 
-	if err := manager.DisableRepository(name); err != nil {
+	if err := disableRepository(name); err != nil {
 		return errors.Wrap(err, "禁用仓库失败")
 	}
 
@@ -388,36 +357,12 @@ func runRepoDisable(name string) error {
 
 // runRepoDefault 执行设置默认仓库操作
 func runRepoDefault(name string) error {
-	manager, err := multirepo.NewManager()
-	if err != nil {
-		return errors.Wrap(err, "初始化多仓库管理器失败")
-	}
-
 	// 检查仓库是否存在
-	if _, err := manager.GetRepository(name); err != nil {
+	if _, err := getRepository(name); err != nil {
 		return errors.Wrapf(err, "仓库 '%s' 不存在或未启用", name)
 	}
 
-	// 获取配置
-	cfg, err := config.GetConfig()
-	if err != nil {
-		return errors.Wrap(err, "获取配置失败")
-	}
-
-	// 启用多仓库功能（如果尚未启用）
-	if cfg.MultiRepo == nil {
-		cfg.MultiRepo = &config.MultiRepoConfig{
-			Enabled:      true,
-			DefaultRepo:  name,
-			Repositories: make(map[string]config.RepositoryConfig),
-		}
-	} else {
-		cfg.MultiRepo.Enabled = true
-		cfg.MultiRepo.DefaultRepo = name
-	}
-
-	// 保存配置到文件
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := setDefaultRepository(name); err != nil {
 		return errors.Wrap(err, "保存配置失败")
 	}
 

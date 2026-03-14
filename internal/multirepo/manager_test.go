@@ -1,9 +1,14 @@
 package multirepo
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/muidea/skill-hub/internal/config"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 func TestManager_ListRepositories(t *testing.T) {
@@ -147,6 +152,181 @@ func TestManager_FindSkill(t *testing.T) {
 	// 在测试环境中，我们期望返回空数组（因为没有实际文件）
 	if len(skills) != 0 {
 		t.Errorf("期望空技能数组，实际得到 %d 个技能", len(skills))
+	}
+}
+
+func TestFilterRepositories(t *testing.T) {
+	repos := []config.RepositoryConfig{
+		{Name: "main"},
+		{Name: "community"},
+	}
+
+	got := filterRepositories(repos, "community")
+	want := []config.RepositoryConfig{{Name: "community"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("filterRepositories() = %#v, want %#v", got, want)
+	}
+}
+
+func TestListSkillsInRepository_UsesRegistryIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("SKILL_HUB_HOME", tmpDir)
+
+	repoDir := filepath.Join(tmpDir, "repositories", "main")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("创建仓库目录失败: %v", err)
+	}
+
+	registry := spec.Registry{
+		Version: "1.0.0",
+		Skills: []spec.SkillMetadata{
+			{
+				ID:            "indexed-skill",
+				Name:          "Indexed Skill",
+				Version:       "1.2.3",
+				Compatibility: "open_code",
+			},
+		},
+	}
+
+	data, err := json.Marshal(registry)
+	if err != nil {
+		t.Fatalf("序列化registry失败: %v", err)
+	}
+
+	registryPath := filepath.Join(repoDir, "registry.json")
+	if err := os.WriteFile(registryPath, data, 0644); err != nil {
+		t.Fatalf("写入registry失败: %v", err)
+	}
+
+	skills := listSkillsInRepository(config.RepositoryConfig{Name: "main"})
+	if len(skills) != 1 {
+		t.Fatalf("listSkillsInRepository() 返回 %d 个技能, want 1", len(skills))
+	}
+	if skills[0].Repository != "main" {
+		t.Fatalf("Repository = %q, want %q", skills[0].Repository, "main")
+	}
+	if skills[0].RepositoryPath != filepath.Join("skills", "indexed-skill") {
+		t.Fatalf("RepositoryPath = %q, want %q", skills[0].RepositoryPath, filepath.Join("skills", "indexed-skill"))
+	}
+}
+
+func TestManager_RebuildRepositoryIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("SKILL_HUB_HOME", tmpDir)
+
+	cfg := &config.Config{
+		MultiRepo: &config.MultiRepoConfig{
+			Enabled:     true,
+			DefaultRepo: "main",
+			Repositories: map[string]config.RepositoryConfig{
+				"main": {
+					Name:      "main",
+					Enabled:   true,
+					IsArchive: true,
+				},
+			},
+		},
+	}
+
+	repoDir := filepath.Join(tmpDir, "repositories", "main", "skills", "rebuilt-skill")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("创建技能目录失败: %v", err)
+	}
+
+	content := `---
+name: Rebuilt Skill
+description: rebuilt from repo
+version: 1.0.0
+compatibility: open_code
+---
+
+# Skill
+`
+	if err := os.WriteFile(filepath.Join(repoDir, "SKILL.md"), []byte(content), 0644); err != nil {
+		t.Fatalf("写入技能文件失败: %v", err)
+	}
+
+	m := &Manager{config: cfg}
+	if err := m.RebuildRepositoryIndex("main"); err != nil {
+		t.Fatalf("RebuildRepositoryIndex() error = %v", err)
+	}
+
+	registryPath := filepath.Join(tmpDir, "repositories", "main", "registry.json")
+	data, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatalf("读取仓库索引失败: %v", err)
+	}
+
+	var registry spec.Registry
+	if err := json.Unmarshal(data, &registry); err != nil {
+		t.Fatalf("解析仓库索引失败: %v", err)
+	}
+
+	if len(registry.Skills) != 1 || registry.Skills[0].ID != "rebuilt-skill" {
+		t.Fatalf("unexpected registry contents: %#v", registry.Skills)
+	}
+}
+
+func TestManager_ArchiveToDefaultRepository(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("SKILL_HUB_HOME", tmpDir)
+
+	cfg := &config.Config{
+		MultiRepo: &config.MultiRepoConfig{
+			Enabled:     true,
+			DefaultRepo: "main",
+			Repositories: map[string]config.RepositoryConfig{
+				"main": {
+					Name:      "main",
+					Enabled:   true,
+					IsArchive: true,
+				},
+			},
+		},
+	}
+
+	sourceDir := filepath.Join(tmpDir, "source-skill")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatalf("创建源技能目录失败: %v", err)
+	}
+
+	content := `---
+name: Archived Skill
+description: archived into default repo
+version: 1.0.0
+compatibility: open_code
+---
+
+# Skill
+`
+	if err := os.WriteFile(filepath.Join(sourceDir, "SKILL.md"), []byte(content), 0644); err != nil {
+		t.Fatalf("写入源技能文件失败: %v", err)
+	}
+
+	m := &Manager{config: cfg}
+	if err := m.ArchiveToDefaultRepository("archived-skill", sourceDir); err != nil {
+		t.Fatalf("ArchiveToDefaultRepository() error = %v", err)
+	}
+
+	targetPath := filepath.Join(tmpDir, "repositories", "main", "skills", "archived-skill", "SKILL.md")
+	if _, err := os.Stat(targetPath); err != nil {
+		t.Fatalf("归档技能文件不存在: %v", err)
+	}
+
+	registryPath := filepath.Join(tmpDir, "repositories", "main", "registry.json")
+	data, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatalf("读取仓库索引失败: %v", err)
+	}
+
+	var registry spec.Registry
+	if err := json.Unmarshal(data, &registry); err != nil {
+		t.Fatalf("解析仓库索引失败: %v", err)
+	}
+
+	if len(registry.Skills) != 1 || registry.Skills[0].ID != "archived-skill" {
+		t.Fatalf("unexpected registry contents: %#v", registry.Skills)
 	}
 }
 

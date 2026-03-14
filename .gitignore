@@ -26,8 +26,8 @@ dist
 skill-hub
 validate
 
-!cmd/skill-hub
-!cmd/validate
+!application/skill-hub
+!application/validate/cmd
 
 !docs/Skill-Hub命令规范.md
 

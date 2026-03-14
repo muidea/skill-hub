@@ -4,8 +4,17 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
+
+func TestNormalizeRepoFilters(t *testing.T) {
+	got := normalizeRepoFilters([]string{"main", "", "community", "main"})
+	want := []string{"main", "community"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalizeRepoFilters() = %#v, want %#v", got, want)
+	}
+}
 
 func TestRefreshRegistry_Disabled(t *testing.T) {
 	t.Skip("跳过有环境依赖的测试，使用TestRefreshRegistryLogic代替")

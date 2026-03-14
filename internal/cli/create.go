@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/muidea/skill-hub/internal/state"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
@@ -323,7 +322,7 @@ func validateSkillFile(filePath string) error {
 }
 
 func alreadyRegisteredAndSynced(projectPath, skillID, skillDir string) bool {
-	stateManager, err := state.NewStateManager()
+	stateManager, err := newStateManager()
 	if err != nil {
 		return false
 	}
@@ -343,7 +342,7 @@ func alreadyRegisteredAndSynced(projectPath, skillID, skillDir string) bool {
 }
 
 func refreshProjectState(projectPath, skillID, target string) error {
-	stateManager, err := state.NewStateManager()
+	stateManager, err := newStateManager()
 	if err != nil {
 		return errors.WrapWithCode(err, "refreshProjectState", errors.ErrSystem, "创建状态管理器失败")
 	}

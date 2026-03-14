@@ -153,6 +153,15 @@ func GetRegistryPath() (string, error) {
 	return filepath.Join(rootDir, "registry.json"), nil
 }
 
+// GetRepositoryRegistryPath 获取指定仓库的索引文件路径
+func GetRepositoryRegistryPath(repoName string) (string, error) {
+	repoDir, err := GetRepositoryPath(repoName)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(repoDir, "registry.json"), nil
+}
+
 // GetStatePath 获取状态文件路径
 func GetStatePath() (string, error) {
 	rootDir, err := GetRootDir()

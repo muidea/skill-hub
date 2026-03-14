@@ -8,9 +8,13 @@
 
 ```
 skill-hub/
-├── cmd/skill-hub/          # 主程序入口
+├── application/skill-hub/  # 主应用入口
+│   ├── cmd/                # 主程序入口
+│   └── docker/             # 容器入口
+├── application/skill-validate/ # 独立校验工具入口
 ├── internal/               # 内部包（不对外暴露）
 │   ├── cli/               # CLI命令实现
+│   ├── modules/           # 模块化壳层（对齐多模块结构）
 │   ├── adapter/           # 适配器层（cursor, claude, opencode）
 │   ├── engine/            # 技能引擎
 │   ├── multirepo/         # 多仓库管理
@@ -169,8 +173,8 @@ LDFLAGS="-X 'skill-hub/internal/cli.version=$(VERSION)' \
 
 ```bash
 # 交叉编译示例
-GOOS=linux GOARCH=amd64 go build -o dist/skill-hub-linux-amd64 ./cmd/skill-hub
-GOOS=darwin GOARCH=arm64 go build -o dist/skill-hub-darwin-arm64 ./cmd/skill-hub
+GOOS=linux GOARCH=amd64 go build -o dist/skill-hub-linux-amd64 ./application/skill-hub/cmd
+GOOS=darwin GOARCH=arm64 go build -o dist/skill-hub-darwin-arm64 ./application/skill-hub/cmd
 ```
 
 ## 测试
@@ -625,7 +629,7 @@ go get -u ./...
 
 ```bash
 # 使用delve调试
-dlv debug ./cmd/skill-hub
+dlv debug ./application/skill-hub/cmd
 
 # 添加调试日志
 import "log"

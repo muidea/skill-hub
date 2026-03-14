@@ -4,18 +4,30 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/muidea/skill-hub/internal/config"
-	"github.com/muidea/skill-hub/internal/multirepo"
-	"github.com/muidea/skill-hub/internal/state"
 	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 const shellCompNoFile = cobra.ShellCompDirectiveNoFileComp
+const completionCacheTTL = 5 * time.Second
 
 var targetValues = []string{spec.TargetCursor, spec.TargetClaudeCode, spec.TargetOpenCode, spec.TargetAll}
+
+type completionCacheEntry struct {
+	items     []string
+	expiresAt time.Time
+}
+
+var skillCompletionCache = struct {
+	mu      sync.Mutex
+	entries map[string]completionCacheEntry
+}{
+	entries: make(map[string]completionCacheEntry),
+}
 
 func filterPrefix(candidates []string, toComplete string) []string {
 	if toComplete == "" {
@@ -31,7 +43,7 @@ func filterPrefix(candidates []string, toComplete string) []string {
 }
 
 func completeSkillIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	mgr, err := multirepo.NewManager()
+	rootDir, err := getHubRootDir()
 	if err != nil {
 		return nil, shellCompNoFile
 	}
@@ -39,7 +51,18 @@ func completeSkillIDs(cmd *cobra.Command, args []string, toComplete string) ([]s
 	if idx := strings.Index(toComplete, "/"); idx >= 0 {
 		repoFilter = toComplete[:idx]
 	}
-	skills, err := mgr.ListSkills(repoFilter)
+
+	cacheKey := rootDir + "::" + repoFilter
+	if cached := readSkillCompletionCache(cacheKey); cached != nil {
+		return filterPrefix(cached, toComplete), shellCompNoFile
+	}
+
+	var repoNames []string
+	if repoFilter != "" {
+		repoNames = []string{repoFilter}
+	}
+
+	skills, err := listSkillMetadata(repoNames)
 	if err != nil {
 		return nil, shellCompNoFile
 	}
@@ -48,6 +71,7 @@ func completeSkillIDs(cmd *cobra.Command, args []string, toComplete string) ([]s
 		item := s.Repository + "/" + s.ID
 		ids = append(ids, item)
 	}
+	writeSkillCompletionCache(cacheKey, ids)
 	return filterPrefix(ids, toComplete), shellCompNoFile
 }
 
@@ -60,7 +84,7 @@ func completeEnabledSkillIDsForCwd(cmd *cobra.Command, args []string, toComplete
 	if err != nil {
 		return nil, shellCompNoFile
 	}
-	stateMgr, err := state.NewStateManager()
+	stateMgr, err := newStateManager()
 	if err != nil {
 		return nil, shellCompNoFile
 	}
@@ -80,16 +104,52 @@ func completeTargetValues(cmd *cobra.Command, args []string, toComplete string) 
 }
 
 func completeRepoNames(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.GetConfig()
+	repos, err := listRepositories(true)
 	if err != nil {
 		return nil, shellCompNoFile
 	}
-	if cfg.MultiRepo == nil || cfg.MultiRepo.Repositories == nil {
+	if len(repos) == 0 {
 		return nil, shellCompNoFile
 	}
 	var names []string
-	for name := range cfg.MultiRepo.Repositories {
-		names = append(names, name)
+	for _, repo := range repos {
+		names = append(names, repo.Name)
 	}
 	return filterPrefix(names, toComplete), shellCompNoFile
+}
+
+func readSkillCompletionCache(key string) []string {
+	skillCompletionCache.mu.Lock()
+	defer skillCompletionCache.mu.Unlock()
+
+	entry, ok := skillCompletionCache.entries[key]
+	if !ok {
+		return nil
+	}
+	if time.Now().After(entry.expiresAt) {
+		delete(skillCompletionCache.entries, key)
+		return nil
+	}
+
+	items := make([]string, len(entry.items))
+	copy(items, entry.items)
+	return items
+}
+
+func writeSkillCompletionCache(key string, items []string) {
+	skillCompletionCache.mu.Lock()
+	defer skillCompletionCache.mu.Unlock()
+
+	copied := make([]string, len(items))
+	copy(copied, items)
+	skillCompletionCache.entries[key] = completionCacheEntry{
+		items:     copied,
+		expiresAt: time.Now().Add(completionCacheTTL),
+	}
+}
+
+func resetCompletionCache() {
+	skillCompletionCache.mu.Lock()
+	defer skillCompletionCache.mu.Unlock()
+	skillCompletionCache.entries = make(map[string]completionCacheEntry)
 }

@@ -9,8 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/muidea/skill-hub/internal/config"
-	"github.com/muidea/skill-hub/internal/multirepo"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/utils"
@@ -74,7 +72,7 @@ func runFeedback(skillID string) error {
 		return errors.WrapWithCode(err, "runFeedback", errors.ErrFileOperation, "读取项目工作区文件失败")
 	}
 
-	repoManager, err := multirepo.NewManager()
+	repoManager, err := newRepositoryManager()
 	if err != nil {
 		return errors.Wrap(err, "初始化多仓库管理器失败")
 	}
@@ -84,7 +82,7 @@ func runFeedback(skillID string) error {
 		return errors.Wrap(err, "检查技能存在状态失败")
 	}
 
-	cfg, err := config.GetConfig()
+	cfg, err := loadHubConfig()
 	if err != nil {
 		return errors.Wrap(err, "获取配置失败")
 	}
@@ -94,7 +92,7 @@ func runFeedback(skillID string) error {
 		return errors.Wrap(err, "获取默认仓库失败")
 	}
 
-	repoDir, err := config.GetRepositoryPath(defaultRepo.Name)
+	repoDir, err := runtimeSvc.RepositoryPath(defaultRepo.Name)
 	if err != nil {
 		return errors.Wrap(err, "获取仓库路径失败")
 	}
@@ -225,15 +223,12 @@ func runFeedback(skillID string) error {
 		}
 	}
 
-	if err := os.MkdirAll(repoSkillDir, 0755); err != nil {
-		return errors.WrapWithCode(err, "runFeedback", errors.ErrFileOperation, "创建技能目录失败")
-	}
-
-	if err := copySkillDirectory(projectSkillDir, repoSkillDir); err != nil {
-		return errors.Wrap(err, "复制技能目录失败")
+	if err := archiveToDefaultRepository(skillID, projectSkillDir); err != nil {
+		return errors.Wrap(err, "归档技能到默认仓库失败")
 	}
 
 	fmt.Println("✓ 更新本地仓库文件")
+	fmt.Println("✓ 技能索引已刷新")
 
 	fmt.Println("✓ 技能已归档到默认仓库")
 

@@ -8,8 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/muidea/skill-hub/internal/config"
-	"github.com/muidea/skill-hub/internal/git"
 	"github.com/muidea/skill-hub/pkg/errors"
 )
 
@@ -95,12 +93,7 @@ func runGitSync() error {
 		return err
 	}
 
-	repo, err := git.NewSkillRepository()
-	if err != nil {
-		return err
-	}
-
-	return repo.Sync()
+	return syncSkillRepositoryAndRefresh()
 }
 
 func runGitStatus() error {
@@ -109,12 +102,7 @@ func runGitStatus() error {
 		return err
 	}
 
-	repo, err := git.NewSkillRepository()
-	if err != nil {
-		return errors.Wrap(err, "创建技能仓库失败")
-	}
-
-	status, err := repo.GetStatus()
+	status, err := skillRepositoryStatus()
 	if err != nil {
 		return errors.Wrap(err, "获取状态失败")
 	}
@@ -129,11 +117,6 @@ func runGitCommit() error {
 		return err
 	}
 
-	repo, err := git.NewSkillRepository()
-	if err != nil {
-		return err
-	}
-
 	// 获取提交信息
 	fmt.Print("请输入提交信息: ")
 	reader := bufio.NewReader(os.Stdin)
@@ -144,7 +127,7 @@ func runGitCommit() error {
 		message = "更新技能"
 	}
 
-	return repo.PushChanges(message)
+	return pushSkillRepositoryChanges(message)
 }
 
 func runGitPush() error {
@@ -153,13 +136,8 @@ func runGitPush() error {
 		return err
 	}
 
-	repo, err := git.NewSkillRepository()
-	if err != nil {
-		return err
-	}
-
 	// 检查是否有未提交的更改
-	status, err := repo.GetStatus()
+	status, err := skillRepositoryStatus()
 	if err != nil {
 		return err
 	}
@@ -182,12 +160,7 @@ func runGitPush() error {
 
 	// 直接推送已存在的提交（工作区可能仍有未提交更改）
 	fmt.Println("推送到远程仓库...")
-	repoImpl, err := git.NewSkillsRepository()
-	if err != nil {
-		return err
-	}
-
-	return repoImpl.Push()
+	return pushSkillRepositoryCommits()
 }
 
 func runGitPull() error {
@@ -196,12 +169,7 @@ func runGitPull() error {
 		return err
 	}
 
-	repo, err := git.NewSkillRepository()
-	if err != nil {
-		return err
-	}
-
-	return repo.Sync()
+	return syncSkillRepositoryAndRefresh()
 }
 
 func runGitRemoteSet(url string) error {
@@ -210,22 +178,13 @@ func runGitRemoteSet(url string) error {
 		return err
 	}
 
-	repo, err := git.NewSkillsRepository()
-	if err != nil {
-		return err
-	}
-
-	if err := repo.SetRemote(url); err != nil {
+	if err := setSkillRepositoryRemote(url); err != nil {
 		return errors.Wrap(err, "设置远程仓库失败")
 	}
 
-	cfg, err := config.GetConfig()
-	if err == nil && cfg.MultiRepo != nil {
-		if repoCfg, ok := cfg.MultiRepo.Repositories[cfg.MultiRepo.DefaultRepo]; ok {
-			repoCfg.URL = url
-			cfg.MultiRepo.Repositories[cfg.MultiRepo.DefaultRepo] = repoCfg
-			_ = config.SaveConfig(cfg)
-		}
+	defaultRepo, err := defaultRepository()
+	if err == nil {
+		_ = updateRepositoryURL(defaultRepo.Name, url)
 	}
 
 	fmt.Printf("✅ 远程仓库已设置为: %s\n", url)
@@ -238,31 +197,17 @@ func runGitRemoteView(verbose bool) error {
 		return err
 	}
 
-	cfg, err := config.GetConfig()
+	repoCfg, err := defaultRepository()
 	if err != nil {
-		return errors.Wrap(err, "获取配置失败")
+		return errors.Wrap(err, "获取默认仓库失败")
 	}
 
-	if cfg.MultiRepo == nil || !cfg.MultiRepo.Enabled {
-		return errors.NewWithCode("runGitRemoteView", errors.ErrConfigNotFound, "多仓库功能未启用，请先运行 'skill-hub init' 或使用 'skill-hub repo' 配置仓库")
-	}
-
-	defaultRepoName := cfg.MultiRepo.DefaultRepo
-	if defaultRepoName == "" {
-		defaultRepoName = "main"
-	}
-
-	repoCfg, ok := cfg.MultiRepo.Repositories[defaultRepoName]
-	if !ok {
-		return errors.NewWithCodef("runGitRemoteView", errors.ErrConfigInvalid, "默认仓库 '%s' 未在配置中找到，请检查 config.yaml", defaultRepoName)
-	}
-
-	repoPath, err := config.GetRepositoryPath(defaultRepoName)
+	repoPath, err := repositoryPath(repoCfg.Name)
 	if err != nil {
 		return errors.Wrap(err, "获取仓库路径失败")
 	}
 
-	repo, err := git.NewRepository(repoPath)
+	repo, err := newGitRepository(repoPath)
 	if err != nil {
 		return errors.Wrap(err, "打开Git仓库失败")
 	}
@@ -272,7 +217,7 @@ func runGitRemoteView(verbose bool) error {
 		remoteURLs = urls
 	}
 
-	fmt.Printf("默认仓库: %s\n", defaultRepoName)
+	fmt.Printf("默认仓库: %s\n", repoCfg.Name)
 	fmt.Printf("状态: %s\n", func() string {
 		if repoCfg.Enabled {
 			return "已启用"

@@ -2,13 +2,9 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
-	"github.com/muidea/skill-hub/internal/adapter"
-	"github.com/muidea/skill-hub/internal/config"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
 )
@@ -69,7 +65,7 @@ func runApply(dryRun bool, force bool) error {
 	}
 
 	// 根据目标环境应用技能
-	adapter, err := adapter.GetAdapterForTarget(target)
+	adapter, err := getTargetAdapter(target)
 	if err != nil {
 		return errors.WrapWithCode(err, "runApply", errors.ErrSystem, "获取适配器失败")
 	}
@@ -111,32 +107,9 @@ func runApply(dryRun bool, force bool) error {
 }
 
 func getSkillContent(skillID string) (string, error) {
-	cfg, err := config.GetConfig()
+	content, err := readDefaultRepositorySkillContent(skillID)
 	if err != nil {
-		return "", errors.Wrap(err, "获取配置失败")
+		return "", errors.Wrap(err, "getSkillContent: 获取默认仓库技能内容失败")
 	}
-
-	var repoPath string
-	if cfg.MultiRepo != nil {
-		rootDir, err := config.GetRootDir()
-		if err != nil {
-			return "", errors.Wrap(err, "获取根目录失败")
-		}
-		repoPath = filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo)
-	} else {
-		return "", errors.NewWithCode("getSkillContent", errors.ErrConfigInvalid, "多仓库配置未初始化")
-	}
-
-	srcPath := filepath.Join(repoPath, "skills", skillID, "SKILL.md")
-
-	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-		return "", errors.NewWithCodef("getSkillContent", errors.ErrFileNotFound, "技能文件在仓库中不存在: %s", srcPath)
-	}
-
-	content, err := os.ReadFile(srcPath)
-	if err != nil {
-		return "", errors.WrapWithCode(err, "getSkillContent", errors.ErrFileOperation, "读取技能文件失败")
-	}
-
-	return string(content), nil
+	return content, nil
 }

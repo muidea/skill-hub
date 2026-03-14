@@ -113,7 +113,7 @@ cd skill-hub
 # 2. 构建项目
 make build
 # 或直接使用 go build
-# go build -o bin/skill-hub ./cmd/skill-hub
+# go build -o bin/skill-hub ./application/skill-hub/cmd
 
 # 3. 安装到系统
 sudo make install
