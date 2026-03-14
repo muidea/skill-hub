@@ -85,6 +85,26 @@ func (m *StateManager) LoadProjectState(projectPath string) (*spec.ProjectState,
 	}, nil
 }
 
+// LoadAllProjectStates 加载所有项目状态
+func (m *StateManager) LoadAllProjectStates() (map[string]spec.ProjectState, error) {
+	data, err := m.fs.ReadFile(m.statePath)
+	if err != nil {
+		if m.fs.IsNotExist(err) {
+			return map[string]spec.ProjectState{}, nil
+		}
+		return nil, fmt.Errorf("读取状态文件失败: %w", err)
+	}
+
+	var allStates map[string]spec.ProjectState
+	if err := json.Unmarshal(data, &allStates); err != nil {
+		return nil, fmt.Errorf("解析状态文件失败: %w", err)
+	}
+	if allStates == nil {
+		return map[string]spec.ProjectState{}, nil
+	}
+	return allStates, nil
+}
+
 // SaveProjectState 保存项目状态
 func (m *StateManager) SaveProjectState(state *spec.ProjectState) error {
 	// 读取现有所有状态

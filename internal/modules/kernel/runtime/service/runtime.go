@@ -6,7 +6,13 @@ import (
 	gitpkg "github.com/muidea/skill-hub/internal/git"
 	adaptermodule "github.com/muidea/skill-hub/internal/modules/blocks/adapter"
 	gitmodule "github.com/muidea/skill-hub/internal/modules/blocks/git"
+	projectapplymodule "github.com/muidea/skill-hub/internal/modules/kernel/project_apply"
+	projectapplyservice "github.com/muidea/skill-hub/internal/modules/kernel/project_apply/service"
+	projectfeedbackmodule "github.com/muidea/skill-hub/internal/modules/kernel/project_feedback"
+	projectfeedbackservice "github.com/muidea/skill-hub/internal/modules/kernel/project_feedback/service"
 	projectstatemodule "github.com/muidea/skill-hub/internal/modules/kernel/project_state"
+	projectusemodule "github.com/muidea/skill-hub/internal/modules/kernel/project_use"
+	projectuseservice "github.com/muidea/skill-hub/internal/modules/kernel/project_use/service"
 	repositorymodule "github.com/muidea/skill-hub/internal/modules/kernel/repository"
 	skillmodule "github.com/muidea/skill-hub/internal/modules/kernel/skill"
 	"github.com/muidea/skill-hub/internal/multirepo"
@@ -16,20 +22,26 @@ import (
 )
 
 type Runtime struct {
-	repositorySvc   *repositorymodule.Repository
-	projectStateSvc *projectstatemodule.ProjectState
-	skillSvc        *skillmodule.Skill
-	adapterSvc      *adaptermodule.Adapter
-	gitSvc          *gitmodule.Git
+	repositorySvc      *repositorymodule.Repository
+	projectApplySvc    *projectapplymodule.ProjectApply
+	projectFeedbackSvc *projectfeedbackmodule.ProjectFeedback
+	projectStateSvc    *projectstatemodule.ProjectState
+	projectUseSvc      *projectusemodule.ProjectUse
+	skillSvc           *skillmodule.Skill
+	adapterSvc         *adaptermodule.Adapter
+	gitSvc             *gitmodule.Git
 }
 
 func New() *Runtime {
 	return &Runtime{
-		repositorySvc:   repositorymodule.New(),
-		projectStateSvc: projectstatemodule.New(),
-		skillSvc:        skillmodule.New(),
-		adapterSvc:      adaptermodule.New(),
-		gitSvc:          gitmodule.New(),
+		repositorySvc:      repositorymodule.New(),
+		projectApplySvc:    projectapplymodule.New(),
+		projectFeedbackSvc: projectfeedbackmodule.New(),
+		projectStateSvc:    projectstatemodule.New(),
+		projectUseSvc:      projectusemodule.New(),
+		skillSvc:           skillmodule.New(),
+		adapterSvc:         adaptermodule.New(),
+		gitSvc:             gitmodule.New(),
 	}
 }
 
@@ -79,6 +91,14 @@ func (r *Runtime) SkillsDir() (string, error) {
 
 func (r *Runtime) ListSkillMetadata(repoNames []string) ([]spec.SkillMetadata, error) {
 	return r.repositorySvc.Service().ListSkills(repoNames)
+}
+
+func (r *Runtime) FindSkill(skillID string) ([]spec.SkillMetadata, error) {
+	return r.repositorySvc.Service().FindSkill(skillID)
+}
+
+func (r *Runtime) LoadSkill(skillID, repoName string) (*spec.Skill, error) {
+	return r.repositorySvc.Service().LoadSkill(skillID, repoName)
 }
 
 func (r *Runtime) RebuildRepositoryIndex(repoName string) error {
@@ -155,4 +175,20 @@ func (r *Runtime) SetSkillRepositoryRemote(url string) error {
 
 func (r *Runtime) CleanupTimestampedBackupDirs(basePath string) error {
 	return r.adapterSvc.Service().CleanupTimestampedBackupDirs(basePath)
+}
+
+func (r *Runtime) EnableSkill(projectPath, skillID, repoName, target string, variables map[string]string) (*projectuseservice.UseResult, error) {
+	return r.projectUseSvc.Service().EnableSkill(projectPath, skillID, repoName, target, variables)
+}
+
+func (r *Runtime) ApplyProject(projectPath string, dryRun, force bool) (*projectapplyservice.ApplyResult, error) {
+	return r.projectApplySvc.Service().Apply(projectPath, dryRun, force)
+}
+
+func (r *Runtime) PreviewFeedback(projectPath, skillID string) (*projectfeedbackservice.PreviewResult, error) {
+	return r.projectFeedbackSvc.Service().Preview(projectPath, skillID)
+}
+
+func (r *Runtime) ApplyFeedback(projectPath, skillID string) (*projectfeedbackservice.PreviewResult, error) {
+	return r.projectFeedbackSvc.Service().Apply(projectPath, skillID)
 }

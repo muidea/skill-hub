@@ -1,12 +1,17 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
+	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
+	projectapplyservice "github.com/muidea/skill-hub/internal/modules/kernel/project_apply/service"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 var applyCmd = &cobra.Command{
@@ -29,6 +34,10 @@ func init() {
 }
 
 func runApply(dryRun bool, force bool) error {
+	if client, ok := hubClientIfAvailable(); ok {
+		return runApplyViaService(client, dryRun, force)
+	}
+
 	ctx, err := RequireInitAndWorkspace("", "")
 	if err != nil {
 		return err
@@ -104,6 +113,73 @@ func runApply(dryRun bool, force bool) error {
 	}
 
 	return nil
+}
+
+type serviceApplyClient interface {
+	ApplyProject(ctx context.Context, req httpapibiz.ApplyProjectRequest) (*httpapibiz.ApplyProjectData, error)
+}
+
+func runApplyViaService(client serviceApplyClient, dryRun bool, force bool) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return utils.GetCwdErr(err)
+	}
+
+	resp, err := client.ApplyProject(context.Background(), httpapibiz.ApplyProjectRequest{
+		ProjectPath: cwd,
+		DryRun:      dryRun,
+		Force:       force,
+	})
+	if err != nil {
+		return errors.Wrap(err, "通过服务应用技能失败")
+	}
+
+	renderApplyResult(resp.Item)
+	return nil
+}
+
+func renderApplyResult(result *projectapplyservice.ApplyResult) {
+	fmt.Println("正在应用技能到项目...")
+	if result == nil {
+		fmt.Println("ℹ️  未返回应用结果")
+		return
+	}
+
+	fmt.Printf("项目目标环境: %s\n", result.Target)
+	fmt.Printf("项目路径: %s\n", result.ProjectPath)
+
+	if len(result.Items) == 0 {
+		fmt.Println("ℹ️  当前项目未启用任何技能")
+		fmt.Println("使用 'skill-hub use <skill-id>' 启用技能")
+		return
+	}
+
+	fmt.Printf("启用技能数: %d\n", len(result.Items))
+	if result.DryRun {
+		fmt.Println("\n=== 演习模式 (dry-run) ===")
+		fmt.Println("将显示将要执行的变更，不实际修改文件")
+	}
+
+	for _, item := range result.Items {
+		fmt.Printf("应用技能: %s\n", item.SkillID)
+		switch item.Status {
+		case "planned":
+			fmt.Printf("  [演习] 将应用技能到: %s\n", result.Target)
+			fmt.Printf("  变量数量: %d\n", item.Variables)
+		case "applied":
+			fmt.Printf("✓ 成功应用技能: %s\n", item.SkillID)
+		case "error":
+			fmt.Printf("⚠️  应用技能失败: %s: %s\n", item.SkillID, item.Message)
+		default:
+			fmt.Printf("ℹ️  状态: %s\n", item.Status)
+		}
+	}
+
+	if result.DryRun {
+		fmt.Println("\n✅ 演习完成，未实际修改文件")
+	} else {
+		fmt.Println("\n✅ 所有技能应用完成")
+	}
 }
 
 func getSkillContent(skillID string) (string, error) {

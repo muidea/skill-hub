@@ -30,6 +30,7 @@
 |------|----------|------|
 | `init` | 初始化本地仓库 | `skill-hub init [git_url] [--target <value>]` |
 | `set-target` | 设置项目目标环境 | `skill-hub set-target <value>` |
+| `serve` | 以本地服务模式运行 | `skill-hub serve [--host <value>] [--port <value>] [--open-browser]` |
 
 ### 3.2. 技能发现
 | 命令 | 功能描述 | 语法 |
@@ -76,6 +77,37 @@
 | `git` | Git仓库操作 | `skill-hub git <subcommand>` |
 
 ## 4. 命令详细规范
+
+### 4.0 serve - 以本地服务模式运行
+
+**语法**: `skill-hub serve [--host <value>] [--port <value>] [--open-browser]`
+
+**选项**:
+- `--host <value>`: 监听地址，默认 `127.0.0.1`
+- `--port <value>`: 监听端口，默认 `5525`
+- `--open-browser`: 启动后尝试打开浏览器
+
+**功能描述**:
+
+启动 `skill-hub` 本地服务模式，提供：
+
+- 本地 HTTP API
+- 本地 Web UI
+- 供 CLI 复用的服务桥接入口
+
+当前 Web UI 支持：
+
+- 仓库管理
+- 技能列表查看
+- 项目列表查看
+- 项目 `status` / `use` / `apply` / `feedback` 操作
+
+**示例**:
+```bash
+skill-hub serve
+skill-hub serve --port 6600
+skill-hub serve --host 127.0.0.1 --port 6600 --open-browser
+```
 
 ### 4.1 init - 初始化本地仓库
 
@@ -148,6 +180,11 @@ skill-hub set-target cursor
 **功能描述**:
 
 显示所有已启用仓库中的技能，支持按目标环境和仓库过滤。默认显示简要列表，包含技能 ID、状态、版本和所属仓库信息。
+
+当前实现补充：
+
+- 当本地服务模式可用时，CLI 会优先通过服务桥接执行该命令
+- 当服务不可用时，回退到本地扫描/索引逻辑
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
@@ -293,6 +330,11 @@ skill-hub validate my-logic
 
 将技能标记为在当前项目中使用。此命令仅更新 `state.json` 中的状态记录，不生成物理文件。需要通过 `apply` 命令进行物理分发。
 
+当前实现补充：
+
+- 当本地服务模式可用时，CLI 会优先通过服务桥接执行
+- 服务桥接路径支持候选技能选择、技能详情读取、变量输入后写入服务端状态
+
 如果项目工作区里首次使用技能，也会同步在`state.json`里完成项目工作区信息刷新
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
@@ -326,6 +368,10 @@ skill-hub use git-expert --target open_code
 - `Outdated`: 仓库版本领先于本地
 - `Missing`: 技能已启用但本地文件缺失
 
+当前实现补充：
+
+- 当本地服务模式可用时，CLI 会优先通过服务桥接执行
+
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
 该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区，如果需要新建项目工作区，则需要同时根据`target`初始化对应的文件和目录，并刷新`state.json`
@@ -353,6 +399,11 @@ skill-hub status --verbose
 **功能描述**:
 
 根据 `state.json` 中的启用记录和目标环境设置，将技能物理分发到项目工作区。具体行为取决于项目工作区设置的目标环境：`open_code` 会将本地仓库中该技能的完整目录（含 `SKILL.md` 及 `scripts/`、`references/`、`assets/` 等子目录）复制到项目 `.agents/skills/<id>/`；`cursor`/`claude` 则仅将 `SKILL.md` 内容注入到对应配置文件。
+
+当前实现补充：
+
+- 当本地服务模式可用时，CLI 会优先通过服务桥接执行
+- 服务端负责实际适配器调用和项目文件分发
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
@@ -385,6 +436,12 @@ skill-hub apply --dry-run
 2. 与本地仓库源文件对比，显示差异
 3. 经用户确认后更新本地仓库文件
 4. 更新 `registry.json` 中的版本/哈希信息
+
+当前实现补充：
+
+- 当本地服务模式可用时，CLI 会优先通过服务桥接执行
+- 服务桥接路径会先执行反馈预览，再根据参数或确认执行实际归档
+- 服务端负责版本推进、归档和索引刷新
 
 **多仓库说明**：技能会被归档到默认仓库（通过 `skill-hub repo default` 命令设置）。如果技能在默认仓库中不存在则新增，存在则覆盖更新。
 
@@ -633,6 +690,10 @@ skill-hub repo add local --type user
 - 是否为默认仓库（归档仓库）
 - 描述信息
 
+当前实现补充：
+
+- 当本地服务模式可用时，`repo add/list/remove/sync/enable/disable/default` 都会优先通过服务桥接执行
+
 **示例**:
 ```bash
 # 列出所有仓库
@@ -728,10 +789,42 @@ skill-hub repo sync
 skill-hub repo sync community
 ```
 
-## 8. 更新记录
+## 8. 服务模式与 CLI 交互说明
+
+当前 `skill-hub` 已支持双运行模式：
+
+- CLI 模式
+- Service 模式
+
+服务模式启动后：
+
+- Web UI 可通过浏览器访问
+- CLI 中的部分命令会优先通过服务桥接执行
+
+当前已桥接的命令：
+
+- `repo *`
+- `list`
+- `status`
+- `use`
+- `apply`
+- `feedback`
+
+当前未桥接、仍主要本地执行的命令：
+
+- `init`
+- `create`
+- `remove`
+- `validate`
+- `git`
+- `pull`
+- `push`
+
+## 9. 更新记录
 
 | 版本 | 日期 | 更新说明 |
 |------|------|----------|
 | 1.0 | 2026-02-08 | 初始版本，统一所有设计文档中的命令定义 |
 | 1.1 | 2026-02-09 | 核对各个命令描述，增加依赖信息说明 |
 | 1.2 | 2026-02-17 | 添加多仓库管理命令，更新init命令描述以支持多仓库架构 |
+| 1.3 | 2026-03-14 | 补充 `serve` 命令、服务模式桥接行为，以及 `repo/list/status/use/apply/feedback` 的当前实现状态 |

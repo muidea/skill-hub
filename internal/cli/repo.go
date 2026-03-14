@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -158,8 +159,11 @@ func runRepoAdd(cmd *cobra.Command, args []string) error {
 		IsArchive:   false, // 只有默认仓库才是归档仓库
 	}
 
-	// 添加仓库
-	if err := addRepository(repoConfig); err != nil {
+	if client, ok := hubClientIfAvailable(); ok {
+		if err := client.AddRepo(context.Background(), repoConfig); err != nil {
+			return errors.Wrap(err, "通过服务添加仓库失败")
+		}
+	} else if err := addRepository(repoConfig); err != nil {
 		return errors.Wrap(err, "添加仓库失败")
 	}
 
@@ -180,46 +184,210 @@ func runRepoAdd(cmd *cobra.Command, args []string) error {
 
 // runRepoList 执行列出仓库操作
 func runRepoList() error {
+	if client, ok := hubClientIfAvailable(); ok {
+		data, err := client.ListRepos(context.Background())
+		if err != nil {
+			return errors.Wrap(err, "通过服务获取仓库列表失败")
+		}
+		renderRepositoryList(data.Items, data.DefaultRepo)
+		return nil
+	}
+
 	repos, err := listRepositories(true)
 	if err != nil {
 		return errors.Wrap(err, "获取仓库列表失败")
 	}
 
-	if len(repos) == 0 {
-		fmt.Println("暂无仓库配置")
+	defaultRepo := "main"
+	if repo, err := defaultRepository(); err == nil && repo != nil {
+		defaultRepo = repo.Name
+	}
+
+	renderRepositoryList(repos, defaultRepo)
+	return nil
+}
+
+// runRepoRemove 执行移除仓库操作
+func runRepoRemove(name string) error {
+	// 确认操作
+	fmt.Printf("确定要移除仓库 '%s' 吗？(y/N): ", name)
+	var confirm string
+	fmt.Scanln(&confirm)
+
+	if strings.ToLower(confirm) != "y" {
+		fmt.Println("操作已取消")
 		return nil
 	}
 
-	// 获取默认仓库
-	cfg, err := loadHubConfig()
-	if err != nil {
-		return errors.Wrap(err, "获取配置失败")
+	if client, ok := hubClientIfAvailable(); ok {
+		if err := client.RemoveRepo(context.Background(), name); err != nil {
+			return errors.Wrap(err, "通过服务移除仓库失败")
+		}
+	} else if err := removeRepository(name); err != nil {
+		return errors.Wrap(err, "移除仓库失败")
 	}
 
-	var defaultRepo string
-	if cfg.MultiRepo != nil && cfg.MultiRepo.Enabled {
-		defaultRepo = cfg.MultiRepo.DefaultRepo
+	fmt.Printf("✅ 仓库 '%s' 已从配置中移除\n", name)
+	fmt.Println("注意：本地仓库文件仍然保留，如需完全删除请手动操作")
+
+	return nil
+}
+
+// runRepoSync 执行同步仓库操作
+func runRepoSync(args []string, syncAll bool) error {
+	if len(args) > 0 {
+		// 同步指定仓库
+		name := args[0]
+		fmt.Printf("正在同步仓库 '%s'...\n", name)
+
+		if client, ok := hubClientIfAvailable(); ok {
+			if err := client.SyncRepo(context.Background(), name); err != nil {
+				return errors.Wrapf(err, "通过服务同步仓库 '%s' 失败", name)
+			}
+		} else if err := syncRepository(name); err != nil {
+			return errors.Wrapf(err, "同步仓库 '%s' 失败", name)
+		}
+
+		fmt.Printf("✅ 仓库 '%s' 同步完成\n", name)
 	} else {
-		defaultRepo = "main"
+		// 同步所有仓库
+		var repos []config.RepositoryConfig
+		if client, ok := hubClientIfAvailable(); ok {
+			data, err := client.ListRepos(context.Background())
+			if err != nil {
+				return errors.Wrap(err, "通过服务获取仓库列表失败")
+			}
+			repos = data.Items
+		} else {
+			var err error
+			repos, err = listRepositories(false)
+			if err != nil {
+				return errors.Wrap(err, "获取仓库列表失败")
+			}
+		}
+
+		if len(repos) == 0 {
+			fmt.Println("暂无仓库需要同步")
+			return nil
+		}
+
+		fmt.Printf("正在同步 %d 个仓库...\n", len(repos))
+
+		successCount := 0
+		failedRepos := []string{}
+
+		for _, repo := range repos {
+			if !repo.Enabled && !syncAll {
+				fmt.Printf("跳过已禁用的仓库: %s\n", repo.Name)
+				continue
+			}
+
+			fmt.Printf("\n同步仓库: %s\n", repo.Name)
+			var err error
+			if client, ok := hubClientIfAvailable(); ok {
+				err = client.SyncRepo(context.Background(), repo.Name)
+			} else {
+				err = syncRepository(repo.Name)
+			}
+			if err != nil {
+				fmt.Printf("❌ 同步失败: %v\n", err)
+				failedRepos = append(failedRepos, repo.Name)
+			} else {
+				successCount++
+			}
+		}
+
+		fmt.Printf("\n✅ 同步完成: %d 成功", successCount)
+		if len(failedRepos) > 0 {
+			fmt.Printf(", %d 失败: %v\n", len(failedRepos), failedRepos)
+		} else {
+			fmt.Println()
+		}
+	}
+
+	return nil
+}
+
+// runRepoEnable 执行启用仓库操作
+func runRepoEnable(name string) error {
+	if client, ok := hubClientIfAvailable(); ok {
+		if err := client.EnableRepo(context.Background(), name); err != nil {
+			return errors.Wrap(err, "通过服务启用仓库失败")
+		}
+	} else if err := enableRepository(name); err != nil {
+		return errors.Wrap(err, "启用仓库失败")
+	}
+
+	fmt.Printf("✅ 仓库 '%s' 已启用\n", name)
+	return nil
+}
+
+// runRepoDisable 执行禁用仓库操作
+func runRepoDisable(name string) error {
+	// 确认操作
+	fmt.Printf("确定要禁用仓库 '%s' 吗？禁用后该仓库的技能将不可用。(y/N): ", name)
+	var confirm string
+	fmt.Scanln(&confirm)
+
+	if strings.ToLower(confirm) != "y" {
+		fmt.Println("操作已取消")
+		return nil
+	}
+
+	if client, ok := hubClientIfAvailable(); ok {
+		if err := client.DisableRepo(context.Background(), name); err != nil {
+			return errors.Wrap(err, "通过服务禁用仓库失败")
+		}
+	} else if err := disableRepository(name); err != nil {
+		return errors.Wrap(err, "禁用仓库失败")
+	}
+
+	fmt.Printf("✅ 仓库 '%s' 已禁用\n", name)
+	return nil
+}
+
+// runRepoDefault 执行设置默认仓库操作
+func runRepoDefault(name string) error {
+	if client, ok := hubClientIfAvailable(); ok {
+		if err := client.SetDefaultRepo(context.Background(), name); err != nil {
+			return errors.Wrap(err, "通过服务设置默认仓库失败")
+		}
+	} else {
+		if _, err := getRepository(name); err != nil {
+			return errors.Wrapf(err, "仓库 '%s' 不存在或未启用", name)
+		}
+
+		if err := setDefaultRepository(name); err != nil {
+			return errors.Wrap(err, "保存配置失败")
+		}
+	}
+
+	fmt.Printf("✅ 默认仓库已设置为 '%s'\n", name)
+	fmt.Println("注意：所有通过 feedback 命令修改的技能都会归档到此仓库")
+
+	return nil
+}
+
+func renderRepositoryList(repos []config.RepositoryConfig, defaultRepo string) {
+	if len(repos) == 0 {
+		fmt.Println("暂无仓库配置")
+		return
 	}
 
 	fmt.Println("已配置的仓库:")
 	fmt.Println(strings.Repeat("=", 80))
 
 	for _, repo := range repos {
-		// 标记默认仓库
 		marker := " "
 		if repo.Name == defaultRepo {
 			marker = "★"
 		}
 
-		// 状态标记
 		status := "✓"
 		if !repo.Enabled {
 			status = "✗"
 		}
 
-		// 归档标记
 		archive := ""
 		if repo.IsArchive {
 			archive = " [归档]"
@@ -244,132 +412,6 @@ func runRepoList() error {
 
 	fmt.Printf("★ 表示默认仓库（归档仓库）\n")
 	fmt.Printf("✓ 表示已启用，✗ 表示已禁用\n")
-
-	return nil
-}
-
-// runRepoRemove 执行移除仓库操作
-func runRepoRemove(name string) error {
-	// 确认操作
-	fmt.Printf("确定要移除仓库 '%s' 吗？(y/N): ", name)
-	var confirm string
-	fmt.Scanln(&confirm)
-
-	if strings.ToLower(confirm) != "y" {
-		fmt.Println("操作已取消")
-		return nil
-	}
-
-	if err := removeRepository(name); err != nil {
-		return errors.Wrap(err, "移除仓库失败")
-	}
-
-	fmt.Printf("✅ 仓库 '%s' 已从配置中移除\n", name)
-	fmt.Println("注意：本地仓库文件仍然保留，如需完全删除请手动操作")
-
-	return nil
-}
-
-// runRepoSync 执行同步仓库操作
-func runRepoSync(args []string, syncAll bool) error {
-	if len(args) > 0 {
-		// 同步指定仓库
-		name := args[0]
-		fmt.Printf("正在同步仓库 '%s'...\n", name)
-
-		if err := syncRepository(name); err != nil {
-			return errors.Wrapf(err, "同步仓库 '%s' 失败", name)
-		}
-
-		fmt.Printf("✅ 仓库 '%s' 同步完成\n", name)
-	} else {
-		// 同步所有仓库
-		repos, err := listRepositories(false)
-		if err != nil {
-			return errors.Wrap(err, "获取仓库列表失败")
-		}
-
-		if len(repos) == 0 {
-			fmt.Println("暂无仓库需要同步")
-			return nil
-		}
-
-		fmt.Printf("正在同步 %d 个仓库...\n", len(repos))
-
-		successCount := 0
-		failedRepos := []string{}
-
-		for _, repo := range repos {
-			if !repo.Enabled && !syncAll {
-				fmt.Printf("跳过已禁用的仓库: %s\n", repo.Name)
-				continue
-			}
-
-			fmt.Printf("\n同步仓库: %s\n", repo.Name)
-			if err := syncRepository(repo.Name); err != nil {
-				fmt.Printf("❌ 同步失败: %v\n", err)
-				failedRepos = append(failedRepos, repo.Name)
-			} else {
-				successCount++
-			}
-		}
-
-		fmt.Printf("\n✅ 同步完成: %d 成功", successCount)
-		if len(failedRepos) > 0 {
-			fmt.Printf(", %d 失败: %v\n", len(failedRepos), failedRepos)
-		} else {
-			fmt.Println()
-		}
-	}
-
-	return nil
-}
-
-// runRepoEnable 执行启用仓库操作
-func runRepoEnable(name string) error {
-	if err := enableRepository(name); err != nil {
-		return errors.Wrap(err, "启用仓库失败")
-	}
-
-	fmt.Printf("✅ 仓库 '%s' 已启用\n", name)
-	return nil
-}
-
-// runRepoDisable 执行禁用仓库操作
-func runRepoDisable(name string) error {
-	// 确认操作
-	fmt.Printf("确定要禁用仓库 '%s' 吗？禁用后该仓库的技能将不可用。(y/N): ", name)
-	var confirm string
-	fmt.Scanln(&confirm)
-
-	if strings.ToLower(confirm) != "y" {
-		fmt.Println("操作已取消")
-		return nil
-	}
-
-	if err := disableRepository(name); err != nil {
-		return errors.Wrap(err, "禁用仓库失败")
-	}
-
-	fmt.Printf("✅ 仓库 '%s' 已禁用\n", name)
-	return nil
-}
-
-// runRepoDefault 执行设置默认仓库操作
-func runRepoDefault(name string) error {
-	// 检查仓库是否存在
-	if _, err := getRepository(name); err != nil {
-		return errors.Wrapf(err, "仓库 '%s' 不存在或未启用", name)
-	}
-
-	if err := setDefaultRepository(name); err != nil {
-		return errors.Wrap(err, "保存配置失败")
-	}
-
-	fmt.Printf("✅ 默认仓库已设置为 '%s'\n", name)
-	fmt.Println("注意：所有通过 feedback 命令修改的技能都会归档到此仓库")
-
-	return nil
 }
 
 // isValidRepoName 验证仓库名称是否有效

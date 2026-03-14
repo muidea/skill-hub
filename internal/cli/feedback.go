@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
+	projectfeedbackservice "github.com/muidea/skill-hub/internal/modules/kernel/project_feedback/service"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/utils"
@@ -45,6 +48,10 @@ func init() {
 }
 
 func runFeedback(skillID string) error {
+	if client, ok := hubClientIfAvailable(); ok {
+		return runFeedbackViaService(client, skillID)
+	}
+
 	ctx, err := RequireInitAndWorkspace("", "")
 	if err != nil {
 		return err
@@ -240,6 +247,109 @@ func runFeedback(skillID string) error {
 	fmt.Println("使用 'skill-hub push' 同步到远程仓库")
 
 	return nil
+}
+
+type serviceFeedbackClient interface {
+	PreviewFeedback(ctx context.Context, req httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error)
+	ApplyFeedback(ctx context.Context, req httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error)
+}
+
+func runFeedbackViaService(client serviceFeedbackClient, skillID string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return utils.GetCwdErr(err)
+	}
+
+	req := httpapibiz.FeedbackRequest{
+		ProjectPath: cwd,
+		SkillID:     skillID,
+	}
+
+	preview, err := client.PreviewFeedback(context.Background(), req)
+	if err != nil {
+		return errors.Wrap(err, "通过服务预览反馈失败")
+	}
+	renderFeedbackPreview(preview.Item)
+
+	if preview.Item != nil && preview.Item.NoChanges {
+		fmt.Println("✅ 技能内容未修改")
+		return nil
+	}
+
+	if feedbackDryRun {
+		fmt.Println("\n✅ 演习模式完成，未进行实际修改")
+		return nil
+	}
+
+	if feedbackForce {
+		fmt.Println("\n🔧 强制模式，直接更新本地仓库...")
+	} else {
+		fmt.Print("\n是否将这些修改更新到本地仓库？ [y/N]: ")
+		var response string
+		fmt.Scanln(&response)
+		response = strings.TrimSpace(response)
+		if response != "y" && response != "Y" {
+			fmt.Println("❌ 取消反馈操作")
+			return nil
+		}
+	}
+
+	result, err := client.ApplyFeedback(context.Background(), req)
+	if err != nil {
+		return errors.Wrap(err, "通过服务执行反馈失败")
+	}
+	renderFeedbackCompletion(result.Item)
+	return nil
+}
+
+func renderFeedbackPreview(preview *projectfeedbackservice.PreviewResult) {
+	if preview == nil {
+		fmt.Println("ℹ️  未返回反馈预览")
+		return
+	}
+
+	fmt.Printf("收集技能 '%s' 的反馈...\n", preview.SkillID)
+	if !preview.SkillExists {
+		fmt.Printf("ℹ️  技能 '%s' 在本地仓库中不存在，将作为新技能创建\n", preview.SkillID)
+	}
+
+	if len(preview.Changes) == 0 && !preview.HasContentChanges && preview.SkillExists {
+		return
+	}
+
+	fmt.Println("\n🔍 检测到修改:")
+	fmt.Println("========================================")
+	fmt.Printf("技能目录: %s\n", preview.SkillID)
+	fmt.Printf("修改文件数: %d\n", len(preview.Changes))
+	if len(preview.Changes) > 0 {
+		fmt.Println("\n修改的文件:")
+		for _, change := range preview.Changes {
+			fmt.Printf("  - %s\n", change)
+		}
+	}
+	if preview.NeedsVersionBump {
+		fmt.Printf("\n🔧 自动升级版本号: %s -> %s\n", preview.ProjectVersion, preview.ResolvedVersion)
+	} else if preview.ProjectVersion != "" {
+		fmt.Printf("\n✓ 使用用户指定的版本号: %s\n", preview.ProjectVersion)
+	}
+	fmt.Println("========================================")
+}
+
+func renderFeedbackCompletion(result *projectfeedbackservice.PreviewResult) {
+	if result == nil {
+		fmt.Println("\n✅ 反馈完成！")
+		return
+	}
+
+	fmt.Println("✓ 更新本地仓库文件")
+	fmt.Println("✓ 技能索引已刷新")
+	fmt.Println("✓ 技能已归档到默认仓库")
+	fmt.Println("\n✅ 反馈完成！")
+	fmt.Printf("技能 '%s' 已保存到默认仓库: %s\n", result.SkillID, result.DefaultRepo)
+	if result.NeedsVersionBump {
+		fmt.Println("提示: 版本号已自动升级，可使用 'skill-hub status' 查看更新后的状态")
+	}
+	fmt.Println("使用 'skill-hub push' 同步到远程仓库")
 }
 
 func getSkillVersionFromContent(content []byte) string {

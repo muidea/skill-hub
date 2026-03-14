@@ -42,6 +42,22 @@ func (r *Repository) ListSkills(repoNames []string) ([]spec.SkillMetadata, error
 	return manager.ListSkillsInRepositories(repoNames)
 }
 
+func (r *Repository) FindSkill(skillID string) ([]spec.SkillMetadata, error) {
+	manager, err := r.Manager()
+	if err != nil {
+		return nil, err
+	}
+	return manager.FindSkill(skillID)
+}
+
+func (r *Repository) LoadSkill(skillID, repoName string) (*spec.Skill, error) {
+	manager, err := r.Manager()
+	if err != nil {
+		return nil, err
+	}
+	return manager.LoadSkill(skillID, repoName)
+}
+
 func (r *Repository) RebuildRepositoryIndex(repoName string) error {
 	manager, err := r.Manager()
 	if err != nil {

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -32,81 +33,97 @@ func init() {
 }
 
 func runList(target string, verbose bool, repoFilters []string) error {
-	// 检查init依赖（规范4.3：该命令依赖init命令）
-	if err := CheckInitDependency(); err != nil {
-		return err
-	}
-
-	// 创建多仓库管理器
-	repoManager, err := newRepositoryManager()
-	if err != nil {
-		return errors.Wrap(err, "创建多仓库管理器失败")
-	}
-
 	repoFilters = normalizeRepoFilters(repoFilters)
 
 	var skillsMetadata []spec.SkillMetadata
-	if len(repoFilters) == 0 {
-		skillsMetadata, err = repoManager.ListSkills("")
+	if client, ok := hubClientIfAvailable(); ok {
+		var err error
+		skillsMetadata, err = client.ListSkills(context.Background(), repoFilters, target)
 		if err != nil {
-			return errors.Wrap(err, "获取技能列表失败")
+			return errors.Wrap(err, "通过服务获取技能列表失败")
 		}
 	} else {
-		availableRepos, err := repoManager.ListRepositories()
+		// 检查init依赖（规范4.3：该命令依赖init命令）
+		if err := CheckInitDependency(); err != nil {
+			return err
+		}
+
+		repoManager, err := newRepositoryManager()
 		if err != nil {
-			return errors.Wrap(err, "获取仓库列表失败")
+			return errors.Wrap(err, "创建多仓库管理器失败")
 		}
 
-		validRepos := make(map[string]bool, len(availableRepos))
-		for _, repo := range availableRepos {
-			validRepos[repo.Name] = true
-		}
+		if len(repoFilters) == 0 {
+			skillsMetadata, err = repoManager.ListSkills("")
+			if err != nil {
+				return errors.Wrap(err, "获取技能列表失败")
+			}
+		} else {
+			availableRepos, err := repoManager.ListRepositories()
+			if err != nil {
+				return errors.Wrap(err, "获取仓库列表失败")
+			}
 
-		for _, repoFilter := range repoFilters {
-			if !validRepos[repoFilter] {
-				return errors.NewWithCodef("runList", errors.ErrConfigInvalid, "仓库 '%s' 不存在或已禁用", repoFilter)
+			validRepos := make(map[string]bool, len(availableRepos))
+			for _, repo := range availableRepos {
+				validRepos[repo.Name] = true
+			}
+
+			for _, repoFilter := range repoFilters {
+				if !validRepos[repoFilter] {
+					return errors.NewWithCodef("runList", errors.ErrConfigInvalid, "仓库 '%s' 不存在或已禁用", repoFilter)
+				}
+			}
+
+			skillsMetadata, err = repoManager.ListSkillsInRepositories(repoFilters)
+			if err != nil {
+				return errors.Wrap(err, "获取技能列表失败")
 			}
 		}
 
-		skillsMetadata, err = repoManager.ListSkillsInRepositories(repoFilters)
-		if err != nil {
-			return errors.Wrap(err, "获取技能列表失败")
-		}
+		skillsMetadata = filterSkillsByTarget(skillsMetadata, target)
 	}
 
-	// 按目标环境过滤技能
+	renderSkillList(skillsMetadata, target, repoFilters, verbose)
+	return nil
+}
+
+func filterSkillsByTarget(skillsMetadata []spec.SkillMetadata, target string) []spec.SkillMetadata {
 	targetLower := strings.ToLower(target)
-	var filteredSkills []spec.SkillMetadata
-	if target != "" {
-		for _, skill := range skillsMetadata {
-			compatLower := strings.ToLower(skill.Compatibility)
-
-			// 检查技能是否兼容指定的目标环境
-			isCompatible := false
-			if targetLower == "cursor" && strings.Contains(compatLower, "cursor") {
-				isCompatible = true
-			} else if (targetLower == "claude" || targetLower == "claude_code") &&
-				(strings.Contains(compatLower, "claude") || strings.Contains(compatLower, "claude_code")) {
-				isCompatible = true
-			} else if (targetLower == "open_code" || targetLower == "opencode") &&
-				(strings.Contains(compatLower, "open_code") || strings.Contains(compatLower, "opencode")) {
-				isCompatible = true
-			}
-
-			if isCompatible {
-				filteredSkills = append(filteredSkills, skill)
-			}
-		}
-		skillsMetadata = filteredSkills
+	if targetLower == "" {
+		return skillsMetadata
 	}
 
+	var filteredSkills []spec.SkillMetadata
+	for _, skill := range skillsMetadata {
+		compatLower := strings.ToLower(skill.Compatibility)
+
+		isCompatible := false
+		if targetLower == "cursor" && strings.Contains(compatLower, "cursor") {
+			isCompatible = true
+		} else if (targetLower == "claude" || targetLower == "claude_code") &&
+			(strings.Contains(compatLower, "claude") || strings.Contains(compatLower, "claude_code")) {
+			isCompatible = true
+		} else if (targetLower == "open_code" || targetLower == "opencode") &&
+			(strings.Contains(compatLower, "open_code") || strings.Contains(compatLower, "opencode")) {
+			isCompatible = true
+		}
+
+		if isCompatible {
+			filteredSkills = append(filteredSkills, skill)
+		}
+	}
+	return filteredSkills
+}
+
+func renderSkillList(skillsMetadata []spec.SkillMetadata, target string, repoFilters []string, verbose bool) {
 	if len(skillsMetadata) == 0 {
 		if target != "" {
 			fmt.Printf("ℹ️  未找到兼容 %s 目标的技能\n", target)
 		} else {
 			fmt.Println("ℹ️  未找到任何技能")
 		}
-		return nil
+		return
 	}
 
 	if verbose {
@@ -139,15 +156,12 @@ func runList(target string, verbose bool, repoFilters []string) error {
 		// 计算动态列宽
 		widths := calculateColumnWidths(skillsMetadata)
 
-		// 手动格式化标题行
-		// 计算每个标题单元格需要的空格数
 		idTitleSpaces := widths.idMin - displayWidth("ID")
 		nameTitleSpaces := widths.nameMin - displayWidth("名称")
 		versionTitleSpaces := widths.versionMin - displayWidth("版本")
 		repoTitleSpaces := widths.repoMin - displayWidth("仓库")
 		toolsTitleSpaces := widths.toolsMin - displayWidth("适用工具")
 
-		// 确保空格数不为负
 		if idTitleSpaces < 0 {
 			idTitleSpaces = 0
 		}
@@ -171,31 +185,21 @@ func runList(target string, verbose bool, repoFilters []string) error {
 			"仓库", strings.Repeat(" ", repoTitleSpaces),
 			"适用工具", strings.Repeat(" ", toolsTitleSpaces))
 
-		// 生成分隔线
-		totalWidth := widths.idMin + widths.nameMin + widths.versionMin + widths.repoMin + widths.toolsMin + 4 // 4个空格
+		totalWidth := widths.idMin + widths.nameMin + widths.versionMin + widths.repoMin + widths.toolsMin + 4
 		separator := strings.Repeat("-", totalWidth)
 		fmt.Println(separator)
 
-		// 显示技能数据
 		for _, skill := range skillsMetadata {
-			// 获取工具字符串
 			toolsStr := getToolsString(skill.Compatibility)
-
-			// 格式化仓库名称
 			repoName := formatRepoName(skill.Repository, widths.repoMin)
-
-			// 格式化技能ID（用于显示）
 			displaySkillID := formatSkillID(skill.ID, widths.idMin)
 
-			// 手动格式化以确保对齐
-			// 计算每个单元格需要的空格数
 			idSpaces := widths.idMin - displayWidth(displaySkillID)
 			nameSpaces := widths.nameMin - displayWidth(skill.Name)
 			versionSpaces := widths.versionMin - displayWidth(skill.Version)
 			repoSpaces := widths.repoMin - displayWidth(repoName)
 			toolsSpaces := widths.toolsMin - displayWidth(toolsStr)
 
-			// 确保空格数不为负
 			if idSpaces < 0 {
 				idSpaces = 0
 			}
@@ -228,7 +232,6 @@ func runList(target string, verbose bool, repoFilters []string) error {
 		fmt.Printf("\n已过滤显示仓库: %s\n", strings.Join(repoFilters, ", "))
 	}
 	fmt.Println("\n使用 'skill-hub use <skill-id>' 在当前项目启用技能")
-	return nil
 }
 
 func normalizeRepoFilters(repoFilters []string) []string {

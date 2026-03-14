@@ -47,6 +47,13 @@ Based on the business scenarios defined in `docs/testCase.md`:
    - **apply** (open_code): Full skill directory is copied from repo to project (see also `test_feedback_apply_multifile.py`).
    - **use**: Only updates state.json; skill files are not copied until `apply` is run.
 
+7. **Service Mode** (`test_service_mode.py`)
+   - `skill-hub serve` health check
+   - Web UI homepage availability
+   - CLI bridge for `repo list` / `list` / `status`
+   - CLI bridge write path for `use` / `apply` / `feedback`
+   - Verify service-managed project skill files and repo archive updates
+
 ## Architecture
 
 ### Directory Structure

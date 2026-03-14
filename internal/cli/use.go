@@ -2,10 +2,12 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
 	"github.com/spf13/cobra"
@@ -32,6 +34,10 @@ func init() {
 }
 
 func runUse(skillID string, target string) error {
+	if client, ok := hubClientIfAvailable(); ok {
+		return runUseViaService(client, skillID, target)
+	}
+
 	if err := CheckInitDependency(); err != nil {
 		return err
 	}
@@ -52,27 +58,9 @@ func runUse(skillID string, target string) error {
 	}
 
 	// 如果只有一个技能，直接使用
-	var selectedSkill spec.SkillMetadata
-	if len(skills) == 1 {
-		selectedSkill = skills[0]
-	} else {
-		// 多个仓库有同名技能，让用户选择
-		fmt.Printf("发现 %d 个同名技能，请选择要使用的技能:\n", len(skills))
-		for i, skill := range skills {
-			fmt.Printf("  %d. [%s] %s - %s\n", i+1, skill.Repository, skill.Name, skill.Description)
-		}
-
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("请选择 (输入编号): ")
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-
-		var choice int
-		if _, err := fmt.Sscanf(input, "%d", &choice); err != nil || choice < 1 || choice > len(skills) {
-			return errors.NewWithCode("runUse", errors.ErrInvalidInput, "无效的选择")
-		}
-
-		selectedSkill = skills[choice-1]
+	selectedSkill, err := chooseSkillCandidate(skills)
+	if err != nil {
+		return err
 	}
 
 	// 加载完整技能信息
@@ -100,44 +88,15 @@ func runUse(skillID string, target string) error {
 	}
 
 	if hasSkill {
-		fmt.Println("⚠️  该技能已在当前项目启用")
-		fmt.Print("是否重新配置变量？ [y/N]: ")
-
-		reader := bufio.NewReader(os.Stdin)
-		response, _ := reader.ReadString('\n')
-		response = strings.TrimSpace(response)
-
-		if response != "y" && response != "Y" {
+		if !confirmSkillReconfigure() {
 			fmt.Println("❌ 取消操作")
 			return nil
 		}
 	}
 
-	// 收集变量值
-	variables := make(map[string]string)
-
-	if len(fullSkill.Variables) > 0 {
-		fmt.Println("\n请设置技能变量 (按Enter使用默认值):")
-
-		reader := bufio.NewReader(os.Stdin)
-		for _, variable := range fullSkill.Variables {
-			defaultValue := variable.Default
-			if defaultValue == "" {
-				defaultValue = ""
-			}
-
-			fmt.Printf("%s [%s]: ", variable.Name, defaultValue)
-			input, _ := reader.ReadString('\n')
-			input = strings.TrimSpace(input)
-
-			if input == "" {
-				variables[variable.Name] = defaultValue
-			} else {
-				variables[variable.Name] = input
-			}
-		}
-	} else {
-		fmt.Println("\n该技能没有可配置的变量")
+	variables, err := promptSkillVariables(fullSkill)
+	if err != nil {
+		return err
 	}
 
 	if err := ctx.StateManager.AddSkillToProjectWithTarget(ctx.Cwd, skillID, fullSkill.Version, variables, target); err != nil {
@@ -151,4 +110,127 @@ func runUse(skillID string, target string) error {
 	fmt.Println("使用 'skill-hub apply' 将技能物理分发到当前项目")
 
 	return nil
+}
+
+func runUseViaService(client serviceUseClient, skillID string, target string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	candidates, err := client.FindSkillCandidates(context.Background(), skillID)
+	if err != nil {
+		return errors.Wrap(err, "通过服务查找技能失败")
+	}
+	if len(candidates) == 0 {
+		return errors.SkillNotFound("runUseViaService", skillID)
+	}
+
+	selectedSkill, err := chooseSkillCandidate(candidates)
+	if err != nil {
+		return err
+	}
+
+	fullSkill, err := client.GetSkillDetail(context.Background(), skillID, selectedSkill.Repository)
+	if err != nil {
+		return errors.Wrap(err, "通过服务加载技能详情失败")
+	}
+
+	fmt.Printf("启用技能: %s (%s)\n", fullSkill.Name, skillID)
+	fmt.Printf("来源仓库: %s\n", fullSkill.Repository)
+	fmt.Printf("描述: %s\n", fullSkill.Description)
+	if len(fullSkill.Tags) > 0 {
+		fmt.Printf("标签: %s\n", strings.Join(fullSkill.Tags, ", "))
+	}
+
+	if projectStatus, err := client.GetProjectStatus(context.Background(), cwd, skillID); err == nil && projectStatus.Item != nil && len(projectStatus.Item.Items) > 0 {
+		if !confirmSkillReconfigure() {
+			fmt.Println("❌ 取消操作")
+			return nil
+		}
+	}
+
+	variables, err := promptSkillVariables(fullSkill)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.UseSkill(context.Background(), httpapibiz.UseSkillRequest{
+		ProjectPath: cwd,
+		SkillID:     skillID,
+		Repository:  selectedSkill.Repository,
+		Target:      target,
+		Variables:   variables,
+	})
+	if err != nil {
+		return errors.Wrap(err, "通过服务启用技能失败")
+	}
+
+	fmt.Printf("\n✅ 技能 '%s' 已成功标记为使用！\n", skillID)
+	fmt.Printf("技能目标环境: %s\n", resp.Item.Target)
+	fmt.Println("使用 'skill-hub apply' 将技能物理分发到当前项目")
+	return nil
+}
+
+type serviceUseClient interface {
+	FindSkillCandidates(ctx context.Context, skillID string) ([]spec.SkillMetadata, error)
+	GetSkillDetail(ctx context.Context, skillID, repoName string) (*spec.Skill, error)
+	GetProjectStatus(ctx context.Context, projectPath, skillID string) (*httpapibiz.ProjectStatusData, error)
+	UseSkill(ctx context.Context, req httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error)
+}
+
+func chooseSkillCandidate(skills []spec.SkillMetadata) (spec.SkillMetadata, error) {
+	if len(skills) == 1 {
+		return skills[0], nil
+	}
+
+	fmt.Printf("发现 %d 个同名技能，请选择要使用的技能:\n", len(skills))
+	for i, skill := range skills {
+		fmt.Printf("  %d. [%s] %s - %s\n", i+1, skill.Repository, skill.Name, skill.Description)
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("请选择 (输入编号): ")
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	var choice int
+	if _, err := fmt.Sscanf(input, "%d", &choice); err != nil || choice < 1 || choice > len(skills) {
+		return spec.SkillMetadata{}, errors.NewWithCode("chooseSkillCandidate", errors.ErrInvalidInput, "无效的选择")
+	}
+
+	return skills[choice-1], nil
+}
+
+func promptSkillVariables(fullSkill *spec.Skill) (map[string]string, error) {
+	variables := make(map[string]string)
+	if len(fullSkill.Variables) == 0 {
+		fmt.Println("\n该技能没有可配置的变量")
+		return variables, nil
+	}
+
+	fmt.Println("\n请设置技能变量 (按Enter使用默认值):")
+	reader := bufio.NewReader(os.Stdin)
+	for _, variable := range fullSkill.Variables {
+		defaultValue := variable.Default
+		fmt.Printf("%s [%s]: ", variable.Name, defaultValue)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+		if input == "" {
+			variables[variable.Name] = defaultValue
+		} else {
+			variables[variable.Name] = input
+		}
+	}
+	return variables, nil
+}
+
+func confirmSkillReconfigure() bool {
+	fmt.Println("⚠️  该技能已在当前项目启用")
+	fmt.Print("是否重新配置变量？ [y/N]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(response)
+	return response == "y" || response == "Y"
 }

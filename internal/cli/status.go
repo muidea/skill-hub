@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	projectstatusservice "github.com/muidea/skill-hub/internal/modules/kernel/project_status/service"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
@@ -38,6 +40,25 @@ func init() {
 }
 
 func runStatus(skillID string, verbose bool) error {
+	if client, ok := hubClientIfAvailable(); ok {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return utils.GetCwdErr(err)
+		}
+
+		data, err := client.GetProjectStatus(context.Background(), cwd, skillID)
+		if err == nil && data.Item != nil {
+			renderProjectStatusSummary(data.Item)
+			if verbose {
+				fmt.Println("\n服务模式当前仅返回状态摘要，详细 diff 仍需本地模式执行。")
+			} else if skillID == "" {
+				fmt.Println("\n使用 'skill-hub status <id>' 检查特定技能状态")
+				fmt.Println("使用 'skill-hub status --verbose' 显示详细差异")
+			}
+			return nil
+		}
+	}
+
 	ctx, err := RequireInitAndWorkspace("", "")
 	if err != nil {
 		return err
@@ -187,6 +208,60 @@ func runStatus(skillID string, verbose bool) error {
 	}
 
 	return nil
+}
+
+func renderProjectStatusSummary(summary *projectstatusservice.ProjectStatusSummary) {
+	fmt.Println("检查技能状态...")
+
+	if summary.SkillCount == 0 {
+		fmt.Println("ℹ️  当前项目未启用任何技能")
+		return
+	}
+
+	fmt.Printf("项目路径: %s\n", summary.ProjectPath)
+	fmt.Printf("启用技能数: %d\n\n", summary.SkillCount)
+	fmt.Println("=== 技能状态 ===")
+
+	maxIDLength := 2
+	maxVersionLength := 7
+	for _, item := range summary.Items {
+		if len(item.SkillID) > maxIDLength {
+			maxIDLength = len(item.SkillID)
+		}
+		if len(item.LocalVersion) > maxVersionLength {
+			maxVersionLength = len(item.LocalVersion)
+		}
+	}
+
+	fmt.Printf("%-*s %-*s 状态\n", maxIDLength, "ID", maxVersionLength, "本地版本")
+	fmt.Println(strings.Repeat("-", maxIDLength+1+maxVersionLength+1+2))
+
+	for _, item := range summary.Items {
+		statusSymbol := "❓"
+		switch item.Status {
+		case spec.SkillStatusSynced:
+			statusSymbol = "✅"
+		case spec.SkillStatusModified:
+			statusSymbol = "⚠️"
+		case spec.SkillStatusOutdated:
+			statusSymbol = "🔄"
+		case spec.SkillStatusMissing:
+			statusSymbol = "❌"
+		}
+
+		localVersion := item.LocalVersion
+		if localVersion == "" {
+			localVersion = "—"
+		}
+
+		fmt.Printf("%-*s %-*s %s %s\n", maxIDLength, item.SkillID, maxVersionLength, localVersion, statusSymbol, item.Status)
+	}
+
+	fmt.Println("\n说明:")
+	fmt.Println("✅ Synced: 本地与仓库一致")
+	fmt.Println("⚠️  Modified: 本地有未反馈的修改")
+	fmt.Println("🔄 Outdated: 仓库版本领先于本地")
+	fmt.Println("❌ Missing: 技能已启用但本地文件缺失")
 }
 
 func showSkillDetails(cwd, skillID, status string) {
