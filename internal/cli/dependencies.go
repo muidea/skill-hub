@@ -252,12 +252,12 @@ func createNewProjectWorkspace(cwd, target string, stateManager *state.StateMana
 	normalizedTarget := spec.NormalizeTarget(target)
 	if normalizedTarget != spec.TargetCursor && normalizedTarget != spec.TargetClaudeCode && normalizedTarget != spec.TargetOpenCode {
 		return nil, errors.NewWithCode("createNewProjectWorkspace", errors.ErrInvalidInput,
-			fmt.Sprintf("无效的目标值: %s，可用选项: cursor, claude, open_code", target))
+			fmt.Sprintf("无效的兼容目标: %s，可用选项: cursor, claude, open_code", target))
 	}
 
-	// 根据target初始化对应的文件和目录
+	// 根据target初始化对应的工作区文件和目录
 	if err := initializeTargetFiles(cwd, normalizedTarget); err != nil {
-		return nil, errors.WrapWithCode(err, "createNewProjectWorkspace", errors.ErrFileOperation, "初始化目标文件失败")
+		return nil, errors.WrapWithCode(err, "createNewProjectWorkspace", errors.ErrFileOperation, "初始化工作区文件失败")
 	}
 
 	// 创建项目状态
@@ -272,11 +272,11 @@ func createNewProjectWorkspace(cwd, target string, stateManager *state.StateMana
 		return nil, errors.WrapWithCode(err, "createNewProjectWorkspace", errors.ErrSystem, "保存项目状态失败")
 	}
 
-	fmt.Printf("✅ 已创建项目工作区，目标环境: %s\n", normalizedTarget)
+	fmt.Printf("✅ 已创建项目工作区，兼容目标: %s\n", normalizedTarget)
 	return projectState, nil
 }
 
-// initializeTargetFiles 根据目标环境初始化对应的文件和目录
+// initializeTargetFiles 根据兼容目标初始化对应的工作区文件和目录
 func initializeTargetFiles(cwd, target string) error {
 	switch target {
 	case spec.TargetOpenCode:

@@ -65,6 +65,8 @@ curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/instal
 
 安装完成后，按照以下工作流程开始使用：
 
+项目本地 Skill 目录默认使用 `.agents/skills/`，`target` 主要用于记录和过滤兼容目标，不再要求每个命令都绑定某个具体工具的目录说明。
+
 #### 多仓库初始化流程
 ```bash
 # 1. 初始化多仓库工作区（可指定初始仓库URL）
@@ -77,7 +79,7 @@ skill-hub repo add personal https://github.com/yourname/skills.git
 # 3. 设置默认归档仓库
 skill-hub repo default main
 
-# 4. 设置项目目标环境
+# 4. 设置项目兼容目标
 skill-hub set-target open_code
 
 # 5. 启用技能
@@ -119,7 +121,7 @@ skill-hub repo disable personal
 | 命令 | 参数 | 功能说明 |
 |------|------|----------|
 | `init` | `[git_url] [--target <value>]` | 初始化多仓库工作区 |
-| `set-target` | `<value>` | 设置项目目标环境 |
+| `set-target` | `<value>` | 设置项目兼容目标 |
 | `list` | `[--target <value>] [--verbose]` | 列出可用技能 |
 | `search` | `<keyword> [--target <value>] [--limit <number>]` | 搜索远程技能 |
 | `create` | `<id> [--target <value>]` | 创建新技能模板 |

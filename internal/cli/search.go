@@ -9,7 +9,7 @@ import (
 var searchCmd = &cobra.Command{
 	Use:   "search <keyword>",
 	Short: "搜索远程技能",
-	Long:  "通过GitHub API搜索带有 agent-skills 标签的远程技能仓库。",
+	Long:  "通过 GitHub API 搜索带有 agent-skills 标签的远程技能仓库，可按兼容目标过滤结果。",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
@@ -19,7 +19,7 @@ var searchCmd = &cobra.Command{
 }
 
 func init() {
-	searchCmd.Flags().String("target", "", "按目标环境过滤搜索结果")
+	searchCmd.Flags().String("target", "", targetFilterFlagUsage)
 	searchCmd.Flags().Int("limit", 20, "限制返回结果数量，默认 20")
 }
 
@@ -31,7 +31,7 @@ func runSearch(keyword, target string, limit int) error {
 
 	fmt.Printf("搜索远程技能: %s\n", keyword)
 	if target != "" {
-		fmt.Printf("目标环境过滤: %s\n", target)
+		fmt.Printf("兼容目标过滤: %s\n", target)
 	}
 	fmt.Printf("结果数量限制: %d\n", limit)
 

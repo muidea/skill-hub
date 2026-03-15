@@ -6,9 +6,9 @@
 
 ## 名词说明
 
-* **项目**：对应OpenCode,Cursor,Claude的项目
+* **项目**：需要启用和管理 Skill 的代码工作区。
 
-* **工作区**：项目所属的工作目录，OpenCode、Claude Code 和 Cursor 都会在工作区里创建管理 Skill 或行为规范的目录与文件，针对 OpenCode 来说对应的是 .agents 目录，针对 Claude (Claude Code) 来说对应 .claude 目录，针对 Cursor 来说对应 .cursorrules 文件。
+* **工作区**：项目所属的工作目录。项目本地 Skill 默认使用 `.agents/skills/` 目录；部分兼容目标可能会额外使用各自的配置文件或目录，但不再作为各命令的默认前提。
 
 * **本地仓库**：skill-hub使用的本地配置目录，采用多仓库架构，支持管理多个Git仓库。默认仓库为归档仓库，所有通过`feedback`命令修改的技能都会归档到默认仓库。
 
@@ -29,7 +29,7 @@
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `init` | 初始化本地仓库 | `skill-hub init [git_url] [--target <value>]` |
-| `set-target` | 设置项目目标环境 | `skill-hub set-target <value>` |
+| `set-target` | 设置项目兼容目标 | `skill-hub set-target <value>` |
 | `serve` | 以本地服务模式运行 | `skill-hub serve [--host <value>] [--port <value>] [--open-browser]` |
 
 ### 3.2. 技能发现
@@ -115,7 +115,7 @@ skill-hub serve --host 127.0.0.1 --port 6600 --open-browser
 
 **参数**:
 - `git_url` (可选): Git 仓库 URL，用于初始化技能仓库。如未提供，表示不使用远端仓库，只进行本地管理
-- `--target <value>` (可选): 技能目标环境，默认为 `open_code`。
+- `--target <value>` (可选): 技能兼容目标，默认为 `open_code`。
 
 **功能描述**:
 
@@ -143,16 +143,16 @@ skill-hub init https://github.com/example/skills-repo.git
 skill-hub init https://github.com/example/skills-repo.git --target open_code
 ```
 
-### 4.2 set-target - 设置项目工作区目标环境
+### 4.2 set-target - 设置项目工作区兼容目标
 
 **语法**: `skill-hub set-target <value>`
 
 **参数**:
-- `value` (必需): 目标环境值，支持 `cursor`、`claude`、`open_code`。
+- `value` (必需): 兼容目标值，支持 `cursor`、`claude`、`open_code`。
 
 **功能描述**:
 
-设置当前项目的首选目标环境，该设置会持久化到 `state.json` 中，影响后续 `create`, `use`, `apply`、`status`、`feedback` 等命令的行为。
+设置当前项目的首选兼容目标，该设置会持久化到 `state.json` 中，影响后续 `create`, `use`, `apply`、`status`、`feedback` 等命令的行为。
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
@@ -173,13 +173,13 @@ skill-hub set-target cursor
 **语法**: `skill-hub list [--target <value>] [--verbose] [--repo <repo-name>...]`
 
 **选项**:
-- `--target <value>`: 按目标环境过滤技能列表。
+- `--target <value>`: 按兼容目标过滤技能列表。
 - `--verbose`: 显示详细信息，包括技能描述、版本、兼容性等。
 - `--repo <repo-name>`: 按仓库名称过滤技能列表（可多次使用指定多个仓库）。
 
 **功能描述**:
 
-显示所有已启用仓库中的技能，支持按目标环境和仓库过滤。默认显示简要列表，包含技能 ID、状态、版本和所属仓库信息。
+显示所有已启用仓库中的技能，支持按兼容目标和仓库过滤。默认显示简要列表，包含技能 ID、状态、版本和所属仓库信息。
 
 当前实现补充：
 
@@ -219,7 +219,7 @@ skill-hub list --repo skills-repo --target cursor --verbose
 - `keyword` (必需): 搜索关键词。
 
 **选项**:
-- `--target <value>`: 按目标环境过滤搜索结果。
+- `--target <value>`: 按兼容目标过滤搜索结果。
 - `--limit <number>`: 限制返回结果数量，默认 20。
 
 **功能描述**:
@@ -243,11 +243,11 @@ skill-hub search database --target open_code --limit 10
 
 **参数**:
 - `id` (必需): 新技能的标识符。
-- `--target <value>` (可选): 技能目标环境。
+- `--target <value>` (可选): 技能兼容目标。
 
 **功能描述**:
 
-在项目工作区创建一个新技能。如果指定了 `--target` 选项，则创建的技能将用于该目标环境。否则将使用`init`初始化时设置的默认目标环境作为项目工作区的目标环境。
+在项目工作区创建一个新技能。如果指定了 `--target` 选项，则会为该技能记录兼容目标。否则将使用项目当前默认的兼容目标。
 
 生成的技能目录结构包含：`SKILL.md`（核心定义）、`scripts/`（可执行脚本）、`references/`（参考资料）、`assets/`（静态资源）。若该技能已存在（同名目录下已有 `SKILL.md`），则主动进行验证。验证通过时：若该技能已在本地仓库 state 中登记且与仓库内容一致，则不执行任何操作；否则刷新项目状态（state.json），便于技能登记与归档。验证不通过时提示是否重新创建。
 
@@ -324,11 +324,11 @@ skill-hub validate my-logic
 
 **参数**:
 - `id` (必需): 要启用的技能标识符。
-- `--target <value>` (可选): 技能目标环境，默认为 `open_code`。
+- `--target <value>` (可选): 技能兼容目标，默认为 `open_code`。
 
 **功能描述**:
 
-将技能标记为在当前项目中使用。此命令仅更新 `state.json` 中的状态记录，不生成物理文件。需要通过 `apply` 命令进行物理分发。
+将技能标记为在当前项目中使用。此命令仅更新 `state.json` 中的状态记录，不直接修改项目文件。需要通过 `apply` 命令进行物理分发。
 
 当前实现补充：
 
@@ -398,7 +398,7 @@ skill-hub status --verbose
 
 **功能描述**:
 
-根据 `state.json` 中的启用记录和目标环境设置，将技能物理分发到项目工作区。具体行为取决于项目工作区设置的目标环境：`open_code` 会将本地仓库中该技能的完整目录（含 `SKILL.md` 及 `scripts/`、`references/`、`assets/` 等子目录）复制到项目 `.agents/skills/<id>/`；`cursor`/`claude` 则仅将 `SKILL.md` 内容注入到对应配置文件。
+根据 `state.json` 中的启用记录和兼容目标设置，将技能物理分发到项目工作区。默认项目本地技能目录为 `.agents/skills/<id>/`；其他写入位置由对应适配器处理。
 
 当前实现补充：
 
@@ -411,7 +411,7 @@ skill-hub status --verbose
 
 **示例**:
 ```bash
-# 应用启用技能，使用项目工作区设置的目标环境
+# 应用启用技能，使用项目工作区设置的兼容目标
 skill-hub apply
 
 # 演习模式查看将要进行的变更

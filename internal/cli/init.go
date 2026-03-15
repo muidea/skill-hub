@@ -19,7 +19,9 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init [git-url]",
 	Short: "初始化Skill Hub工作区",
-	Long: `初始化Skill Hub工作区，创建必要的配置文件和目录结构。
+	Long: `初始化 Skill Hub 工作区，创建必要的配置文件和目录结构。
+
+项目本地技能目录默认使用 .agents/skills。
 
 如果提供了Git仓库URL，会克隆远程仓库到本地。
 如果没有提供URL，会创建一个空的本地仓库。`,
@@ -31,7 +33,7 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.Flags().String("target", "open_code", "技能目标环境，默认为 open_code")
+	initCmd.Flags().String("target", "open_code", targetFlagUsage)
 }
 
 func runInit(args []string, target string) error {

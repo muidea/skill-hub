@@ -16,7 +16,7 @@ import (
 var useCmd = &cobra.Command{
 	Use:   "use <id>",
 	Short: "使用技能",
-	Long: `将技能标记为在当前项目中使用。此命令仅更新 state.json 中的状态记录，不生成物理文件。
+	Long: `将技能标记为在当前项目中使用。此命令仅更新 state.json 中的状态记录，不直接修改项目文件。
 需要通过 apply 命令进行物理分发。
 
 如果项目工作区里首次使用技能，也会同步在state.json里完成项目工作区信息刷新`,
@@ -28,12 +28,14 @@ var useCmd = &cobra.Command{
 }
 
 func init() {
-	useCmd.Flags().String("target", "open_code", "技能目标环境，默认为 open_code")
+	useCmd.Flags().String("target", "open_code", targetFlagUsage)
 	useCmd.ValidArgsFunction = completeSkillIDs
 	_ = useCmd.RegisterFlagCompletionFunc("target", completeTargetValues)
 }
 
 func runUse(skillID string, target string) error {
+	target = spec.NormalizeTarget(target)
+
 	if client, ok := hubClientIfAvailable(); ok {
 		return runUseViaService(client, skillID, target)
 	}
@@ -106,13 +108,15 @@ func runUse(skillID string, target string) error {
 	fmt.Printf("\n✅ 技能 '%s' 已成功标记为使用！\n", skillID)
 
 	// 显示目标信息
-	fmt.Printf("技能目标环境: %s\n", target)
+	fmt.Printf("技能兼容目标: %s\n", target)
 	fmt.Println("使用 'skill-hub apply' 将技能物理分发到当前项目")
 
 	return nil
 }
 
 func runUseViaService(client serviceUseClient, skillID string, target string) error {
+	target = spec.NormalizeTarget(target)
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -167,7 +171,7 @@ func runUseViaService(client serviceUseClient, skillID string, target string) er
 	}
 
 	fmt.Printf("\n✅ 技能 '%s' 已成功标记为使用！\n", skillID)
-	fmt.Printf("技能目标环境: %s\n", resp.Item.Target)
+	fmt.Printf("技能兼容目标: %s\n", resp.Item.Target)
 	fmt.Println("使用 'skill-hub apply' 将技能物理分发到当前项目")
 	return nil
 }

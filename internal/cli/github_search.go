@@ -144,7 +144,7 @@ func displaySearchResults(results []GitHubSearchResult, keyword, target string, 
 	if len(results) == 0 {
 		fmt.Println("\nℹ️  未找到相关技能")
 		if target != "" {
-			fmt.Printf("搜索关键词: %s (目标环境: %s)\n", keyword, target)
+			fmt.Printf("搜索关键词: %s (兼容目标: %s)\n", keyword, target)
 		} else {
 			fmt.Printf("搜索关键词: %s\n", keyword)
 		}
@@ -186,7 +186,7 @@ func displaySearchResults(results []GitHubSearchResult, keyword, target string, 
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Printf("找到 %d 个相关技能", len(results))
 	if target != "" {
-		fmt.Printf(" (已过滤目标环境: %s)", target)
+		fmt.Printf(" (已过滤兼容目标: %s)", target)
 	}
 	fmt.Println()
 
