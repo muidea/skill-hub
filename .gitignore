@@ -17,6 +17,10 @@ coverage.*
 *.coverprofile
 profile.cov
 
+.pytest_cache
+
+.cursor
+
 __pycache__
 
 .agents
