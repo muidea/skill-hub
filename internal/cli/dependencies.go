@@ -111,10 +111,6 @@ func newGitRepository(repoPath string) (*gitpkg.Repository, error) {
 	return runtimeSvc.GitRepository(repoPath)
 }
 
-func newSkillsRepository() (*gitpkg.Repository, error) {
-	return runtimeSvc.SkillsRepository()
-}
-
 func newSkillRepository() (*gitpkg.SkillRepository, error) {
 	return runtimeSvc.SkillRepository()
 }

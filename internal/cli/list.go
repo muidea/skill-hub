@@ -3,13 +3,11 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/logging"
-	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
 	"github.com/spf13/cobra"
 )
@@ -274,15 +272,6 @@ func refreshRegistry() error {
 		"duration_ms", time.Since(startTime).Milliseconds())
 
 	return nil
-}
-
-func parseSkillMetadataFromFile(mdPath, skillID string) (*spec.SkillMetadata, error) {
-	content, err := os.ReadFile(mdPath)
-	if err != nil {
-		return nil, errors.Wrap(err, "parseSkillMetadataFromFile: 读取SKILL.md失败")
-	}
-
-	return skill.ParseSkillMetadata(content, skillID)
 }
 
 // columnWidths 定义列宽配置

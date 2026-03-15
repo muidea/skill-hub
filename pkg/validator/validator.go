@@ -4,8 +4,8 @@ import (
 	"os"
 	"strings"
 
-	"gopkg.in/yaml.v3"
 	"github.com/muidea/skill-hub/pkg/utils"
+	"gopkg.in/yaml.v3"
 )
 
 // Validator 技能校验器

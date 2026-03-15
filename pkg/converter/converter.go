@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode"
 
-	"gopkg.in/yaml.v3"
 	"github.com/muidea/skill-hub/pkg/validator"
+	"gopkg.in/yaml.v3"
 )
 
 // Fix represents a single fix that can be applied to a skill
