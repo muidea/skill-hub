@@ -81,7 +81,7 @@ func LoadConfig() error {
 	// 设置默认值
 	viper.SetDefault("claude_config_path", filepath.Join(homeDir, ".claude", "config.json"))
 	viper.SetDefault("cursor_config_path", filepath.Join(homeDir, ".cursor", "rules"))
-	viper.SetDefault("default_tool", "cursor")
+	viper.SetDefault("default_tool", "open_code")
 	viper.SetDefault("git_token", "")
 
 	// 多仓库配置默认值 - 强制启用多仓库模式

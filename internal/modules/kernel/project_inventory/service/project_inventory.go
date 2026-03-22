@@ -25,10 +25,11 @@ type ProjectDetail struct {
 }
 
 type ProjectSkill struct {
-	SkillID string `json:"skill_id"`
-	Version string `json:"version,omitempty"`
-	Status  string `json:"status,omitempty"`
-	Target  string `json:"target,omitempty"`
+	SkillID          string `json:"skill_id"`
+	Version          string `json:"version,omitempty"`
+	Status           string `json:"status,omitempty"`
+	Target           string `json:"target,omitempty"`
+	SourceRepository string `json:"source_repository,omitempty"`
 }
 
 type ProjectInventory struct {
@@ -117,10 +118,11 @@ func (p *ProjectInventory) ListProjectSkills(id string) ([]ProjectSkill, error) 
 				target = spec.NormalizeTarget(skillVars.Variables["target"])
 			}
 			skills = append(skills, ProjectSkill{
-				SkillID: skillID,
-				Version: skillVars.Version,
-				Status:  skillVars.Status,
-				Target:  target,
+				SkillID:          skillID,
+				Version:          skillVars.Version,
+				Status:           skillVars.Status,
+				Target:           target,
+				SourceRepository: skillVars.SourceRepository,
 			})
 		}
 

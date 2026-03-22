@@ -2,7 +2,7 @@
 
 **文档状态**：面向后续 `mn` 模块开发前的整理说明  
 **适用范围**：当前 `skill-hub` 已有能力边界、模块归类、后续迁移顺序  
-**当前验证状态**：`go test ./...` 通过；`tests/e2e` 当前总结果为 `105 passed`
+**当前验证状态**：`go test ./...` 通过；`tests/e2e` 当前总结果为 `102 passed, 3 skipped`
 
 ---
 
@@ -336,6 +336,7 @@
 
 - `repo *`
 - `list`
+- `set-target`
 - `status`
 - `use`
 - `apply`
@@ -344,6 +345,7 @@
 当前仍以本地执行为主的命令：
 
 - `init`
+- `search`
 - `create`
 - `remove`
 - `validate`
@@ -383,7 +385,7 @@
 
 1. 服务模式页面级测试补齐
 2. 服务模式错误模型继续收敛
-3. 评估 `remove` / `validate` 是否需要桥接到服务
+3. 推进 `search` 的服务桥接闭环
 
 ### Phase 2：提炼 MN 所需服务接口
 

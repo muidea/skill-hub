@@ -169,7 +169,7 @@ multi_repo:
     %s:
       name: "%s"
       url: "%s"
-      branch: "master"
+      branch: "main"
       enabled: true
       description: "主技能仓库"
       type: "user"

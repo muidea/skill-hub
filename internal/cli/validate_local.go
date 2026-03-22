@@ -13,9 +13,12 @@ import (
 )
 
 var validateCmd = &cobra.Command{
-	Use:               "validate <id>",
-	Short:             "验证技能合规性",
-	Long:              `验证指定技能的项目本地工作区的文件是否合规，包括检查 SKILL.md 的 YAML 语法、必需字段、文件结构等。验证范围包括项目本地文件和仓库源文件。如果该技能未在state.json里项目工作区登记，则提示该技能非法`,
+	Use:   "validate <id>",
+	Short: "验证本地新建技能的合规性",
+	Long: `验证指定技能在项目本地工作区中的文件是否合规，主要用于 create 之后、feedback 之前的本地校验。
+
+该命令只检查项目工作区中的技能目录和 SKILL.md 内容，包括 YAML 语法、必需字段和基本文件结构。
+如果该技能未在 state.json 里登记，或项目本地工作区目录不存在，则视为非法技能。`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeEnabledSkillIDsForCwd,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -89,14 +92,9 @@ func runValidate(skillID string) error {
 		}
 	}
 
-	// 6. 检查仓库源文件（如果可用）
-	fmt.Println("检查仓库源文件...")
-	// TODO: 实现仓库源文件检查逻辑
-	fmt.Println("⚠️  仓库源文件检查功能暂未实现")
-
 	fmt.Println("\n" + strings.Repeat("=", 50))
 	fmt.Println("✅ 验证通过！")
-	fmt.Println("技能合规性验证完成")
+	fmt.Println("本地技能合规性验证完成")
 	fmt.Println(strings.Repeat("=", 50))
 
 	return nil

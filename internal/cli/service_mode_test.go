@@ -167,6 +167,50 @@ func TestRunFeedbackViaServiceWithoutLocalConfig(t *testing.T) {
 	}
 }
 
+func TestRunSetTargetViaServiceWithoutLocalConfig(t *testing.T) {
+	projectDir := t.TempDir()
+	reset := stubServiceBridge(t, &fakeServiceBridgeClient{
+		setProjectTargetFn: func(ctx context.Context, req httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error) {
+			return &httpapibiz.SetProjectTargetData{
+				ProjectPath: req.ProjectPath,
+				Target:      req.Target,
+			}, nil
+		},
+	})
+	defer reset()
+
+	output := withWorkingDir(t, projectDir, func() string {
+		return captureStdout(t, func() {
+			if err := runSetTarget(spec.TargetOpenCode); err != nil {
+				t.Fatalf("runSetTarget returned error: %v", err)
+			}
+		})
+	})
+	if !strings.Contains(output, "首选兼容目标设置为") {
+		t.Fatalf("unexpected set-target output: %q", output)
+	}
+}
+
+func TestRunSearchViaServiceWithoutLocalConfig(t *testing.T) {
+	reset := stubServiceBridge(t, &fakeServiceBridgeClient{
+		searchRemoteSkillsFn: func(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
+			return []spec.RemoteSearchResult{
+				{FullName: "demo/search-skill", Description: "demo", HTMLURL: "https://example.com/demo"},
+			}, nil
+		},
+	})
+	defer reset()
+
+	output := captureStdout(t, func() {
+		if err := runSearch("demo", spec.TargetOpenCode, 5); err != nil {
+			t.Fatalf("runSearch returned error: %v", err)
+		}
+	})
+	if !strings.Contains(output, "demo/search-skill") {
+		t.Fatalf("unexpected search output: %q", output)
+	}
+}
+
 func stubServiceBridge(t *testing.T, client serviceBridgeClient) func() {
 	t.Helper()
 	prev := serviceBridgeResolver
@@ -218,7 +262,9 @@ type fakeServiceBridgeClient struct {
 	disableRepoFn         func(context.Context, string) error
 	setDefaultRepoFn      func(context.Context, string) error
 	listSkillsFn          func(context.Context, []string, string) ([]spec.SkillMetadata, error)
+	searchRemoteSkillsFn  func(context.Context, string, string, int) ([]spec.RemoteSearchResult, error)
 	getProjectStatusFn    func(context.Context, string, string) (*httpapibiz.ProjectStatusData, error)
+	setProjectTargetFn    func(context.Context, httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error)
 	findSkillCandidatesFn func(context.Context, string) ([]spec.SkillMetadata, error)
 	getSkillDetailFn      func(context.Context, string, string) (*spec.Skill, error)
 	useSkillFn            func(context.Context, httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error)
@@ -276,11 +322,23 @@ func (f *fakeServiceBridgeClient) ListSkills(ctx context.Context, repoNames []st
 	}
 	return nil, nil
 }
+func (f *fakeServiceBridgeClient) SearchRemoteSkills(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
+	if f.searchRemoteSkillsFn != nil {
+		return f.searchRemoteSkillsFn(ctx, keyword, target, limit)
+	}
+	return nil, nil
+}
 func (f *fakeServiceBridgeClient) GetProjectStatus(ctx context.Context, projectPath, skillID string) (*httpapibiz.ProjectStatusData, error) {
 	if f.getProjectStatusFn != nil {
 		return f.getProjectStatusFn(ctx, projectPath, skillID)
 	}
 	return &httpapibiz.ProjectStatusData{}, nil
+}
+func (f *fakeServiceBridgeClient) SetProjectTarget(ctx context.Context, req httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error) {
+	if f.setProjectTargetFn != nil {
+		return f.setProjectTargetFn(ctx, req)
+	}
+	return &httpapibiz.SetProjectTargetData{}, nil
 }
 func (f *fakeServiceBridgeClient) FindSkillCandidates(ctx context.Context, skillID string) ([]spec.SkillMetadata, error) {
 	if f.findSkillCandidatesFn != nil {

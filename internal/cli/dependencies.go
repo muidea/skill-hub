@@ -63,6 +63,36 @@ func readDefaultRepositorySkillContent(skillID string) (string, error) {
 	return runtimeSvc.ReadDefaultRepositorySkillContent(skillID)
 }
 
+func readRepositorySkillContent(repoName, skillID string) (string, error) {
+	repoPath, err := repositoryPath(repoName)
+	if err != nil {
+		return "", errors.Wrap(err, "readRepositorySkillContent: 获取仓库路径失败")
+	}
+
+	skillPath := filepath.Join(repoPath, "skills", skillID, "SKILL.md")
+	content, err := os.ReadFile(skillPath)
+	if err != nil {
+		return "", errors.Wrap(err, "readRepositorySkillContent: 读取技能文件失败")
+	}
+	return string(content), nil
+}
+
+func getRepoSkillDirPath(skillID string) (string, error) {
+	defaultRepo, err := defaultRepository()
+	if err != nil {
+		return "", errors.Wrap(err, "getRepoSkillDirPath: 获取默认仓库失败")
+	}
+	repoPath, err := repositoryPath(defaultRepo.Name)
+	if err != nil {
+		return "", errors.Wrap(err, "getRepoSkillDirPath: 获取仓库路径失败")
+	}
+	repoSkillDir := filepath.Join(repoPath, "skills", skillID)
+	if _, err := os.Stat(repoSkillDir); os.IsNotExist(err) {
+		return "", errors.NewWithCode("getRepoSkillDirPath", errors.ErrSkillNotFound, "技能在仓库中不存在")
+	}
+	return repoSkillDir, nil
+}
+
 func listSkillMetadata(repoNames []string) ([]spec.SkillMetadata, error) {
 	return runtimeSvc.ListSkillMetadata(repoNames)
 }

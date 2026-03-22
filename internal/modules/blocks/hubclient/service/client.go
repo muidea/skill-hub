@@ -24,7 +24,7 @@ func New(baseURL string) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		httpClient: &http.Client{
-			Timeout: 1200 * time.Millisecond,
+			Timeout: 5 * time.Second,
 		},
 	}
 }
@@ -106,6 +106,22 @@ func (c *Client) ListSkills(ctx context.Context, repoNames []string, target stri
 	return data.Items, nil
 }
 
+func (c *Client) SearchRemoteSkills(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
+	query := url.Values{}
+	query.Set("keyword", keyword)
+	if target != "" {
+		query.Set("target", target)
+	}
+	if limit > 0 {
+		query.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	data, err := get[httpapibiz.RemoteSearchData](ctx, c, "/api/v1/search?"+query.Encode())
+	if err != nil {
+		return nil, err
+	}
+	return data.Items, nil
+}
+
 func (c *Client) GetProjectStatus(ctx context.Context, projectPath, skillID string) (*httpapibiz.ProjectStatusData, error) {
 	query := url.Values{}
 	query.Set("path", projectPath)
@@ -113,6 +129,14 @@ func (c *Client) GetProjectStatus(ctx context.Context, projectPath, skillID stri
 		query.Set("skill_id", skillID)
 	}
 	data, err := get[httpapibiz.ProjectStatusData](ctx, c, "/api/v1/project-status?"+query.Encode())
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) SetProjectTarget(ctx context.Context, req httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error) {
+	data, err := post[httpapibiz.SetProjectTargetData](ctx, c, "/api/v1/project-target", req)
 	if err != nil {
 		return nil, err
 	}

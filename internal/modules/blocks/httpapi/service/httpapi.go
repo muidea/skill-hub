@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/muidea/skill-hub/internal/config"
@@ -42,11 +43,13 @@ func (h *HTTPAPI) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/health", h.handleHealth)
 	mux.HandleFunc("/api/v1/repos", h.handleRepos)
 	mux.HandleFunc("/api/v1/repos/", h.handleRepoActions)
+	mux.HandleFunc("/api/v1/search", h.handleSearch)
 	mux.HandleFunc("/api/v1/skills", h.handleSkills)
 	mux.HandleFunc("/api/v1/skills/", h.handleSkillActions)
 	mux.HandleFunc("/api/v1/projects", h.handleProjects)
 	mux.HandleFunc("/api/v1/projects/", h.handleProjectActions)
 	mux.HandleFunc("/api/v1/project-status", h.handleProjectStatus)
+	mux.HandleFunc("/api/v1/project-target", h.handleSetProjectTarget)
 	mux.HandleFunc("/api/v1/project-skills/use", h.handleUseSkill)
 	mux.HandleFunc("/api/v1/project-apply", h.handleApplyProject)
 	mux.HandleFunc("/api/v1/project-feedback/preview", h.handlePreviewFeedback)
@@ -158,6 +161,38 @@ func (h *HTTPAPI) handleRepoActions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, httpapibiz.Response[map[string]string]{Code: httpapibiz.CodeOK, Data: map[string]string{"status": "ok"}})
+}
+
+func (h *HTTPAPI) handleSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+	if keyword == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 keyword 参数")
+		return
+	}
+
+	target := strings.TrimSpace(r.URL.Query().Get("target"))
+	limit := 20
+	if limitParam := strings.TrimSpace(r.URL.Query().Get("limit")); limitParam != "" {
+		if parsed, err := strconv.Atoi(limitParam); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	items, err := h.runtimeSvc.Service().SearchRemoteSkills(keyword, target, limit)
+	if err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.RemoteSearchData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.RemoteSearchData{Items: items},
+	})
 }
 
 func (h *HTTPAPI) handleSkills(w http.ResponseWriter, r *http.Request) {
@@ -332,6 +367,42 @@ func (h *HTTPAPI) handleProjectStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.ProjectStatusData]{
 		Code: httpapibiz.CodeOK,
 		Data: httpapibiz.ProjectStatusData{Item: status},
+	})
+}
+
+func (h *HTTPAPI) handleSetProjectTarget(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.SetProjectTargetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+	if strings.TrimSpace(req.ProjectPath) == "" || strings.TrimSpace(req.Target) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 project_path 或 target")
+		return
+	}
+
+	target := spec.NormalizeTarget(strings.TrimSpace(req.Target))
+	if target != spec.TargetCursor && target != spec.TargetClaudeCode && target != spec.TargetOpenCode {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "目标值无效")
+		return
+	}
+
+	if err := h.runtimeSvc.Service().SetPreferredTarget(req.ProjectPath, target); err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.SetProjectTargetData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.SetProjectTargetData{
+			ProjectPath: req.ProjectPath,
+			Target:      target,
+		},
 	})
 }
 

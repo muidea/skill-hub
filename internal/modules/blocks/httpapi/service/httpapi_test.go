@@ -95,6 +95,17 @@ func TestHTTPAPI_ProjectStatusRequiresPath(t *testing.T) {
 	}
 }
 
+func TestHTTPAPI_SearchRequiresKeyword(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search", nil)
+	rec := httptest.NewRecorder()
+
+	New().Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
 func TestHTTPAPI_UseSkillRequiresBodyFields(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/project-skills/use", bytes.NewBufferString(`{}`))
 	rec := httptest.NewRecorder()

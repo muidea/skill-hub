@@ -39,6 +39,10 @@ type SkillListData struct {
 	Items []spec.SkillMetadata `json:"items"`
 }
 
+type RemoteSearchData struct {
+	Items []spec.RemoteSearchResult `json:"items"`
+}
+
 type SkillCandidateListData struct {
 	Items []spec.SkillMetadata `json:"items"`
 }
@@ -61,6 +65,16 @@ type ProjectSkillListData struct {
 
 type ProjectStatusData struct {
 	Item *projectstatusservice.ProjectStatusSummary `json:"item"`
+}
+
+type SetProjectTargetRequest struct {
+	ProjectPath string `json:"project_path"`
+	Target      string `json:"target"`
+}
+
+type SetProjectTargetData struct {
+	ProjectPath string `json:"project_path"`
+	Target      string `json:"target"`
 }
 
 type UseSkillRequest struct {

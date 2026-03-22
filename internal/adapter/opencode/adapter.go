@@ -11,6 +11,8 @@ import (
 	"github.com/muidea/skill-hub/pkg/utils"
 )
 
+const sourceRepositoryVariable = "_skill_hub_source_repository"
+
 // OpenCodeAdapter 实现OpenCode适配器
 type OpenCodeAdapter struct {
 	*common.BaseAdapter
@@ -34,6 +36,16 @@ func NewOpenCodeAdapterWithOptions(opts ...common.ModeOption) *OpenCodeAdapter {
 // GetTarget 获取适配器对应的target类型
 func (a *OpenCodeAdapter) GetTarget() string {
 	return "open_code"
+}
+
+func (a *OpenCodeAdapter) SetProjectMode() {
+	a.BaseAdapter.SetProjectMode()
+	a.basePath = ""
+}
+
+func (a *OpenCodeAdapter) SetGlobalMode() {
+	a.BaseAdapter.SetGlobalMode()
+	a.basePath = ""
 }
 
 // GetSkillPath 获取技能在目标系统中的路径
@@ -64,7 +76,7 @@ func (a *OpenCodeAdapter) Apply(skillID string, content string, variables map[st
 
 	// 对于open_code适配器，直接从仓库复制整个技能目录
 	// 这样可以保证文件内容完全一致，避免格式转换导致的差异
-	if err := a.copySkillFromRepository(skillID, skillDir); err != nil {
+	if err := a.copySkillFromRepository(skillID, skillDir, variables[sourceRepositoryVariable]); err != nil {
 		return fmt.Errorf("从仓库复制技能失败: %w", err)
 	}
 
@@ -101,7 +113,7 @@ func (a *OpenCodeAdapter) Extract(skillID string) (string, error) {
 }
 
 // copySkillFromRepository 从仓库复制整个技能目录
-func (a *OpenCodeAdapter) copySkillFromRepository(skillID, targetDir string) error {
+func (a *OpenCodeAdapter) copySkillFromRepository(skillID, targetDir, sourceRepository string) error {
 	// 获取配置
 	cfg, err := config.GetConfig()
 	if err != nil {
@@ -116,7 +128,11 @@ func (a *OpenCodeAdapter) copySkillFromRepository(skillID, targetDir string) err
 		if err != nil {
 			return a.createBasicSkill(skillID, targetDir)
 		}
-		repoPath = filepath.Join(rootDir, "repositories", cfg.MultiRepo.DefaultRepo)
+		repoName := cfg.MultiRepo.DefaultRepo
+		if sourceRepository != "" {
+			repoName = sourceRepository
+		}
+		repoPath = filepath.Join(rootDir, "repositories", repoName)
 	} else {
 		// 多仓库配置未初始化，创建基本技能
 		return a.createBasicSkill(skillID, targetDir)
@@ -275,26 +291,23 @@ func (a *OpenCodeAdapter) Supports() bool {
 
 // getBasePath 获取基础路径
 func (a *OpenCodeAdapter) getBasePath() (string, error) {
-	if a.basePath != "" {
-		return a.basePath, nil
-	}
-
 	if a.GetMode() == "project" {
-		// 项目级：使用当前工作目录
 		cwd, err := os.Getwd()
 		if err != nil {
 			return "", utils.GetCwdErr(err)
 		}
-		a.basePath = filepath.Join(cwd, ".agents")
-	} else {
-		// 全局级：使用用户配置目录
-		_, err := config.GetConfig()
-		if err != nil {
-			return "", err
-		}
-		// 展开路径中的~
-		a.basePath = expandPath(filepath.Join("~", ".config", "opencode"))
+		return filepath.Join(cwd, ".agents"), nil
 	}
+
+	if a.basePath != "" {
+		return a.basePath, nil
+	}
+
+	_, err := config.GetConfig()
+	if err != nil {
+		return "", err
+	}
+	a.basePath = expandPath(filepath.Join("~", ".config", "opencode"))
 
 	return a.basePath, nil
 }

@@ -64,145 +64,30 @@ func runStatus(skillID string, verbose bool) error {
 		return err
 	}
 
-	fmt.Println("检查技能状态...")
-
-	projectState, err := ctx.StateManager.LoadProjectState(ctx.Cwd)
+	summary, err := projectstatusservice.New().Inspect(ctx.Cwd, skillID)
 	if err != nil {
 		return err
 	}
 
-	skills := projectState.Skills
-	if len(skills) == 0 {
-		fmt.Println("ℹ️  当前项目未启用任何技能")
-		return nil
-	}
+	renderProjectStatusSummary(summary)
 
-	targetSkillID := skillID
-	if skillID != "" {
-		if _, exists := skills[skillID]; !exists {
-			return errors.NewWithCodef("runStatus", errors.ErrSkillNotFound, "技能 %s 未在当前项目中启用", skillID)
-		}
-		singleSkill := map[string]spec.SkillVars{
-			skillID: skills[skillID],
-		}
-		skills = singleSkill
-	}
-
-	fmt.Printf("项目路径: %s\n", ctx.Cwd)
-	fmt.Printf("启用技能数: %d\n", len(skills))
-	if skillID != "" {
-		fmt.Printf("检查特定技能: %s\n", skillID)
-	}
-	fmt.Println()
-
-	fmt.Println("检查项目本地工作区文件...")
-
-	results := make(map[string]string)
-	localVersions := make(map[string]string)
-
-	for currentSkillID, skillVars := range skills {
-		agentsSkillDir := filepath.Join(ctx.Cwd, ".agents", "skills", currentSkillID)
-		skillMdPath := filepath.Join(agentsSkillDir, "SKILL.md")
-
-		if _, err := os.Stat(skillMdPath); os.IsNotExist(err) {
-			results[currentSkillID] = spec.SkillStatusMissing
-			localVersions[currentSkillID] = "—"
-			updateSkillStatus(ctx.Cwd, currentSkillID, spec.SkillStatusMissing, skillVars.Version)
-			continue
-		}
-
-		repoSkillDir, repoDirErr := getRepoSkillDirPath(currentSkillID)
-		if repoDirErr == nil {
-			equal, eqErr := skillDirsEqual(agentsSkillDir, repoSkillDir)
-			if eqErr == nil && !equal {
-				localVersion, _, _ := getLocalSkillInfo(skillMdPath)
-				status := spec.SkillStatusModified
-				if repoVersion, _, err := getRepoSkillInfo(currentSkillID); err == nil {
-					if compareVersions(repoVersion, localVersion) > 0 {
-						status = spec.SkillStatusOutdated
-					}
-				}
-				results[currentSkillID] = status
-				localVersions[currentSkillID] = localVersion
-				updateSkillStatus(ctx.Cwd, currentSkillID, status, localVersion)
-				continue
-			}
-		}
-
-		localVersion, localHash, err := getLocalSkillInfo(skillMdPath)
-		if err != nil {
-			fmt.Printf("⚠️  获取技能 %s 信息失败，标记为Modified: %v\n", currentSkillID, err)
-			results[currentSkillID] = spec.SkillStatusModified
-			localVersions[currentSkillID] = "unknown"
-			updateSkillStatus(ctx.Cwd, currentSkillID, spec.SkillStatusModified, "unknown")
-			continue
-		}
-
-		repoVersion, repoHash, err := getRepoSkillInfo(currentSkillID)
-		if err != nil {
-			results[currentSkillID] = spec.SkillStatusModified
-			localVersions[currentSkillID] = localVersion
-			if verbose {
-				fmt.Printf("  ℹ️  技能 %s 在仓库中不存在，标记为 Modified\n", currentSkillID)
-			}
-			updateSkillStatus(ctx.Cwd, currentSkillID, spec.SkillStatusModified, localVersion)
-			continue
-		}
-
-		status := determineSkillStatus(localVersion, localHash, repoVersion, repoHash)
-		results[currentSkillID] = status
-		localVersions[currentSkillID] = localVersion
-		updateSkillStatus(ctx.Cwd, currentSkillID, status, localVersion)
-	}
-
-	fmt.Println("\n=== 技能状态 ===")
-
-	maxIDLength := 2
-	maxVersionLength := 7
-	for currentSkillID := range results {
-		if len(currentSkillID) > maxIDLength {
-			maxIDLength = len(currentSkillID)
-		}
-		if v := localVersions[currentSkillID]; len(v) > maxVersionLength {
-			maxVersionLength = len(v)
-		}
-	}
-
-	fmt.Printf("%-*s %-*s 状态\n", maxIDLength, "ID", maxVersionLength, "本地版本")
-	fmt.Println(strings.Repeat("-", maxIDLength+1+maxVersionLength+1+2))
-
-	for currentSkillID, status := range results {
-		statusSymbol := "❓"
-		switch status {
-		case spec.SkillStatusSynced:
-			statusSymbol = "✅"
-		case spec.SkillStatusModified:
-			statusSymbol = "⚠️"
-		case spec.SkillStatusOutdated:
-			statusSymbol = "🔄"
-		case spec.SkillStatusMissing:
-			statusSymbol = "❌"
-		}
-		ver := localVersions[currentSkillID]
-		fmt.Printf("%-*s %-*s %s %s\n", maxIDLength, currentSkillID, maxVersionLength, ver, statusSymbol, status)
+	itemMap := make(map[string]projectstatusservice.SkillStatusItem, len(summary.Items))
+	for _, item := range summary.Items {
+		itemMap[item.SkillID] = item
 	}
 
 	if verbose {
 		fmt.Println("\n=== 详细差异信息 ===")
-		for currentSkillID := range results {
-			showSkillDiff(ctx.Cwd, currentSkillID)
+		for _, item := range summary.Items {
+			showSkillDiff(item)
 		}
 	}
 
-	fmt.Println("\n说明:")
-	fmt.Println("✅ Synced: 本地与仓库一致")
-	fmt.Println("⚠️  Modified: 本地有未反馈的修改")
-	fmt.Println("🔄 Outdated: 仓库版本领先于本地")
-	fmt.Println("❌ Missing: 技能已启用但本地文件缺失")
-
-	if targetSkillID != "" {
-		showSkillDetails(ctx.Cwd, targetSkillID, results[targetSkillID])
-	} else if !verbose {
+	if skillID != "" {
+		if item, ok := itemMap[skillID]; ok {
+			showSkillDetails(item)
+		}
+	} else if !verbose && summary.SkillCount > 0 {
 		fmt.Println("\n使用 'skill-hub status <id>' 检查特定技能状态")
 		fmt.Println("使用 'skill-hub status --verbose' 显示详细差异")
 	}
@@ -264,14 +149,11 @@ func renderProjectStatusSummary(summary *projectstatusservice.ProjectStatusSumma
 	fmt.Println("❌ Missing: 技能已启用但本地文件缺失")
 }
 
-func showSkillDetails(cwd, skillID, status string) {
+func showSkillDetails(item projectstatusservice.SkillStatusItem) {
 	fmt.Println("\n=== 技能详情 ===")
 
-	agentsSkillDir := filepath.Join(cwd, ".agents", "skills", skillID)
-	localSkillMdPath := filepath.Join(agentsSkillDir, "SKILL.md")
-
 	statusSymbol := "❓"
-	switch status {
+	switch item.Status {
 	case spec.SkillStatusSynced:
 		statusSymbol = "✅"
 	case spec.SkillStatusModified:
@@ -282,30 +164,29 @@ func showSkillDetails(cwd, skillID, status string) {
 		statusSymbol = "❌"
 	}
 
-	fmt.Printf("ID:         %s\n", skillID)
-	fmt.Printf("状态:       %s %s\n", statusSymbol, status)
+	fmt.Printf("ID:         %s\n", item.SkillID)
+	fmt.Printf("状态:       %s %s\n", statusSymbol, item.Status)
+	if item.SourceRepository != "" {
+		fmt.Printf("来源仓库:   %s\n", item.SourceRepository)
+	}
 
-	localVersion := "N/A"
-	if status != spec.SkillStatusMissing {
-		if v, _, err := getLocalSkillInfo(localSkillMdPath); err == nil {
-			localVersion = v
-		}
+	localVersion := item.LocalVersion
+	if localVersion == "" {
+		localVersion = "N/A"
 	}
 	fmt.Printf("本地版本:   %s\n", localVersion)
 
-	repoVersion := "N/A"
-	if v, _, err := getRepoSkillInfo(skillID); err == nil {
-		repoVersion = v
+	repoVersion := item.RepoVersion
+	if repoVersion == "" {
+		repoVersion = "N/A"
 	}
 	fmt.Printf("仓库版本:   %s\n", repoVersion)
 
-	fmt.Printf("本地路径:   %s\n", localSkillMdPath)
+	fmt.Printf("本地路径:   %s\n", item.LocalPath)
+	fmt.Printf("仓库路径:   %s\n", item.RepoPath)
 
-	repoSkillPath, _ := getRepoSkillPath(skillID)
-	fmt.Printf("仓库路径:   %s\n", repoSkillPath)
-
-	localInfo, localErr := os.Stat(localSkillMdPath)
-	repoInfo, repoErr := os.Stat(repoSkillPath)
+	localInfo, localErr := os.Stat(item.LocalPath)
+	repoInfo, repoErr := os.Stat(item.RepoPath)
 
 	if localErr == nil || repoErr == nil {
 		fmt.Println("更新时间对比:")
@@ -324,24 +205,18 @@ func showSkillDetails(cwd, skillID, status string) {
 		}
 	}
 
-	if status != spec.SkillStatusMissing && localVersion != "N/A" && repoVersion != "N/A" {
-		if desc := describeChangeDirection(status, localVersion, repoVersion); desc != "" {
+	if item.Status != spec.SkillStatusMissing && localVersion != "N/A" && repoVersion != "N/A" {
+		if desc := describeChangeDirection(item.Status, localVersion, repoVersion); desc != "" {
 			fmt.Println(desc)
 		}
 	}
 }
 
-func showSkillDiff(cwd, skillID string) {
-	agentsSkillDir := filepath.Join(cwd, ".agents", "skills", skillID)
-	localSkillMdPath := filepath.Join(agentsSkillDir, "SKILL.md")
-	repoSkillMdPath := ""
+func showSkillDiff(item projectstatusservice.SkillStatusItem) {
+	localContent, localErr := os.ReadFile(item.LocalPath)
+	repoContent, repoErr := os.ReadFile(item.RepoPath)
 
-	repoSkillMdPath, _ = getRepoSkillPath(skillID)
-
-	localContent, localErr := os.ReadFile(localSkillMdPath)
-	repoContent, repoErr := os.ReadFile(repoSkillMdPath)
-
-	fmt.Printf("\n--- %s ---\n", skillID)
+	fmt.Printf("\n--- %s ---\n", item.SkillID)
 
 	if localErr != nil && repoErr != nil {
 		fmt.Println("⚠️  无法读取本地和仓库文件")
@@ -350,13 +225,13 @@ func showSkillDiff(cwd, skillID string) {
 
 	if localErr != nil {
 		fmt.Println("⚠️  无法读取本地文件")
-		fmt.Printf("仓库文件: %s\n", repoSkillMdPath)
+		fmt.Printf("仓库文件: %s\n", item.RepoPath)
 		return
 	}
 
 	if repoErr != nil {
 		fmt.Println("⚠️  无法读取仓库文件（技能可能不在仓库中）")
-		fmt.Printf("本地文件: %s\n", localSkillMdPath)
+		fmt.Printf("本地文件: %s\n", item.LocalPath)
 		return
 	}
 
@@ -368,8 +243,8 @@ func showSkillDiff(cwd, skillID string) {
 		return
 	}
 
-	localVersion, localHash, lvErr := getLocalSkillInfo(localSkillMdPath)
-	repoVersion, repoHash, rvErr := getLocalSkillInfo(repoSkillMdPath)
+	localVersion, localHash, lvErr := getLocalSkillInfo(item.LocalPath)
+	repoVersion, repoHash, rvErr := getLocalSkillInfo(item.RepoPath)
 	if lvErr == nil && rvErr == nil {
 		status := determineSkillStatus(localVersion, localHash, repoVersion, repoHash)
 		fmt.Printf("状态判定: %s\n", status)
@@ -456,30 +331,6 @@ func describeChangeDirection(status, localVersion, repoVersion string) string {
 	}
 }
 
-func getRepoSkillDirPath(skillID string) (string, error) {
-	defaultRepo, err := defaultRepository()
-	if err != nil {
-		return "", errors.Wrap(err, "获取默认仓库失败")
-	}
-	repoPath, err := repositoryPath(defaultRepo.Name)
-	if err != nil {
-		return "", errors.Wrap(err, "获取仓库路径失败")
-	}
-	repoSkillDir := filepath.Join(repoPath, "skills", skillID)
-	if _, err := os.Stat(repoSkillDir); os.IsNotExist(err) {
-		return "", errors.NewWithCode("getRepoSkillDirPath", errors.ErrSkillNotFound, "技能在仓库中不存在")
-	}
-	return repoSkillDir, nil
-}
-
-func getRepoSkillPath(skillID string) (string, error) {
-	repoSkillDir, err := getRepoSkillDirPath(skillID)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(repoSkillDir, "SKILL.md"), nil
-}
-
 func skillDirsEqual(dirA, dirB string) (bool, error) {
 	manifestA, err := buildSkillDirManifest(dirA)
 	if err != nil {
@@ -521,18 +372,6 @@ func buildSkillDirManifest(dir string) (map[string]string, error) {
 		return nil
 	})
 	return out, err
-}
-
-func getRepoSkillInfo(skillID string) (string, string, error) {
-	repoSkillDir, err := getRepoSkillDirPath(skillID)
-	if err != nil {
-		return "", "", err
-	}
-	repoSkillPath := filepath.Join(repoSkillDir, "SKILL.md")
-	if _, err := os.Stat(repoSkillPath); os.IsNotExist(err) {
-		return "", "", errors.NewWithCode("getRepoSkillInfo", errors.ErrSkillNotFound, "技能在仓库中不存在")
-	}
-	return getLocalSkillInfo(repoSkillPath)
 }
 
 func determineSkillStatus(localVersion, localHash, repoVersion, repoHash string) string {

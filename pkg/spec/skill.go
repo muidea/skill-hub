@@ -108,10 +108,11 @@ const (
 
 // SkillVars 表示项目中某个技能的变量配置和状态
 type SkillVars struct {
-	SkillID   string            `json:"skill_id"`
-	Version   string            `json:"version"`
-	Status    string            `json:"status,omitempty"` // 技能状态：Synced, Modified, Outdated, Missing
-	Variables map[string]string `json:"variables"`
+	SkillID          string            `json:"skill_id"`
+	Version          string            `json:"version"`
+	Status           string            `json:"status,omitempty"`            // 技能状态：Synced, Modified, Outdated, Missing
+	SourceRepository string            `json:"source_repository,omitempty"` // 首次 use 时选中的来源仓库
+	Variables        map[string]string `json:"variables"`
 }
 
 // CreateOptions 创建技能选项

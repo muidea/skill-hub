@@ -224,9 +224,14 @@ skill-hub list --repo skills-repo --target cursor --verbose
 
 **功能描述**:
 
+搜索远端技能入口。命令行仍作为用户入口，但最终的远端搜索交互应由本地 `skill-hub serve` 实例统一承接，以复用本地托管的 `~/.skill-hub/` 上下文、远端访问策略和 Web/CLI 共用能力。
+
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
-当前未实现
+当前实现状态：
+
+- 当前 CLI 仍包含本地直连实现
+- 目标状态是优先通过服务桥接执行
 
 **示例**:
 ```bash
@@ -304,7 +309,9 @@ skill-hub remove git-expert
 
 **功能描述**:
 
-验证指定技能的项目工作区的文件是否合规，包括检查 `SKILL.md` 的 YAML 语法、必需字段、文件结构等。验证范围包括项目本地文件和仓库源文件。
+验证指定技能在项目工作区中的本地文件是否合规，包括检查 `SKILL.md` 的 YAML 语法、必需字段和基本文件结构。
+
+该命令与 `create` 配套，主要用于 `feedback` 前的本地校验，不负责校验仓库侧内容。
 
 如果该技能未在`state.json`里项目工作区登记，则提示该技能非法
 
@@ -469,17 +476,17 @@ skill-hub feedback git-expert --dry-run
 
 **功能描述**:
 
-从远程技能仓库拉取最新更改到本地仓库（`~/.skill-hub/repositories/`），并更新技能索引。此命令仅同步仓库层，不涉及项目工作目录的更新。
+从默认仓库对应的远程拉取最新更改到本地仓库（`~/.skill-hub/repositories/<default>/`），并更新技能索引。此命令仅同步仓库层，不涉及项目工作目录的更新。
 
 `git sync`、`git pull` 以及 `repo sync` 也遵循同样的索引刷新原则：仓库内容变化后会重建对应 repo 的 `registry.json`，默认仓库同时会刷新根目录兼容索引。
 
-**多仓库说明**：默认同步所有已启用的仓库。可使用 `skill-hub repo sync` 命令同步特定仓库。
+**多仓库说明**：此命令仅处理默认仓库。如需同步指定仓库或所有启用仓库，请使用 `skill-hub repo sync`。
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
 
 **关键行为**:
-1. 对所有已启用的仓库执行 `git pull` 从远程仓库获取最新技能
+1. 对默认仓库执行 `git pull` 从远程仓库获取最新技能
 2. 更新本地技能注册表（作为只读缓存）
 3. 不修改项目状态或项目工作目录中的文件
 4. 不更新项目的 `LastSync` 时间戳
@@ -508,7 +515,7 @@ skill-hub pull --check
 
 **功能描述**:
 
-自动检测并提交所有未提交的更改，然后推送到远程技能仓库。此命令将本地仓库（`~/.skill-hub/repositories/`）中的更改同步到远程仓库，完成反馈闭环。
+自动检测并提交默认仓库中的未提交更改，然后推送到对应远程仓库。此命令用于完成 `feedback -> push` 的归档闭环。
 
 **多仓库说明**：默认推送到默认仓库（归档仓库）。可使用 `skill-hub repo default` 命令设置默认仓库。
 
@@ -805,6 +812,7 @@ skill-hub repo sync community
 
 - `repo *`
 - `list`
+- `set-target`
 - `status`
 - `use`
 - `apply`
@@ -813,6 +821,7 @@ skill-hub repo sync community
 当前未桥接、仍主要本地执行的命令：
 
 - `init`
+- `search`
 - `create`
 - `remove`
 - `validate`
@@ -828,3 +837,4 @@ skill-hub repo sync community
 | 1.1 | 2026-02-09 | 核对各个命令描述，增加依赖信息说明 |
 | 1.2 | 2026-02-17 | 添加多仓库管理命令，更新init命令描述以支持多仓库架构 |
 | 1.3 | 2026-03-14 | 补充 `serve` 命令、服务模式桥接行为，以及 `repo/list/status/use/apply/feedback` 的当前实现状态 |
+| 1.4 | 2026-03-22 | 同步项目工作区/默认仓库/服务化边界：`search` 目标服务化，`validate` 仅本地校验，`pull/push` 收口为默认仓库语义 |

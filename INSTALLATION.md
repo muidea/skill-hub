@@ -194,31 +194,31 @@ skill-hub 提供了一系列命令来管理技能和项目。
 
 | 命令 | 描述 | 示例 |
 |------|------|------|
-| `init` | 初始化本地仓库 | `skill-hub init [git_url] [--target <value>]` |
+| `init` | 初始化多仓库工作区 | `skill-hub init [git_url] [--target <value>]` |
 | `set-target` | 设置项目目标环境 | `skill-hub set-target <value>` |
 | `list` | 列出可用技能 | `skill-hub list [--target <value>] [--verbose] [--repo <repo-name>...]` |
 | `search` | 搜索远程技能 | `skill-hub search <keyword> [--target <value>] [--limit <number>]` |
 | `create` | 创建新技能模板 | `skill-hub create <id> [--target <value>]` |
 | `remove` | 移除项目技能 | `skill-hub remove <id>` |
-| `validate` | 验证技能合规性 | `skill-hub validate <id>` |
+| `validate` | 验证项目工作区中新建 skill 的合规性 | `skill-hub validate <id>` |
 | `use` | 使用指定技能 | `skill-hub use <id> [--target <value>]` |
 | `status` | 检查技能状态 | `skill-hub status [id] [--verbose]` |
 | `apply` | 应用技能到项目 | `skill-hub apply [--dry-run] [--force]` |
 | `feedback` | 反馈项目修改到默认仓库 | `skill-hub feedback <id> [--dry-run] [--force]` |
-| `pull` | 从远程仓库拉取最新技能 | `skill-hub pull [--force] [--check]` |
-| `push` | 推送本地更改到远程仓库 | `skill-hub push [--message MESSAGE] [--force] [--dry-run]` |
+| `pull` | 拉取默认仓库的远程更新 | `skill-hub pull [--force] [--check]` |
+| `push` | 推送默认仓库的本地更改 | `skill-hub push [--message MESSAGE] [--force] [--dry-run]` |
 
 ### 多仓库管理命令
 
 | 命令 | 描述 | 示例 |
 |------|------|------|
-| `repo add` | 添加新技能仓库 | `skill-hub repo add <name> <git_url> [--default]` |
-| `repo list` | 列出所有技能仓库 | `skill-hub repo list [--verbose]` |
+| `repo add` | 添加新技能仓库 | `skill-hub repo add <name> <git_url>` |
+| `repo list` | 列出所有技能仓库 | `skill-hub repo list` |
 | `repo remove` | 移除技能仓库 | `skill-hub repo remove <name>` |
 | `repo enable` | 启用技能仓库 | `skill-hub repo enable <name>` |
 | `repo disable` | 禁用技能仓库 | `skill-hub repo disable <name>` |
 | `repo default` | 设置默认（归档）仓库 | `skill-hub repo default <name>` |
-| `repo sync` | 同步所有仓库 | `skill-hub repo sync [--force]` |
+| `repo sync` | 同步指定仓库或所有启用仓库 | `skill-hub repo sync [name] [--all]` |
 
 ### 常用工作流程
 

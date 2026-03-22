@@ -8,9 +8,33 @@
 
 ## 简介
 
+`skill-hub` 首先是一个命令行工具，用于管理 skill、在项目中启用 skill，并维护 skill 的仓库生命周期。
+
+同时它支持以 `serve` 模式运行。`serve` 模式会托管用户本地的 `~/.skill-hub/` 目录，提供 Web 管理能力；CLI 在执行命令时会优先与本地 `serve` 实例交互，但 `serve` 不是必选项，本地服务不可用时所有命令都必须回退到本地执行。
+
+### 概念模型
+
+1. **全局管理目录**：`~/.skill-hub/`
+   承接多仓库配置、本地仓库存储、默认仓库、全局状态、索引和缓存。
+
+2. **项目本地工作区**：`<project>/.agents/skills/`
+   承接当前项目实际使用的 skill 内容，是项目侧的工作目录。
+
+3. **来源仓库**
+   指某个 skill 在 `use` 时选中的仓库。它决定 `apply` 的读取来源，以及 `status` 的上游对比基线。
+
+4. **默认仓库**
+   指当前配置中的默认仓库，同时也是归档仓库。`feedback` 只归档到默认仓库，`pull` / `push` 默认也只操作默认仓库。
+
+5. **多仓库管理**
+   指 `~/.skill-hub/` 下多个本地仓库的配置、启停、默认仓库切换和同步能力。
+
+6. **服务实例**
+   指 `skill-hub serve` 启动的本地服务。它托管 `~/.skill-hub/`，为 Web 管理和 CLI 复用提供统一执行入口。
+
 ## 项目结构
 
-当前推荐结构已经对齐为多模块应用入口：
+当前代码结构包含模块化内核与现有 CLI 实现。当前构建入口统一位于 `application/skill-hub/cmd`，实际命令执行仍由 `internal/cli` 承载，`internal/modules/kernel` 主要提供服务化封装与后续重构落点：
 
 ```text
 skill-hub/
@@ -43,13 +67,28 @@ go build -o bin/skill-hub ./application/skill-hub/cmd
 
 - **技能管理**：查看、启用、禁用技能
 - **技能创建**：从当前项目创建新的技能模板
-- **本地验证**：在本地项目中验证技能有效性
+- **本地验证**：校验 create 生成的项目本地 skill 是否符合规范
 - **技能归档**：将验证通过的技能归档到正式仓库
 - **跨工具同步**：支持 Cursor、Claude Code、OpenCode 等AI工具
 - **版本控制**：基于Git的技能版本管理
 - **差异检测**：自动检测手动修改并支持反馈
 - **安全操作**：原子文件写入和备份机制
 - **全面测试**：单元测试 + 端到端测试覆盖
+
+### 命令分层
+
+- **项目本地工作区命令**：`set-target`、`use`、`status`、`apply`、`feedback`、`pull`、`push`、`create`、`remove`、`validate`
+- **多仓库管理命令**：`repo *`
+- **远端搜索命令**：`search`
+- **底层运维命令**：`git *`、`serve`
+- **引导命令**：`init`
+
+其中：
+
+- `create` / `remove` / `validate` 只作用于项目本地工作区，不参与服务化托管
+- `search` 面向远端能力；当本地 `serve` 实例可用时优先通过服务承接远端交互，不可用时回退到本地执行
+- `repo *` 面向 `~/.skill-hub/` 下的多仓库管理
+- `use` / `status` / `apply` / `feedback` / `set-target` / `pull` / `push` 都服务于项目工作流，但会依赖全局管理目录中的仓库与状态信息
 
 ## 🚀 快速开始
 
@@ -94,7 +133,7 @@ skill-hub apply
 # 1. 从当前项目创建新技能模板
 skill-hub create my-new-skill
 
-# 2. 在本地项目中验证技能有效性
+# 2. 在 feedback 前校验本地新建 skill
 skill-hub validate my-new-skill
 
 # 3. 反馈手动修改并归档到默认仓库
@@ -126,25 +165,25 @@ skill-hub repo disable personal
 | `search` | `<keyword> [--target <value>] [--limit <number>]` | 搜索远程技能 |
 | `create` | `<id> [--target <value>]` | 创建新技能模板 |
 | `remove` | `<id>` | 移除项目技能 |
-| `validate` | `<id>` | 验证技能合规性 |
+| `validate` | `<id>` | 验证项目工作区中新建 skill 的合规性 |
 | `use` | `<id> [--target <value>]` | 使用指定技能 |
 | `status` | `[id] [--verbose]` | 检查技能状态 |
 | `apply` | `[--dry-run] [--force]` | 应用技能到项目 |
 | `feedback` | `<id> [--dry-run] [--force]` | 反馈修改到仓库 |
-| `pull` | `[--force] [--check]` | 从远程拉取技能 |
-| `push` | `[--message MESSAGE] [--force] [--dry-run]` | 推送本地更改 |
+| `pull` | `[--force] [--check]` | 拉取默认仓库的远程更新 |
+| `push` | `[--message MESSAGE] [--force] [--dry-run]` | 推送默认仓库的本地更改 |
 
 ### 多仓库管理命令
 
 | 命令 | 参数 | 功能说明 |
 |------|------|----------|
-| `repo add` | `<name> <git_url> [--default]` | 添加新技能仓库 |
-| `repo list` | `[--verbose]` | 列出所有技能仓库 |
+| `repo add` | `<name> <git_url>` | 添加新技能仓库 |
+| `repo list` | `无` | 列出所有技能仓库 |
 | `repo remove` | `<name>` | 移除技能仓库 |
 | `repo enable` | `<name>` | 启用技能仓库 |
 | `repo disable` | `<name>` | 禁用技能仓库 |
 | `repo default` | `<name>` | 设置默认（归档）仓库 |
-| `repo sync` | `[--force]` | 同步所有仓库 |
+| `repo sync` | `[name] [--all]` | 同步指定仓库或所有启用仓库 |
 
 **语法说明**：`<参数>`为必需参数，`[参数]`为可选参数
 

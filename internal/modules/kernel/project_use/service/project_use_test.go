@@ -67,6 +67,9 @@ func TestProjectUse_EnableSkill(t *testing.T) {
 	if projectState.Skills["demo-skill"].Version != "1.0.0" {
 		t.Fatalf("expected stored version 1.0.0, got %q", projectState.Skills["demo-skill"].Version)
 	}
+	if projectState.Skills["demo-skill"].SourceRepository != "main" {
+		t.Fatalf("expected source repository main, got %q", projectState.Skills["demo-skill"].SourceRepository)
+	}
 	if projectState.Skills["demo-skill"].Variables["env"] != "test" {
 		t.Fatalf("expected stored variable env=test, got %+v", projectState.Skills["demo-skill"].Variables)
 	}

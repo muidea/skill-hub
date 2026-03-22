@@ -101,7 +101,7 @@ func runUse(skillID string, target string) error {
 		return err
 	}
 
-	if err := ctx.StateManager.AddSkillToProjectWithTarget(ctx.Cwd, skillID, fullSkill.Version, variables, target); err != nil {
+	if err := ctx.StateManager.AddSkillToProjectWithTarget(ctx.Cwd, skillID, fullSkill.Version, selectedSkill.Repository, variables, target); err != nil {
 		return errors.Wrap(err, "保存项目状态失败")
 	}
 

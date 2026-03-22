@@ -1,6 +1,6 @@
 # skill-hub End-to-End Tests
 
-Python-based end-to-end test framework for skill-hub, covering the 5 business scenarios from `docs/testCase.md`.
+Python-based end-to-end test framework for skill-hub, covering the scenario test files and supplemental regression cases under `tests/e2e/`.
 
 ## Overview
 
@@ -8,7 +8,7 @@ This test framework provides comprehensive end-to-end testing for skill-hub's co
 
 ## Test Scenarios
 
-Based on the business scenarios defined in `docs/testCase.md`:
+Based on the business scenarios defined in the repo test documents and current CLI behavior:
 
 1. **Developer Full Workflow** (`test_scenario1.py`)
    - Environment initialization with `skill-hub init`
@@ -34,11 +34,11 @@ Based on the business scenarios defined in `docs/testCase.md`:
    - Multi-target cleanup with `--target all`
    - Repository safety (never delete source files)
 
-5. **Update and Validation Workflow** (`test_scenario5.py`)
-   - Repository updates with `skill-hub update`
+5. **Target Priority and Validation Workflow** (`test_scenario5.py`)
+   - Project/global target priority checks
    - Skill validation with `skill-hub validate`
-   - Invalid YAML detection
-   - Outdated skill detection
+   - Invalid local skill detection
+   - Target inheritance behavior
 
 6. **Skill Content Commands** (`test_skill_content_commands.py`)
    - **create**: New skill has standard structure (SKILL.md + scripts/, references/, assets/); when skill already exists, create validates and refreshes state for registration/archiving.
@@ -86,7 +86,7 @@ tests/e2e/
 │               ├── README.md
 │               ├── skill_info.json
 │               └── skill_validate.json
-├── test_scenario[1-5].py       # Test scenario implementations
+├── test_scenario*.py           # Scenario test implementations
 ├── test_skill_content_commands.py  # create/status/feedback/apply/use skill content
 ├── test_feedback_apply_multifile.py # Multi-file skill feedback & apply
 └── test_feedback_version_upgrade.py # Version upgrade on feedback
@@ -106,7 +106,7 @@ tests/e2e/
 ### System Requirements
 - Python 3.8 or higher
 - `skill-hub` binary: when running from the repo, `bin/skill-hub` is used if present (run `make build` first); otherwise PATH or `SKILL_HUB_BIN` is used
-- Network connectivity (for update tests)
+- Network connectivity (for pull/push/git remote tests)
 
 ### Python Dependencies
 Install with: `pip install -r tests/e2e/requirements.txt`
@@ -206,7 +206,7 @@ Located at `data/test_skills/my-logic-skill/`:
 
 ### Expected Output Files
 - `skill_info.json` - Expected `skill-hub skill info` output
-- `skill_validate.json` - Expected `skill-hub skill validate` output
+- `skill_validate.json` - Expected `skill-hub validate` output
 - Additional files can be added as needed
 
 ## Writing New Tests

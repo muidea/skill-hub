@@ -31,6 +31,20 @@ skill-hub/
 
 ### 代码架构
 
+#### 产品与运行模型
+
+`skill-hub` 的主产品形态是命令行工具，同时支持以 `serve` 模式运行。
+
+- **CLI 模式**：用户直接执行 `skill-hub ...`
+- **Serve 模式**：用户执行 `skill-hub serve`，由本地服务托管 `~/.skill-hub/`，并提供 Web 管理能力
+
+两者共享同一套状态与仓库数据：
+
+- `~/.skill-hub/`：全局管理域，承接多仓库配置、本地仓库存储、默认仓库、全局状态、索引和缓存
+- `<project>/.agents/skills/`：项目工作域，承接某个项目实际使用的 skill 内容
+
+设计上，CLI 仍然是主要用户入口；当本地 `serve` 实例可用时，CLI 优先复用服务能力，以统一状态装载、远端访问和 Web/CLI 共用逻辑；当本地服务不可用时，所有命令都应回退到本地执行。
+
 #### 核心组件
 
 1. **CLI层** (`internal/cli/`)
@@ -61,6 +75,33 @@ skill-hub/
    - 项目状态持久化
    - 技能启用状态跟踪
    - 配置同步管理
+
+#### 业务分层
+
+1. **项目本地工作区业务**
+   - `set-target`、`use`、`status`、`apply`、`feedback`
+   - `pull`、`push`
+   - `create`、`remove`、`validate`
+
+2. **多仓库管理业务**
+   - `repo add/list/remove/enable/disable/default/sync`
+
+3. **远端搜索业务**
+   - `search`
+   - 设计上在本地 `serve` 实例可用时优先由服务统一承接远端交互，不可用时回退到本地执行
+
+4. **底层运维业务**
+   - `git *`
+   - `serve`
+   - `init`
+
+#### 边界约束
+
+- `create` / `remove` / `validate` 只针对项目本地工作区有效，不应服务化
+- `feedback` 只归档到默认仓库
+- `use` 记录来源仓库，`apply` / `status` 基于来源仓库工作
+- `pull` / `push` 默认只操作默认仓库，但仍属于项目工作流的一部分
+- `repo *` 负责多仓库管理，不直接等同于项目工作区命令
 
 ## 开发环境设置
 

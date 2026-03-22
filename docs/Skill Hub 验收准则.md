@@ -1,5 +1,8 @@
 # skill-hub 验收准则 (Detailed Acceptance Criteria)
 
+> 文档状态说明：
+> 本文档已按当前产品定位做最小必要同步。对于运行模型、命令分层和服务边界，以 [README.md](../README.md)、[DEVELOPMENT.md](../DEVELOPMENT.md) 和 [Skill-Hub命令规范.md](./Skill-Hub命令规范.md) 为准。
+
 ## 模块 1：环境初始化与基础架构 (Initialization)
 
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
@@ -30,7 +33,7 @@
 
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
 | :--- | :--- | :--- | :--- |
-| 4.1 | **项目绑定记录** | `state.json` 必须实时记录当前项目路径与启用的 Skill 列表、变量值。 | 运行 `skill-hub use <id> [--target <value>]` 后，查看 `~/.skill-hub/state.json`。 |
+| 4.1 | **项目绑定记录** | `state.json` 必须实时记录当前项目路径与启用的 Skill 列表、变量值，以及 skill 的来源仓库信息。 | 运行 `skill-hub use <id> [--target <value>]` 后，查看 `~/.skill-hub/state.json`。 |
 | 4.2 | **路径一致性** | 工具需处理软链接路径、相对路径转绝对路径，确保在不同目录下运行状态识别一致。 | 在项目子目录下运行 `skill-hub status [id] [--verbose]`，应能识别根目录状态。 |
 
 ## 模块 5：闭环反馈功能 (Feedback Loop) —— **重中之重**
@@ -39,15 +42,15 @@
 | :--- | :--- | :--- | :--- |
 | 5.1 | **内容差异检测** | 手动修改标记块内的一个字符，`status` 命令必须输出 `Modified` 状态。 | 修改内容后运行 `skill-hub status [id] [--verbose]`。 |
 | 5.2 | **正则提取精度** | 无论标记块位于文件头部、中部或尾部，`feedback` 都能精准提取块内文本，不带多余空行。 | 在文件中间修改 Skill 内容，运行 `feedback` 并查看仓库文件。 |
-| 5.3 | **交互式确认** | `feedback` 必须展示 Diff 界面，由用户输入 `y/n` 确认后才可更新本地 Git 仓库。 | 运行 `feedback`，观察是否出现交互式 Diff 界面。 |
+| 5.3 | **交互式确认** | `feedback` 必须展示归档预览，由用户输入 `y/n` 确认后才可归档到默认仓库。 | 运行 `feedback`，观察是否出现确认与预览信息。 |
 | 5.4 | **反向变量处理** | (进阶) 反馈回仓库的内容应尽量保持通用性，或提示用户手动移除项目特定变量值。 | 检查 `feedback` 后的 `SKILL.md` 内容。 |
 
-## 6. GitHub 发现与搜集 (Discovery)
+## 6. 远端发现与搜集 (Discovery)
 
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
 | :--- | :--- | :--- | :--- |
-| 6.1 | **关键词检索** | `search` 指令能通过 GitHub API 返回带有指定标签（Topic）的项目列表。 | 运行 `skill-hub search <keyword> [--target <value>] [--limit <number>]`。 |
-| 6.2 | **一键导入** | `import [url]` 能将第三方仓库下载并按照规范合并到本地 Skill 仓库中。 | 运行 `import` 后，执行 `list` 查看是否出现新技能。 |
+| 6.1 | **关键词检索** | `search` 指令在本地 `serve` 可用时应通过服务承接远端搜索交互；服务不可用时也应能回退到本地执行，并返回与关键词相关的候选技能。 | 分别在服务可用与不可用场景下运行 `skill-hub search <keyword> [--target <value>] [--limit <number>]`。 |
+| 6.2 | **多仓库同步入口** | `repo sync` 应负责同步指定仓库或所有启用仓库；`pull` 不承担全多仓库同步职责。 | 运行 `skill-hub repo sync` 与 `skill-hub pull`，检查两者输出和影响范围。 |
 
 ## 7. 工程鲁棒性与性能 (Engineering)
 
@@ -55,7 +58,7 @@
 | :--- | :--- | :--- | :--- |
 | 7.1 | **跨平台路径** | Windows 下路径使用 `\`，macOS/Linux 下使用 `/`，工具需自动适配，不产生乱码。 | 在 Windows 和 Mac 上交叉测试。 |
 | 7.2 | **错误提示友好度** | 遇到无权限写入、Git 冲突、YAML 语法错误时，必须输出易懂的中文/英文错误信息。 | 故意制造 YAML 语法错误，观察报错。 |
-| 7.3 | **Dry Run 演习** | `--dry-run` 模式下，控制台输出所有变更预览，文件哈希值及修改时间戳完全不变。 | 运行 `apply --dry-run`，用 `md5sum` 校验原文件。 |
+| 7.3 | **Dry Run 演习** | `--dry-run` 模式下，控制台输出所有变更预览，文件哈希值及修改时间戳完全不变。 | 运行 `apply --dry-run` 或 `push --dry-run`，用 `md5sum` 校验原文件。 |
 
 ## 8. 合规性与发布 (License & Release)
 

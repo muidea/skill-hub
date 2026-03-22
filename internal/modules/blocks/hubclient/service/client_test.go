@@ -52,6 +52,24 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 						},
 					},
 				}), nil
+			case "/api/v1/search":
+				if got := req.URL.Query().Get("keyword"); got != "demo" {
+					t.Fatalf("expected keyword demo, got %q", got)
+				}
+				if got := req.URL.Query().Get("target"); got != spec.TargetOpenCode {
+					t.Fatalf("expected target %q, got %q", spec.TargetOpenCode, got)
+				}
+				if got := req.URL.Query().Get("limit"); got != "5" {
+					t.Fatalf("expected limit 5, got %q", got)
+				}
+				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.RemoteSearchData]{
+					Code: httpapibiz.CodeOK,
+					Data: httpapibiz.RemoteSearchData{
+						Items: []spec.RemoteSearchResult{
+							{FullName: "demo/search-skill", HTMLURL: "https://example.com/demo"},
+						},
+					},
+				}), nil
 			case "/api/v1/project-status":
 				if got := req.URL.Query().Get("path"); got != "/tmp/project" {
 					t.Fatalf("expected project path /tmp/project, got %q", got)
@@ -69,6 +87,22 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 								{SkillID: "demo", Status: spec.SkillStatusSynced, LocalVersion: "1.0.0"},
 							},
 						},
+					},
+				}), nil
+			case "/api/v1/project-target":
+				body, _ := io.ReadAll(req.Body)
+				var payload httpapibiz.SetProjectTargetRequest
+				if err := json.Unmarshal(body, &payload); err != nil {
+					t.Fatalf("unmarshal set project target request: %v", err)
+				}
+				if payload.ProjectPath != "/tmp/project" || payload.Target != spec.TargetOpenCode {
+					t.Fatalf("unexpected set project target payload: %+v", payload)
+				}
+				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.SetProjectTargetData]{
+					Code: httpapibiz.CodeOK,
+					Data: httpapibiz.SetProjectTargetData{
+						ProjectPath: payload.ProjectPath,
+						Target:      payload.Target,
 					},
 				}), nil
 			case "/api/v1/skills/demo/candidates":
@@ -159,12 +193,31 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 		t.Fatalf("unexpected skills: %+v", skills)
 	}
 
+	searchResults, err := client.SearchRemoteSkills(ctx, "demo", spec.TargetOpenCode, 5)
+	if err != nil {
+		t.Fatalf("SearchRemoteSkills returned error: %v", err)
+	}
+	if len(searchResults) != 1 || searchResults[0].FullName != "demo/search-skill" {
+		t.Fatalf("unexpected search results: %+v", searchResults)
+	}
+
 	projectStatus, err := client.GetProjectStatus(ctx, "/tmp/project", "demo")
 	if err != nil {
 		t.Fatalf("GetProjectStatus returned error: %v", err)
 	}
 	if projectStatus.Item == nil || len(projectStatus.Item.Items) != 1 {
 		t.Fatalf("unexpected project status payload: %+v", projectStatus)
+	}
+
+	projectTarget, err := client.SetProjectTarget(ctx, httpapibiz.SetProjectTargetRequest{
+		ProjectPath: "/tmp/project",
+		Target:      spec.TargetOpenCode,
+	})
+	if err != nil {
+		t.Fatalf("SetProjectTarget returned error: %v", err)
+	}
+	if projectTarget.Target != spec.TargetOpenCode {
+		t.Fatalf("unexpected project target response: %+v", projectTarget)
 	}
 
 	candidates, err := client.FindSkillCandidates(ctx, "demo")

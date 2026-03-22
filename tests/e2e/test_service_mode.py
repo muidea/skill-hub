@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from tests.e2e.utils.command_runner import CommandRunner
+from tests.e2e.utils.network_checker import NetworkChecker
 from tests.e2e.utils.service_runner import ServiceRunner
 
 
@@ -140,5 +141,26 @@ class TestServiceMode:
             updated_repo_content = repo_skill_file.read_text(encoding="utf-8")
             assert "<!-- updated via service mode -->" in updated_repo_content
             assert updated_repo_content != initial_repo_content
+        finally:
+            service.stop()
+
+    @pytest.mark.requires_network
+    def test_service_bridge_search_prefers_service_when_available(self):
+        if not NetworkChecker.is_network_available():
+            pytest.skip("network required for remote search test")
+
+        self._prepare_service_skill()
+        service = self._start_service()
+
+        try:
+            bridge_env = self.client_env.copy()
+            bridge_env["SKILL_HUB_SERVICE_URL"] = service.base_url
+
+            search_result = self.cmd.run("search", ["git", "--limit", "5"], cwd=str(self.project_dir), env=bridge_env)
+            assert search_result.success, search_result.stderr
+
+            output = search_result.stdout + search_result.stderr
+            assert "正在通过本地服务搜索远端技能" in output
+            assert "搜索结果" in output or "未找到相关技能" in output
         finally:
             service.stop()

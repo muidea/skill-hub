@@ -3,7 +3,7 @@
 **文档状态**：第一阶段已实现，文档按当前代码状态刷新  
 **适用范围**：`skill-hub` 在保留现有命令行模式基础上，新增本地服务运行模式、Web 管理界面，以及 CLI 通过服务交互的能力  
 **当前阶段目标**：先完成服务模式本身，不先做 `skill-node` 对接  
-**当前验证状态**：`go test ./...` 通过；`tests/e2e` 当前总结果为 `105 passed`
+**当前验证状态**：`go test ./...` 通过；`tests/e2e` 当前总结果为 `102 passed, 3 skipped`
 
 ---
 
@@ -51,6 +51,14 @@ CLI 与服务的关系：
 - 不破坏现有 CLI 使用习惯
 - 服务模式可以逐步扩展
 - 后续对接 `skill-node` / `MN` 时不需要重新设计本地管理面
+- `serve` 只是增强能力，不是 CLI 的前置依赖
+
+补充约束：
+
+- `serve` 托管的是用户本地 `~/.skill-hub/` 全局管理目录
+- 项目实际使用的 skill 内容仍位于项目根目录 `.agents/skills/`
+- `create` / `remove` / `validate` 只针对项目本地工作区，不要求服务化
+- `search` 属于远端能力入口，在本地服务可用时优先由服务实例统一承接远端交互；服务不可用时回退到本地执行
 
 ---
 
@@ -116,6 +124,7 @@ skill-hub serve
 - 查看某个项目下启用的 skill
 - 查看 skill 的版本、状态、目标环境
 - 查看项目状态摘要
+- 设置项目首选目标
 - 对项目执行 `use`
 - 对项目执行 `apply`
 - 对项目执行 `feedback`
@@ -238,6 +247,7 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 ### 7.3 技能列表与详情
 
 - `GET /api/v1/skills`
+- `GET /api/v1/search?keyword=<keyword>[&target=<value>][&limit=<n>]`
 - `GET /api/v1/skills/{id}/candidates`
 - `GET /api/v1/skills/{id}?repo=<repo-name>`
 
@@ -355,6 +365,7 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 - `repo disable`
 - `repo default`
 - `list`
+- `search`
 - `status`
 - `use`
 - `apply`
@@ -366,6 +377,11 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 - `validate`
 - `create`
 - `remove`
+
+补充说明：
+
+- `search` 当前已接入服务桥接；当本地服务不可用时，CLI 仍保留兼容性本地回退
+- `create` / `remove` / `validate` 仍明确限定为项目本地工作区命令，不参与服务化托管
 
 ### 10.3 CLI 代理策略
 

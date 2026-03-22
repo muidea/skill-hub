@@ -34,6 +34,8 @@ type ProjectApply struct {
 	adapterSvc      *adaptermodule.Adapter
 }
 
+const sourceRepositoryVariable = "_skill_hub_source_repository"
+
 func New() *ProjectApply {
 	return &ProjectApply{
 		projectStateSvc: projectstatemodule.New(),
@@ -96,14 +98,19 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 			Variables: len(skillVars.Variables),
 		}
 
-		content, err := p.repositorySvc.Service().ReadDefaultRepositorySkillContent(skillID)
+		repoName, err := p.resolveSourceRepository(skillVars)
 		if err != nil {
 			item.Status = "error"
 			item.Message = err.Error()
 			result.Items = append(result.Items, item)
-			if !force {
-				continue
-			}
+			continue
+		}
+
+		content, err := p.repositorySvc.Service().ReadSkillContent(repoName, skillID)
+		if err != nil {
+			item.Status = "error"
+			item.Message = err.Error()
+			result.Items = append(result.Items, item)
 			continue
 		}
 
@@ -114,8 +121,9 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 			continue
 		}
 
+		applyVariables := cloneApplyVariables(skillVars.Variables, repoName)
 		if err := p.applyInProjectDir(projectState.ProjectPath, func() error {
-			return adapter.Apply(skillID, content, skillVars.Variables)
+			return adapter.Apply(skillID, content, applyVariables)
 		}); err != nil {
 			item.Status = "error"
 			item.Message = err.Error()
@@ -131,6 +139,33 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 	}
 
 	return result, nil
+}
+
+func (p *ProjectApply) resolveSourceRepository(skillVars spec.SkillVars) (string, error) {
+	if skillVars.SourceRepository != "" {
+		return skillVars.SourceRepository, nil
+	}
+
+	defaultRepo, err := p.repositorySvc.Service().DefaultRepository()
+	if err != nil {
+		return "", errors.Wrap(err, "resolveSourceRepository: 获取默认仓库失败")
+	}
+	return defaultRepo.Name, nil
+}
+
+func cloneApplyVariables(variables map[string]string, repoName string) map[string]string {
+	if len(variables) == 0 && repoName == "" {
+		return map[string]string{}
+	}
+
+	cloned := make(map[string]string, len(variables)+1)
+	for key, value := range variables {
+		cloned[key] = value
+	}
+	if repoName != "" {
+		cloned[sourceRepositoryVariable] = repoName
+	}
+	return cloned
 }
 
 func (p *ProjectApply) applyInProjectDir(projectPath string, fn func() error) error {

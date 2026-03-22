@@ -19,10 +19,10 @@ var (
 
 var pushCmd = &cobra.Command{
 	Use:   "push",
-	Short: "推送本地更改到远程仓库",
-	Long: `自动检测并提交所有未提交的更改，然后推送到远程技能仓库。
+	Short: "推送默认仓库的本地更改",
+	Long: `自动检测并提交默认仓库（归档仓库）中的未提交更改，然后推送到对应远程仓库。
 
-此命令将本地仓库（~/.skill-hub/repositories/）中的更改同步到远程仓库，完成反馈闭环。
+此命令默认只处理默认仓库，用于完成 feedback -> push 的归档闭环。
 使用 --dry-run 选项可以查看将要推送的更改而不实际执行。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runPush()
@@ -84,7 +84,7 @@ func runPush() error {
 
 	// 确认推送（除非使用 --force）
 	if !pushForce {
-		fmt.Print("\n是否推送这些更改到远程仓库？ [y/N]: ")
+		fmt.Print("\n是否推送这些更改到默认仓库远程？ [y/N]: ")
 		reader := bufio.NewReader(os.Stdin)
 		response, _ := reader.ReadString('\n')
 		response = strings.TrimSpace(response)
@@ -101,12 +101,12 @@ func runPush() error {
 		message = "更新技能"
 	}
 
-	fmt.Println("正在提交并推送更改...")
+	fmt.Println("正在提交并推送默认仓库更改...")
 
 	if err := pushSkillRepositoryChanges(message); err != nil {
 		return errors.Wrap(err, "推送失败")
 	}
 
-	fmt.Println("✅ 更改已成功推送到远程仓库")
+	fmt.Println("✅ 默认仓库更改已成功推送到远程仓库")
 	return nil
 }

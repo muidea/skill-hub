@@ -22,12 +22,13 @@ type ProjectStatusSummary struct {
 }
 
 type SkillStatusItem struct {
-	SkillID      string `json:"skill_id"`
-	Status       string `json:"status"`
-	LocalVersion string `json:"local_version,omitempty"`
-	RepoVersion  string `json:"repo_version,omitempty"`
-	LocalPath    string `json:"local_path,omitempty"`
-	RepoPath     string `json:"repo_path,omitempty"`
+	SkillID          string `json:"skill_id"`
+	Status           string `json:"status"`
+	SourceRepository string `json:"source_repository,omitempty"`
+	LocalVersion     string `json:"local_version,omitempty"`
+	RepoVersion      string `json:"repo_version,omitempty"`
+	LocalPath        string `json:"local_path,omitempty"`
+	RepoPath         string `json:"repo_path,omitempty"`
 }
 
 type ProjectStatus struct {
@@ -101,11 +102,12 @@ func (p *ProjectStatus) inspectSkill(projectPath, skillID string, skillVars spec
 	localSkillMdPath := filepath.Join(agentsSkillDir, "SKILL.md")
 
 	item := &SkillStatusItem{
-		SkillID:   skillID,
-		LocalPath: localSkillMdPath,
+		SkillID:          skillID,
+		SourceRepository: skillVars.SourceRepository,
+		LocalPath:        localSkillMdPath,
 	}
 
-	repoSkillPath, repoVersion, repoHash, repoExists, err := p.getRepoSkillInfo(skillID)
+	repoSkillPath, repoVersion, repoHash, repoExists, err := p.getRepoSkillInfo(skillID, skillVars.SourceRepository)
 	if err != nil {
 		return nil, err
 	}
@@ -161,13 +163,13 @@ func (p *ProjectStatus) inspectSkill(projectPath, skillID string, skillVars spec
 	return item, nil
 }
 
-func (p *ProjectStatus) getRepoSkillInfo(skillID string) (string, string, string, bool, error) {
-	defaultRepo, err := p.repositorySvc.Service().DefaultRepository()
+func (p *ProjectStatus) getRepoSkillInfo(skillID, sourceRepository string) (string, string, string, bool, error) {
+	repoName, err := p.resolveSourceRepository(sourceRepository)
 	if err != nil {
-		return "", "", "", false, errors.Wrap(err, "getRepoSkillInfo: 获取默认仓库失败")
+		return "", "", "", false, errors.Wrap(err, "getRepoSkillInfo: 获取来源仓库失败")
 	}
 
-	repoPath, err := p.repositorySvc.Service().Path(defaultRepo.Name)
+	repoPath, err := p.repositorySvc.Service().Path(repoName)
 	if err != nil {
 		return "", "", "", false, errors.Wrap(err, "getRepoSkillInfo: 获取仓库路径失败")
 	}
@@ -183,6 +185,18 @@ func (p *ProjectStatus) getRepoSkillInfo(skillID string) (string, string, string
 		return "", "", "", false, err
 	}
 	return repoSkillPath, version, hash, true, nil
+}
+
+func (p *ProjectStatus) resolveSourceRepository(sourceRepository string) (string, error) {
+	if sourceRepository != "" {
+		return sourceRepository, nil
+	}
+
+	defaultRepo, err := p.repositorySvc.Service().DefaultRepository()
+	if err != nil {
+		return "", errors.Wrap(err, "resolveSourceRepository: 获取默认仓库失败")
+	}
+	return defaultRepo.Name, nil
 }
 
 func getLocalSkillInfo(skillMdPath string) (string, string, error) {

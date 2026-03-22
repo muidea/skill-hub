@@ -85,8 +85,20 @@ func runApply(dryRun bool, force bool) error {
 	for skillID, skillVars := range skills {
 		fmt.Printf("应用技能: %s\n", skillID)
 
+		sourceRepository := skillVars.SourceRepository
+		if sourceRepository == "" {
+			defaultRepo, err := defaultRepository()
+			if err != nil {
+				fmt.Printf("⚠️  获取默认仓库失败: %v\n", err)
+				continue
+			}
+			if defaultRepo != nil {
+				sourceRepository = defaultRepo.Name
+			}
+		}
+
 		// 从仓库获取技能内容
-		content, err := getSkillContent(skillID)
+		content, err := getSkillContent(sourceRepository, skillID)
 		if err != nil {
 			fmt.Printf("⚠️  获取技能内容失败: %s: %v\n", skillID, err)
 			continue
@@ -97,7 +109,7 @@ func runApply(dryRun bool, force bool) error {
 			fmt.Printf("  变量: %v\n", skillVars.Variables)
 		} else {
 			// 实际应用技能
-			if err := adapter.Apply(skillID, content, skillVars.Variables); err != nil {
+			if err := adapter.Apply(skillID, content, cloneApplyVariables(skillVars.Variables, sourceRepository)); err != nil {
 				fmt.Printf("⚠️  应用技能失败: %s: %v\n", skillID, err)
 			} else {
 				fmt.Printf("✓ 成功应用技能: %s\n", skillID)
@@ -181,10 +193,33 @@ func renderApplyResult(result *projectapplyservice.ApplyResult) {
 	}
 }
 
-func getSkillContent(skillID string) (string, error) {
-	content, err := readDefaultRepositorySkillContent(skillID)
+func getSkillContent(repoName, skillID string) (string, error) {
+	if repoName == "" {
+		content, err := readDefaultRepositorySkillContent(skillID)
+		if err != nil {
+			return "", errors.Wrap(err, "getSkillContent: 获取默认仓库技能内容失败")
+		}
+		return content, nil
+	}
+
+	content, err := readRepositorySkillContent(repoName, skillID)
 	if err != nil {
-		return "", errors.Wrap(err, "getSkillContent: 获取默认仓库技能内容失败")
+		return "", errors.Wrap(err, "getSkillContent: 获取来源仓库技能内容失败")
 	}
 	return content, nil
+}
+
+func cloneApplyVariables(variables map[string]string, repoName string) map[string]string {
+	if len(variables) == 0 && repoName == "" {
+		return map[string]string{}
+	}
+
+	cloned := make(map[string]string, len(variables)+1)
+	for key, value := range variables {
+		cloned[key] = value
+	}
+	if repoName != "" {
+		cloned["_skill_hub_source_repository"] = repoName
+	}
+	return cloned
 }

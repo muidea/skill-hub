@@ -67,7 +67,7 @@ func (p *ProjectUse) EnableSkill(projectPath, skillID, repoName, target string, 
 		return nil, errors.Wrap(err, "EnableSkill: 创建状态管理器失败")
 	}
 
-	if err := stateManager.AddSkillToProjectWithTarget(absProjectPath, skillID, fullSkill.Version, variables, target); err != nil {
+	if err := stateManager.AddSkillToProjectWithTarget(absProjectPath, skillID, fullSkill.Version, selectedRepo, variables, target); err != nil {
 		return nil, errors.Wrap(err, "EnableSkill: 保存项目状态失败")
 	}
 

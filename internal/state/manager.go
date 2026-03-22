@@ -140,11 +140,11 @@ func (m *StateManager) SaveProjectState(state *spec.ProjectState) error {
 
 // AddSkillToProject 添加技能到项目
 func (m *StateManager) AddSkillToProject(projectPath, skillID, version string, variables map[string]string) error {
-	return m.AddSkillToProjectWithTarget(projectPath, skillID, version, variables, "")
+	return m.AddSkillToProjectWithTarget(projectPath, skillID, version, "", variables, "")
 }
 
 // AddSkillToProjectWithTarget 添加技能到项目并指定目标
-func (m *StateManager) AddSkillToProjectWithTarget(projectPath, skillID, version string, variables map[string]string, target string) error {
+func (m *StateManager) AddSkillToProjectWithTarget(projectPath, skillID, version, sourceRepository string, variables map[string]string, target string) error {
 	state, err := m.LoadProjectState(projectPath)
 	if err != nil {
 		return err
@@ -156,9 +156,10 @@ func (m *StateManager) AddSkillToProjectWithTarget(projectPath, skillID, version
 	}
 
 	state.Skills[skillID] = spec.SkillVars{
-		SkillID:   skillID,
-		Version:   version,
-		Variables: variables,
+		SkillID:          skillID,
+		Version:          version,
+		SourceRepository: sourceRepository,
+		Variables:        variables,
 	}
 
 	return m.SaveProjectState(state)

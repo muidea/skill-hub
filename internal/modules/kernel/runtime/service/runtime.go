@@ -57,6 +57,14 @@ func (r *Runtime) StateManager() (*state.StateManager, error) {
 	return r.projectStateSvc.Service().Manager()
 }
 
+func (r *Runtime) SetPreferredTarget(projectPath, target string) error {
+	stateManager, err := r.projectStateSvc.Service().Manager()
+	if err != nil {
+		return errors.Wrap(err, "SetPreferredTarget: 创建状态管理器失败")
+	}
+	return stateManager.SetPreferredTarget(projectPath, target)
+}
+
 func (r *Runtime) RepositoryManager() (*multirepo.Manager, error) {
 	return r.repositorySvc.Service().Manager()
 }
@@ -95,6 +103,10 @@ func (r *Runtime) ListSkillMetadata(repoNames []string) ([]spec.SkillMetadata, e
 
 func (r *Runtime) FindSkill(skillID string) ([]spec.SkillMetadata, error) {
 	return r.repositorySvc.Service().FindSkill(skillID)
+}
+
+func (r *Runtime) SearchRemoteSkills(keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
+	return r.skillSvc.Service().SearchRemote(keyword, target, limit)
 }
 
 func (r *Runtime) LoadSkill(skillID, repoName string) (*spec.Skill, error) {

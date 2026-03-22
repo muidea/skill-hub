@@ -1,8 +1,27 @@
 package service
 
-import "github.com/muidea/skill-hub/internal/engine"
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/muidea/skill-hub/internal/engine"
+	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/spec"
+)
 
 type Skill struct{}
+
+type gitHubSearchResponse struct {
+	TotalCount int                       `json:"total_count"`
+	Items      []spec.RemoteSearchResult `json:"items"`
+}
+
+var remoteSearchHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 func New() *Skill {
 	return &Skill{}
@@ -14,4 +33,79 @@ func (s *Skill) Manager() (*engine.SkillManager, error) {
 
 func (s *Skill) SkillsDir() (string, error) {
 	return engine.GetSkillsDir()
+}
+
+func (s *Skill) SearchRemote(keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
+	results, err := searchGitHubRepositories(keyword, limit)
+	if err != nil {
+		return nil, err
+	}
+	return filterRemoteSearchResults(results, target), nil
+}
+
+func searchGitHubRepositories(keyword string, limit int) ([]spec.RemoteSearchResult, error) {
+	query := url.QueryEscape(keyword + " topic:agent-skills")
+	requestURL := fmt.Sprintf("https://api.github.com/search/repositories?q=%s&sort=stars&order=desc&per_page=%d", query, limit)
+
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "创建请求失败")
+	}
+	req.Header.Set("User-Agent", "skill-hub-cli")
+
+	resp, err := remoteSearchHTTPClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "发送请求失败")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, errors.NewWithCodef("searchGitHubRepositories", errors.ErrAPIRequest, "GitHub API返回错误: %s - %s", resp.Status, string(body))
+	}
+
+	var payload gitHubSearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, errors.Wrap(err, "解析响应失败")
+	}
+
+	return payload.Items, nil
+}
+
+func filterRemoteSearchResults(results []spec.RemoteSearchResult, target string) []spec.RemoteSearchResult {
+	if target == "" {
+		return results
+	}
+
+	var filtered []spec.RemoteSearchResult
+	targetLower := strings.ToLower(target)
+
+	for _, result := range results {
+		searchText := strings.ToLower(result.Description + " " + strings.Join(result.Topics, " ") + " " + result.FullName)
+
+		isMatch := false
+		switch targetLower {
+		case "cursor":
+			isMatch = strings.Contains(searchText, "cursor") ||
+				strings.Contains(searchText, "cursorrules") ||
+				strings.Contains(result.FullName, "cursor")
+		case "claude", "claude_code":
+			isMatch = strings.Contains(searchText, "claude") ||
+				strings.Contains(searchText, "claude code") ||
+				strings.Contains(result.FullName, "claude")
+		case "open_code", "opencode":
+			notCursor := !strings.Contains(searchText, "cursor") && !strings.Contains(result.FullName, "cursor")
+			notClaude := !strings.Contains(searchText, "claude") && !strings.Contains(result.FullName, "claude")
+			isMatch = (notCursor && notClaude) ||
+				strings.Contains(searchText, "opencode") ||
+				strings.Contains(searchText, "open code") ||
+				strings.Contains(searchText, "skill-hub")
+		}
+
+		if isMatch {
+			filtered = append(filtered, result)
+		}
+	}
+
+	return filtered
 }

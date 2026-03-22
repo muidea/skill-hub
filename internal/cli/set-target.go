@@ -1,13 +1,17 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
+	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
+	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 var setTargetCmd = &cobra.Command{
@@ -34,6 +38,24 @@ func runSetTarget(target string) error {
 	normalizedTarget := spec.NormalizeTarget(target)
 	if normalizedTarget != spec.TargetCursor && normalizedTarget != spec.TargetClaudeCode && normalizedTarget != spec.TargetOpenCode {
 		return errors.NewWithCodef("runSetTarget", errors.ErrInvalidInput, "无效的目标值: %s，可用选项: cursor, claude, open_code", target)
+	}
+
+	if client, ok := hubClientIfAvailable(); ok {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return utils.GetCwdErr(err)
+		}
+		resp, err := client.SetProjectTarget(context.Background(), httpapibiz.SetProjectTargetRequest{
+			ProjectPath: cwd,
+			Target:      normalizedTarget,
+		})
+		if err != nil {
+			return errors.Wrap(err, "通过服务设置首选目标失败")
+		}
+
+		fmt.Printf("✅ 已将项目 '%s' 的首选兼容目标设置为: %s\n", filepath.Base(cwd), resp.Target)
+		fmt.Println("下次执行 'skill-hub apply' 时将自动使用此目标")
+		return nil
 	}
 
 	ctx, err := RequireInitAndWorkspace("", normalizedTarget)

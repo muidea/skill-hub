@@ -15,9 +15,10 @@ var (
 
 var pullCmd = &cobra.Command{
 	Use:   "pull",
-	Short: "从远程仓库拉取最新技能",
-	Long: `从远程技能仓库拉取最新更改到本地仓库，并更新技能注册表。
+	Short: "从默认仓库拉取最新技能",
+	Long: `从默认仓库（归档仓库）对应的远程拉取最新更改到本地仓库，并更新技能注册表。
 
+此命令仅处理默认仓库，不负责多仓库同步；多仓库同步请使用 'skill-hub repo sync'。
 此命令仅同步仓库层（~/.skill-hub/repositories/），不涉及项目工作目录的更新。
 使用 --check 选项可以检查可用更新但不实际执行拉取操作。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -37,14 +38,14 @@ func runPull() error {
 	}
 
 	if pullCheck {
-		fmt.Println("检查远程仓库可用的更新...")
+		fmt.Println("检查默认仓库远程的可用更新...")
 		// 这里可以实现检查逻辑，显示可用的更新数量
 		// 暂时简单实现
 		fmt.Println("检查功能待实现，使用 'skill-hub pull' 直接拉取更新")
 		return nil
 	}
 
-	fmt.Println("正在从远程仓库拉取最新技能...")
+	fmt.Println("正在从默认仓库远程拉取最新技能...")
 
 	if err := syncSkillRepositoryAndRefresh(); err != nil {
 		return errors.Wrap(err, "同步技能仓库失败")
@@ -60,9 +61,10 @@ func runPull() error {
 		return errors.Wrap(err, "获取技能列表失败")
 	}
 
-	fmt.Printf("\n✅ 技能仓库更新完成，共 %d 个技能\n", len(skills))
+	fmt.Printf("\n✅ 默认仓库更新完成，共 %d 个技能\n", len(skills))
 	fmt.Println("使用 'skill-hub status' 检查项目技能状态")
 	fmt.Println("使用 'skill-hub apply' 将仓库更新应用到项目工作目录")
+	fmt.Println("如需同步所有启用仓库，请使用 'skill-hub repo sync'")
 
 	return nil
 }
