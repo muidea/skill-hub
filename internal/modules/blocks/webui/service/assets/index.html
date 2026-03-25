@@ -3,74 +3,397 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Skill Hub</title>
+  <title>Skill Hub | 技能目录</title>
   <style>
-    :root { color-scheme: light; --bg:#f6f4ee; --panel:#fffaf1; --line:#d8ccb8; --ink:#2a241d; --muted:#6b5f52; --accent:#8b5e34; --accent-soft:#ede0cf; }
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fa;
+      --panel: #ffffff;
+      --panel-muted: #fafafa;
+      --line: #f0f0f0;
+      --line-strong: #d9d9d9;
+      --text: rgba(0, 0, 0, 0.88);
+      --text-secondary: rgba(0, 0, 0, 0.65);
+      --text-tertiary: rgba(0, 0, 0, 0.45);
+      --primary: #1677ff;
+      --primary-hover: #4096ff;
+      --primary-soft: #e6f4ff;
+      --radius: 16px;
+      --mono: "SFMono-Regular", Consolas, Menlo, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
     * { box-sizing: border-box; }
-    body { margin:0; font-family: Georgia, "Noto Serif SC", serif; color:var(--ink); background:linear-gradient(180deg,#f8f6f0 0%,#efe5d3 100%); }
-    header { padding:24px 28px; border-bottom:1px solid var(--line); background:rgba(255,250,241,.88); position:sticky; top:0; backdrop-filter: blur(8px); }
-    header h1 { margin:0; font-size:28px; }
-    header p { margin:6px 0 0; color:var(--muted); }
-    main { display:grid; gap:18px; padding:20px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
-    section { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 12px 30px rgba(82,59,34,.08); }
-    h2 { margin:0 0 12px; font-size:20px; }
-    .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-    input, select, button { border-radius:10px; border:1px solid var(--line); padding:9px 12px; font:inherit; }
-    button { background:var(--accent); color:#fff; border-color:var(--accent); cursor:pointer; }
-    button.secondary { background:#fff; color:var(--accent); }
-    ul { list-style:none; padding:0; margin:0; display:grid; gap:10px; }
-    li { border:1px solid var(--line); border-radius:12px; padding:12px; background:#fff; }
-    small { color:var(--muted); }
-    .row { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
-    .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-    .stack { display:grid; gap:10px; }
-    .inline-form { display:grid; gap:8px; margin-top:12px; }
-    .inline-form .rowline { display:flex; gap:8px; flex-wrap:wrap; }
-    .detail { margin-top:12px; padding:12px; border:1px dashed var(--line); border-radius:12px; background:#fffdf8; }
-    .log { white-space:pre-wrap; font-family: "SFMono-Regular", Consolas, monospace; font-size:13px; color:var(--muted); }
-    .mono { font-family: "SFMono-Regular", Consolas, monospace; }
-    .empty { color:var(--muted); font-style:italic; }
-    .status { color:var(--accent); font-weight:700; }
-    .badge { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--accent-soft); color:var(--accent); font-size:12px; margin-left:6px; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(22, 119, 255, 0.08), transparent 24%),
+        linear-gradient(180deg, #f7faff 0%, #f5f7fa 38%, #f5f7fa 100%);
+    }
+
+    .shell {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 28px 24px 40px;
+    }
+
+    .hero,
+    .panel {
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(240, 240, 240, 0.92);
+      border-radius: var(--radius);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .hero {
+      padding: 28px;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, rgba(22, 119, 255, 0.12), rgba(255, 255, 255, 0.94) 56%);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    h1 {
+      margin: 14px 0 10px;
+      font-size: clamp(30px, 4vw, 42px);
+      line-height: 1.12;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 760px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    .panel {
+      padding: 20px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .panel-title h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .panel-title p {
+      margin: 6px 0 0;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .badge,
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .badge,
+    .chip-primary {
+      background: var(--primary-soft);
+      color: var(--primary);
+      border-color: #bae0ff;
+    }
+
+    .chip-neutral {
+      background: var(--panel-muted);
+      color: var(--text-secondary);
+      border-color: var(--line);
+    }
+
+    .toolbar,
+    .pagination,
+    .pagination-controls,
+    .meta-line {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .toolbar {
+      margin-bottom: 16px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      flex: 1 1 180px;
+    }
+
+    .field label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    input,
+    select,
+    button {
+      font: inherit;
+    }
+
+    input,
+    select {
+      width: 100%;
+      height: 40px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--primary-hover);
+      box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.12);
+    }
+
+    button {
+      height: 40px;
+      padding: 0 16px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all .2s ease;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 6px 12px rgba(22, 119, 255, 0.22);
+    }
+
+    button.primary:hover { background: var(--primary-hover); }
+
+    button.secondary {
+      background: #fff;
+      color: var(--text);
+      border-color: var(--line-strong);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      padding: 14px;
+      border-radius: 14px;
+      background: var(--panel-muted);
+      border: 1px solid var(--line);
+    }
+
+    .metric span {
+      display: block;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-bottom: 8px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 700;
+    }
+
+    .metric small {
+      display: block;
+      margin-top: 8px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 12px;
+    }
+
+    .card-item {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      background: linear-gradient(180deg, #ffffff 0%, #fcfcfc 100%);
+    }
+
+    .item-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .item-title strong {
+      font-size: 16px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .mono { font-family: var(--mono); }
+
+    .desc {
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 10px;
+    }
+
+    .empty {
+      color: var(--text-tertiary);
+    }
+
+    .pagination {
+      justify-content: space-between;
+      margin-top: 14px;
+    }
+
+    .pagination-info {
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .page-size {
+      width: 92px;
+      min-width: 92px;
+    }
+
+    .page-jump {
+      width: 88px;
+      min-width: 88px;
+      height: 36px;
+    }
+
+    .pagination button {
+      min-width: 40px;
+      padding: 0 12px;
+      height: 36px;
+    }
+
+    .pagination button.is-active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    @media (max-width: 768px) {
+      .shell { padding: 18px 14px 28px; }
+      .hero, .panel { padding: 16px; }
+      .stats { grid-template-columns: 1fr; }
+      .panel-header, .pagination { flex-direction: column; align-items: stretch; }
+      .field, button { width: 100%; }
+    }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Skill Hub</h1>
-    <p>本地服务模式管理界面</p>
-  </header>
-  <main>
-    <section>
-      <h2>仓库</h2>
-      <form id="repo-form" class="toolbar">
-        <input name="name" placeholder="仓库名" required>
-        <input name="url" placeholder="URL，可选">
-        <button type="submit">添加仓库</button>
-      </form>
-      <ul id="repos"><li class="empty">加载中...</li></ul>
-    </section>
-
-    <section>
-      <h2>技能</h2>
-      <div class="toolbar">
-        <input id="repo-filter" placeholder="repo 过滤，逗号分隔">
-        <select id="target-filter">
-          <option value="">全部目标</option>
-          <option value="open_code">open_code</option>
-          <option value="cursor">cursor</option>
-          <option value="claude_code">claude_code</option>
-        </select>
-        <button id="refresh-skills" type="button">刷新</button>
+  <div class="shell">
+    <section class="hero">
+      <div class="eyebrow">Skill Catalog</div>
+      <h1>Skill Hub 技能目录</h1>
+      <p>面向普通用户的只读技能视图。你可以按仓库和目标筛选当前可用技能，并通过分页快速浏览目录。</p>
+      <div class="hero-actions">
+        <button class="primary" id="refresh-skills" type="button">刷新技能目录</button>
+        <button class="secondary" type="button" onclick="window.location.href='/admin.html'">进入管理端</button>
       </div>
-      <ul id="skills"><li class="empty">加载中...</li></ul>
     </section>
 
-    <section>
-      <h2>项目</h2>
-      <ul id="projects"><li class="empty">加载中...</li></ul>
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <h2>技能目录</h2>
+          <p>仅展示技能索引，不包含仓库管理和项目工作区能力。</p>
+        </div>
+        <span class="badge">User View</span>
+      </div>
+
+      <div class="stats">
+        <div class="metric">
+          <span>技能总数</span>
+          <strong id="summary-skills">0</strong>
+          <small id="summary-target">目标过滤: 全部</small>
+        </div>
+        <div class="metric">
+          <span>仓库数量</span>
+          <strong id="summary-repos">0</strong>
+          <small>当前过滤结果关联仓库</small>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field">
+          <label for="repo-filter">仓库过滤</label>
+          <input id="repo-filter" placeholder="例如: main 或 community">
+        </div>
+        <div class="field">
+          <label for="target-filter">目标过滤</label>
+          <select id="target-filter">
+            <option value="">全部目标</option>
+            <option value="open_code">open_code</option>
+            <option value="cursor">cursor</option>
+            <option value="claude_code">claude_code</option>
+          </select>
+        </div>
+      </div>
+
+      <ul id="skills" class="list"><li class="card-item empty">加载中...</li></ul>
+      <div id="skills-pagination" class="pagination"></div>
     </section>
-  </main>
+  </div>
+
   <script>
+    const state = {
+      skills: [],
+      page: 1,
+      pageSize: 8,
+      totalPages: 1
+    };
+
     async function api(path, options = {}) {
       const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
       const data = await res.json();
@@ -80,235 +403,107 @@
       return data.data;
     }
 
-    async function loadRepos() {
-      const data = await api("/api/v1/repos");
-      const root = document.getElementById("repos");
-      if (!data.items.length) {
-        root.innerHTML = '<li class="empty">暂无仓库</li>';
+    function paginate() {
+      const totalPages = Math.max(1, Math.ceil(state.skills.length / state.pageSize));
+      state.totalPages = totalPages;
+      if (state.page > totalPages) state.page = totalPages;
+      if (state.page < 1) state.page = 1;
+      const start = (state.page - 1) * state.pageSize;
+      return {
+        items: state.skills.slice(start, start + state.pageSize),
+        total: state.skills.length,
+        totalPages,
+        start: start + 1,
+        end: Math.min(state.skills.length, start + state.pageSize),
+        page: state.page
+      };
+    }
+
+    function setOverview(pageData) {
+      const repoSet = new Set(state.skills.map(item => item.repository).filter(Boolean));
+      const target = document.getElementById("target-filter").value.trim() || "全部";
+      document.getElementById("summary-skills").textContent = String(state.skills.length);
+      document.getElementById("summary-repos").textContent = String(repoSet.size);
+      document.getElementById("summary-target").textContent = `目标过滤: ${target}`;
+    }
+
+    function renderSkills() {
+      const root = document.getElementById("skills");
+      const pageData = paginate();
+      setOverview(pageData);
+
+      if (!pageData.total) {
+        root.innerHTML = '<li class="card-item empty">暂无技能</li>';
+        document.getElementById("skills-pagination").innerHTML = "";
         return;
       }
-      root.innerHTML = data.items.map(repo => `
-        <li>
-          <div class="row">
-            <div>
-              <strong>${repo.name}</strong> ${repo.name === data.default_repo ? '<span class="status">默认</span>' : ''}
-              <div><small>${repo.description || "无描述"}</small></div>
-              <div><small class="mono">${repo.url || "本地仓库"}</small></div>
-            </div>
-            <small>${repo.enabled ? "启用" : "禁用"}</small>
+
+      root.innerHTML = pageData.items.map(item => `
+        <li class="card-item">
+          <div class="item-title">
+            <strong class="mono">${escapeHtml(item.id)}</strong>
+            ${item.repository ? `<span class="chip chip-primary">${escapeHtml(item.repository)}</span>` : ""}
           </div>
-          <div class="actions">
-            <button class="secondary" onclick="repoAction('${repo.name}','sync')">同步</button>
-            <button class="secondary" onclick="repoAction('${repo.name}','set-default')">设为默认</button>
-            <button class="secondary" onclick="repoAction('${repo.name}','${repo.enabled ? "disable" : "enable"}')">${repo.enabled ? "禁用" : "启用"}</button>
-            <button class="secondary" onclick="deleteRepo('${repo.name}')">删除</button>
+          <div class="desc">${escapeHtml(item.description || "无描述")}</div>
+          <div class="meta-line">
+            <span class="chip chip-neutral">version ${escapeHtml(item.version || "-")}</span>
+            <span class="chip chip-neutral">${escapeHtml(item.compatibility || "未声明目标")}</span>
           </div>
         </li>`).join("");
+
+      renderPagination(pageData);
     }
 
-    async function repoAction(name, action) {
-      await api(`/api/v1/repos/${encodeURIComponent(name)}/${action}`, { method: "POST" });
-      await Promise.all([loadRepos(), loadSkills()]);
+    function renderPagination(pageData) {
+      const root = document.getElementById("skills-pagination");
+      const pages = [];
+      const begin = Math.max(1, pageData.page - 1);
+      const finish = Math.min(pageData.totalPages, begin + 2);
+      for (let i = begin; i <= finish; i++) pages.push(i);
+
+      root.innerHTML = `
+        <div class="pagination-info">第 ${pageData.page} / ${pageData.totalPages} 页</div>
+        <div class="pagination-controls">
+          <select class="page-size" onchange="changePageSize(this.value)">
+            ${[6, 8, 12, 16, 24].map(size => `<option value="${size}" ${size === state.pageSize ? "selected" : ""}>${size} / 页</option>`).join("")}
+          </select>
+          <button class="secondary" type="button" onclick="changePage(${pageData.page - 1})" ${pageData.page <= 1 ? "disabled" : ""}>上一页</button>
+          ${pages.map(page => `<button class="secondary ${page === pageData.page ? "is-active" : ""}" type="button" onclick="changePage(${page})">${page}</button>`).join("")}
+          <button class="secondary" type="button" onclick="changePage(${pageData.page + 1})" ${pageData.page >= pageData.totalPages ? "disabled" : ""}>下一页</button>
+          <input class="page-jump" type="number" min="1" max="${pageData.totalPages}" value="${pageData.page}" onchange="jumpToPage(this.value)">
+        </div>
+      `;
     }
 
-    async function deleteRepo(name) {
-      await api(`/api/v1/repos/${encodeURIComponent(name)}`, { method: "DELETE" });
-      await Promise.all([loadRepos(), loadSkills()]);
+    function changePage(page) {
+      state.page = page;
+      renderSkills();
     }
 
-    async function loadSkills() {
+    function jumpToPage(value) {
+      const page = Number(value);
+      if (!Number.isFinite(page)) return;
+      state.page = page;
+      renderSkills();
+    }
+
+    function changePageSize(value) {
+      state.pageSize = Number(value);
+      state.page = 1;
+      renderSkills();
+    }
+
+    async function refreshSkills() {
       const repo = document.getElementById("repo-filter").value.trim();
       const target = document.getElementById("target-filter").value.trim();
       const query = new URLSearchParams();
       if (repo) query.set("repo", repo);
       if (target) query.set("target", target);
+
       const data = await api(`/api/v1/skills?${query.toString()}`);
-      const root = document.getElementById("skills");
-      if (!data.items.length) {
-        root.innerHTML = '<li class="empty">暂无技能</li>';
-        return;
-      }
-      root.innerHTML = data.items.map(item => `
-        <li>
-          <div class="row">
-            <div>
-              <strong>${item.id}</strong>
-              <div><small>${item.description || "无描述"}</small></div>
-            </div>
-            <small>${item.repository || "-"}</small>
-          </div>
-          <div><small>version: ${item.version || "-"} | target: ${item.compatibility || "-"}</small></div>
-        </li>`).join("");
-    }
-
-    async function loadProjects() {
-      const data = await api("/api/v1/projects");
-      const root = document.getElementById("projects");
-      if (!data.items.length) {
-        root.innerHTML = '<li class="empty">暂无已登记项目</li>';
-        return;
-      }
-      root.innerHTML = data.items.map(item => `
-        <li>
-          <div><strong>${item.project_path}</strong></div>
-          <div><small>target: ${item.preferred_target || "-"} | skills: ${item.skill_count}</small></div>
-          <div class="actions">
-            <button class="secondary" onclick="toggleProjectSkills('${item.id}', this)">查看技能</button>
-            <button class="secondary" onclick="loadProjectStatus('${escapeAttr(item.project_path)}')">状态</button>
-            <button class="secondary" onclick="applyProject('${escapeAttr(item.project_path)}', true)">演习应用</button>
-            <button class="secondary" onclick="applyProject('${escapeAttr(item.project_path)}', false)">应用</button>
-          </div>
-          <form class="inline-form" onsubmit="event.preventDefault(); useSkillFromProject('${escapeAttr(item.project_path)}', this);">
-            <div class="rowline">
-              <input name="skill_id" placeholder="skill id" required>
-              <input name="repository" placeholder="repo，可选">
-              <select name="target">
-                <option value="open_code">open_code</option>
-                <option value="cursor">cursor</option>
-                <option value="claude_code">claude_code</option>
-              </select>
-              <button type="submit">启用技能</button>
-            </div>
-          </form>
-          <form class="inline-form" onsubmit="event.preventDefault(); feedbackProject('${escapeAttr(item.project_path)}', this, true);">
-            <div class="rowline">
-              <input name="skill_id" placeholder="feedback skill id" required>
-              <button class="secondary" type="button" onclick="feedbackProject('${escapeAttr(item.project_path)}', this.form, false)">预览反馈</button>
-              <button type="submit">执行反馈</button>
-            </div>
-          </form>
-          <div id="project-${item.id}" class="detail empty"></div>
-          <div id="project-status-${escapeKey(item.project_path)}" class="detail empty"></div>
-          <div id="project-op-${escapeKey(item.project_path)}" class="detail empty"></div>
-        </li>`).join("");
-    }
-
-    async function toggleProjectSkills(id, button) {
-      const root = document.getElementById(`project-${id}`);
-      if (root.dataset.loaded === "true") {
-        root.innerHTML = "";
-        root.dataset.loaded = "false";
-        root.classList.add("empty");
-        button.textContent = "查看技能";
-        return;
-      }
-      const data = await api(`/api/v1/projects/${encodeURIComponent(id)}/skills`);
-      if (!data.items.length) {
-        root.innerHTML = '<div class="empty">暂无技能</div>';
-      } else {
-        root.innerHTML = "<ul>" + data.items.map(item => `<li><span class="mono">${escapeHtml(item.skill_id)}</span> <small>version: ${escapeHtml(item.version || "-")} | status: ${escapeHtml(item.status || "-")} | target: ${escapeHtml(item.target || "-")}</small></li>`).join("") + "</ul>";
-      }
-      root.dataset.loaded = "true";
-      root.classList.remove("empty");
-      button.textContent = "收起";
-    }
-
-    async function loadProjectStatus(projectPath) {
-      const key = escapeKey(projectPath);
-      const root = document.getElementById(`project-status-${key}`);
-      root.textContent = "加载中...";
-      root.classList.remove("empty");
-      const query = new URLSearchParams({ path: projectPath });
-      const data = await api(`/api/v1/project-status?${query.toString()}`);
-      if (!data.item || !data.item.items.length) {
-        root.innerHTML = '<div class="empty">暂无状态数据</div>';
-        return;
-      }
-      root.innerHTML = `
-        <div><strong>状态摘要</strong><span class="badge">skills: ${escapeHtml(data.item.skill_count || data.item.items.length)}</span></div>
-        <ul>${data.item.items.map(item => `<li><span class="mono">${escapeHtml(item.skill_id)}</span> <small>version: ${escapeHtml(item.local_version || "-")} | repo: ${escapeHtml(item.repo_version || "-")} | status: ${escapeHtml(item.status || "-")}</small></li>`).join("")}</ul>
-      `;
-    }
-
-    async function applyProject(projectPath, dryRun) {
-      const root = document.getElementById(`project-op-${escapeKey(projectPath)}`);
-      root.textContent = dryRun ? "执行演习应用中..." : "执行应用中...";
-      root.classList.remove("empty");
-      const data = await api("/api/v1/project-apply", {
-        method: "POST",
-        body: JSON.stringify({ project_path: projectPath, dry_run: dryRun, force: false })
-      });
-      const item = data.item;
-      if (!item) {
-        root.innerHTML = '<div class="empty">未返回应用结果</div>';
-        return;
-      }
-      root.innerHTML = `
-        <div><strong>${dryRun ? "演习应用" : "应用完成"}</strong></div>
-        <div class="log">${escapeHtml(item.items.map(row => `${row.skill_id}: ${row.status}${row.message ? ` - ${row.message}` : ""}`).join("\n") || "无技能")}</div>
-      `;
-    }
-
-    async function useSkillFromProject(projectPath, form) {
-      const root = document.getElementById(`project-op-${escapeKey(projectPath)}`);
-      const formData = new FormData(form);
-      const skillId = String(formData.get("skill_id") || "").trim();
-      const repository = String(formData.get("repository") || "").trim();
-      const target = String(formData.get("target") || "").trim();
-      if (!skillId) return;
-
-      let variables = {};
-      try {
-        let repo = repository;
-        if (!repo) {
-          const candidates = await api(`/api/v1/skills/${encodeURIComponent(skillId)}/candidates`);
-          if (candidates.items.length > 1) {
-            root.innerHTML = `<div class="log">技能 ${escapeHtml(skillId)} 存在多个候选仓库，请先填写 repo 字段。</div>`;
-            root.classList.remove("empty");
-            return;
-          }
-          repo = candidates.items[0]?.repository || "";
-        }
-
-        if (repo) {
-          const detail = await api(`/api/v1/skills/${encodeURIComponent(skillId)}?repo=${encodeURIComponent(repo)}`);
-          for (const variable of (detail.item?.variables || [])) {
-            const value = window.prompt(`变量 ${variable.name}`, variable.default || "");
-            if (value !== null) variables[variable.name] = value;
-          }
-        }
-
-        const data = await api("/api/v1/project-skills/use", {
-          method: "POST",
-          body: JSON.stringify({
-            project_path: projectPath,
-            skill_id: skillId,
-            repository: repo,
-            target,
-            variables
-          })
-        });
-        root.innerHTML = `<div class="log">已启用 ${escapeHtml(data.item.skill_id)}\nrepo: ${escapeHtml(data.item.repository)}\ntarget: ${escapeHtml(data.item.target)}</div>`;
-        root.classList.remove("empty");
-        form.reset();
-        await loadProjects();
-      } catch (err) {
-        root.innerHTML = `<div class="log">${escapeHtml(err.message)}</div>`;
-        root.classList.remove("empty");
-      }
-    }
-
-    async function feedbackProject(projectPath, form, apply) {
-      const root = document.getElementById(`project-op-${escapeKey(projectPath)}`);
-      const formData = new FormData(form);
-      const skillId = String(formData.get("skill_id") || "").trim();
-      if (!skillId) return;
-
-      const path = apply ? "/api/v1/project-feedback/apply" : "/api/v1/project-feedback/preview";
-      const data = await api(path, {
-        method: "POST",
-        body: JSON.stringify({ project_path: projectPath, skill_id: skillId })
-      });
-      const item = data.item;
-      root.innerHTML = `
-        <div><strong>${apply ? "反馈完成" : "反馈预览"}</strong></div>
-        <div class="log">skill: ${escapeHtml(item.skill_id)}
-repo: ${escapeHtml(item.default_repo)}
-version: ${escapeHtml(item.project_version)} -> ${escapeHtml(item.resolved_version)}
-changes:
-${escapeHtml((item.changes || []).join("\n") || "无")}</div>
-      `;
-      root.classList.remove("empty");
+      state.skills = data.items || [];
+      state.page = 1;
+      renderSkills();
     }
 
     function escapeHtml(value) {
@@ -320,31 +515,18 @@ ${escapeHtml((item.changes || []).join("\n") || "无")}</div>
         .replaceAll("'", "&#39;");
     }
 
-    function escapeAttr(value) {
-      return String(value ?? "").replaceAll("\\", "\\\\").replaceAll("'", "\\'");
-    }
-
-    function escapeKey(value) {
-      return String(value ?? "").replaceAll(/[^a-zA-Z0-9_-]/g, "_");
-    }
-
-    document.getElementById("repo-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const form = new FormData(event.target);
-      await api("/api/v1/repos", {
-        method: "POST",
-        body: JSON.stringify({
-          name: form.get("name"),
-          url: form.get("url")
-        })
-      });
-      event.target.reset();
-      await Promise.all([loadRepos(), loadSkills()]);
+    document.getElementById("refresh-skills").addEventListener("click", refreshSkills);
+    document.getElementById("repo-filter").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        refreshSkills();
+      }
+    });
+    document.getElementById("target-filter").addEventListener("change", () => {
+      refreshSkills();
     });
 
-    document.getElementById("refresh-skills").addEventListener("click", loadSkills);
-
-    Promise.all([loadRepos(), loadSkills(), loadProjects()]).catch((err) => {
+    refreshSkills().catch((err) => {
       console.error(err);
       alert(err.message);
     });

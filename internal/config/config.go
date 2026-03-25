@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/muidea/skill-hub/pkg/errors"
 
@@ -36,28 +37,55 @@ type Config struct {
 }
 
 var (
+	configMu     sync.RWMutex
 	globalConfig *Config
-	configLoaded = false
 )
 
 // GetConfig 返回全局配置，如果未加载则先加载
 func GetConfig() (*Config, error) {
-	if !configLoaded {
-		if err := LoadConfig(); err != nil {
-			return nil, err
-		}
+	configMu.RLock()
+	cfg := globalConfig
+	configMu.RUnlock()
+	if cfg != nil {
+		return cfg, nil
 	}
+
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	if globalConfig != nil {
+		return globalConfig, nil
+	}
+
+	cfg, err := loadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	globalConfig = cfg
 	return globalConfig, nil
 }
 
 // LoadConfig 加载配置文件
 func LoadConfig() error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	configMu.Lock()
+	globalConfig = cfg
+	configMu.Unlock()
+	return nil
+}
+
+func loadConfig() (*Config, error) {
 	// 支持通过环境变量指定skill-hub目录
 	configDir := os.Getenv("SKILL_HUB_HOME")
 	if configDir == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return errors.WrapWithCode(err, "LoadConfig", errors.ErrSystem, "获取用户主目录失败")
+			return nil, errors.WrapWithCode(err, "LoadConfig", errors.ErrSystem, "获取用户主目录失败")
 		}
 		configDir = filepath.Join(homeDir, ".skill-hub")
 	}
@@ -66,39 +94,39 @@ func LoadConfig() error {
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		return errors.ConfigNotFound("LoadConfig", configFile)
+		return nil, errors.ConfigNotFound("LoadConfig", configFile)
 	}
 
-	viper.SetConfigFile(configFile)
-	viper.SetConfigType("yaml")
+	cfgViper := viper.New()
+	cfgViper.SetConfigFile(configFile)
+	cfgViper.SetConfigType("yaml")
 
 	// 获取用户主目录用于其他路径
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return errors.WrapWithCode(err, "LoadConfig", errors.ErrSystem, "获取用户主目录失败")
+		return nil, errors.WrapWithCode(err, "LoadConfig", errors.ErrSystem, "获取用户主目录失败")
 	}
 
 	// 设置默认值
-	viper.SetDefault("claude_config_path", filepath.Join(homeDir, ".claude", "config.json"))
-	viper.SetDefault("cursor_config_path", filepath.Join(homeDir, ".cursor", "rules"))
-	viper.SetDefault("default_tool", "open_code")
-	viper.SetDefault("git_token", "")
+	cfgViper.SetDefault("claude_config_path", filepath.Join(homeDir, ".claude", "config.json"))
+	cfgViper.SetDefault("cursor_config_path", filepath.Join(homeDir, ".cursor", "rules"))
+	cfgViper.SetDefault("default_tool", "open_code")
+	cfgViper.SetDefault("git_token", "")
 
 	// 多仓库配置默认值 - 强制启用多仓库模式
-	viper.SetDefault("multi_repo.enabled", true)
-	viper.SetDefault("multi_repo.default_repo", "main")
+	cfgViper.SetDefault("multi_repo.enabled", true)
+	cfgViper.SetDefault("multi_repo.default_repo", "main")
 
-	if err := viper.ReadInConfig(); err != nil {
-		return errors.WrapWithCode(err, "LoadConfig", errors.ErrConfigInvalid, "读取配置文件失败")
+	if err := cfgViper.ReadInConfig(); err != nil {
+		return nil, errors.WrapWithCode(err, "LoadConfig", errors.ErrConfigInvalid, "读取配置文件失败")
 	}
 
-	globalConfig = &Config{}
-	if err := viper.Unmarshal(globalConfig); err != nil {
-		return errors.WrapWithCode(err, "LoadConfig", errors.ErrConfigInvalid, "解析配置文件失败")
+	cfg := &Config{}
+	if err := cfgViper.Unmarshal(cfg); err != nil {
+		return nil, errors.WrapWithCode(err, "LoadConfig", errors.ErrConfigInvalid, "解析配置文件失败")
 	}
 
-	configLoaded = true
-	return nil
+	return cfg, nil
 }
 
 // GetRepoPath 获取默认仓库路径（多仓库模式）
@@ -231,14 +259,16 @@ func SaveConfig(cfg *Config) error {
 	}
 
 	// 更新全局配置
+	configMu.Lock()
 	globalConfig = cfg
-	configLoaded = true
+	configMu.Unlock()
 
 	return nil
 }
 
 // ResetForTest resets config globals. For use in tests only to avoid polluting other tests.
 func ResetForTest() {
-	configLoaded = false
+	configMu.Lock()
 	globalConfig = nil
+	configMu.Unlock()
 }

@@ -162,23 +162,37 @@ func (r *Repository) ReadDefaultRepositorySkillContent(skillID string) (string, 
 }
 
 func (r *Repository) SetDefaultRepository(name string) error {
+	manager, err := r.Manager()
+	if err != nil {
+		return err
+	}
+
 	cfg, err := config.GetConfig()
 	if err != nil {
 		return err
 	}
 
-	if cfg.MultiRepo == nil {
-		cfg.MultiRepo = &config.MultiRepoConfig{
-			Enabled:      true,
-			DefaultRepo:  name,
-			Repositories: make(map[string]config.RepositoryConfig),
-		}
-	} else {
-		cfg.MultiRepo.Enabled = true
-		cfg.MultiRepo.DefaultRepo = name
+	if _, err := manager.GetRepository(name); err != nil {
+		return err
 	}
 
-	return config.SaveConfig(cfg)
+	if cfg.MultiRepo == nil {
+		return errors.NewWithCode("SetDefaultRepository", errors.ErrConfigInvalid, "多仓库配置未初始化")
+	}
+
+	cfg.MultiRepo.Enabled = true
+	cfg.MultiRepo.DefaultRepo = name
+
+	if err := config.SaveConfig(cfg); err != nil {
+		return err
+	}
+
+	manager, err = r.Manager()
+	if err != nil {
+		return err
+	}
+
+	return manager.RebuildRepositoryIndex(name)
 }
 
 func (r *Repository) UpdateRepositoryURL(name, url string) error {

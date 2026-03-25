@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 
 	serverservice "github.com/muidea/skill-hub/internal/modules/kernel/server/service"
@@ -16,6 +20,10 @@ var (
 	serveHost        string
 	servePort        int
 	serveOpenBrowser bool
+	serveInputReader io.Reader = os.Stdin
+	serveRunServer             = func(ctx context.Context, cfg serverservice.Config) error {
+		return serverservice.New().Run(ctx, cfg)
+	}
 )
 
 var serveCmd = &cobra.Command{
@@ -39,12 +47,32 @@ func runServe() error {
 
 	url := fmt.Sprintf("http://%s:%d", serveHost, servePort)
 	fmt.Printf("skill-hub service listening on %s\n", url)
+	fmt.Println("输入 q 并回车可停止服务")
 
 	if serveOpenBrowser {
 		go openBrowser(url)
 	}
 
-	return serverservice.New().Run(ctx, serverservice.Config{Host: serveHost, Port: servePort})
+	go waitForServeStopInput(ctx, serveInputReader, stop)
+
+	return serveRunServer(ctx, serverservice.Config{Host: serveHost, Port: servePort})
+}
+
+func waitForServeStopInput(ctx context.Context, reader io.Reader, stop context.CancelFunc) {
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		switch strings.ToLower(strings.TrimSpace(scanner.Text())) {
+		case "q", "quit", "exit", "stop":
+			stop()
+			return
+		}
+	}
 }
 
 func openBrowser(url string) {
