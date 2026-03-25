@@ -54,6 +54,10 @@ Based on the business scenarios defined in the repo test documents and current C
    - CLI bridge write path for `use` / `apply` / `feedback`
    - Verify service-managed project skill files and repo archive updates
 
+8. **State Prune** (`test_state_prune.py`)
+   - `skill-hub prune` keeps valid `state.json` project records unchanged
+   - After project directory deletion, stale state records are removed
+
 ## Architecture
 
 ### Directory Structure
@@ -88,6 +92,7 @@ tests/e2e/
 │               └── skill_validate.json
 ├── test_scenario*.py           # Scenario test implementations
 ├── test_skill_content_commands.py  # create/status/feedback/apply/use skill content
+├── test_state_prune.py           # prune invalid state.json project records
 ├── test_feedback_apply_multifile.py # Multi-file skill feedback & apply
 └── test_feedback_version_upgrade.py # Version upgrade on feedback
 ```

@@ -213,6 +213,7 @@
 - `list`
 - `feedback`
 - `status`
+- `prune`
 - `git`
 - `create`
 - `init`
@@ -349,6 +350,7 @@
 - `create`
 - `remove`
 - `validate`
+- `prune`
 - `git/pull/push` 主链路
 
 ---

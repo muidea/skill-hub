@@ -7,6 +7,7 @@
 | 9.1 | **配置自动定位** | 工具必须能自动识别并定位 `~/.claude/config.json` (Code) 和 Claude Desktop 的配置文件路径。 | 在不同 OS (Mac/Win) 下运行 `check claude`，观察输出路径是否正确。 |
 | 9.2 | **备份机制** | 在修改 Claude 的 JSON 配置文件前，必须在同目录下生成 `.bak` 备份文件。 | 执行 `skill-hub set-target claude`，然后执行 `skill-hub apply`，检查是否存在 `config.json.bak`。 |
 | 9.3 | **权限预检** | 若配置文件由于系统权限无法写入，工具应返回 `ERR_FS_PERMISSION` 而非静默失败。 | 将 `config.json` 设为只读，执行 `apply` 观察报错。 |
+| 9.4 | **失效项目清理** | 当 Claude 项目目录被移动或删除后，执行 `skill-hub prune` 必须清理 `state.json` 中对应的失效项目路径。 | 删除或迁移项目目录后运行 `skill-hub prune`，检查 `state.json`。 |
 
 ## 模块 10：指令型技能注入 (Instructional Apply)
 

@@ -22,6 +22,7 @@
 当前已明确的边界：
 
 - `create` / `remove` / `validate` 长期保留为项目本地工作区命令
+- `prune` 长期保留为本地状态维护命令，直接维护 `state.json`
 - `search` 应逐步服务化
 
 ## 3. MN 设计前置

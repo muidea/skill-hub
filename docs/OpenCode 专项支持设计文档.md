@@ -71,6 +71,7 @@ internal/
 | `skill-hub apply [--dry-run] [--force]` | 自动在项目根目录生成或更新 `.agents/skills/` 文件夹。 |
 | `skill-hub remove <id>` | 删除对应的技能文件夹并更新状态。 |
 | `skill-hub feedback <id> [--dry-run] [--force]` | 从 `.agents/skills/[id]/SKILL.md` 同步改动。 |
+| `skill-hub prune` | 清理 `state.json` 中已失效的项目路径记录，避免旧 OpenCode 项目路径继续影响上下文识别。 |
 
 ---
 
@@ -88,6 +89,7 @@ internal/
 ### 7.3 清理验收
 *   **AC 3.1**: 执行 `remove` 后，对应的 `.agents/skills/[id]/` 文件夹必须被彻底删除，且不影响 `.agents/skills/` 目录下的其他技能。
 *   **AC 3.2**: 若项目中所有技能均被移除，`.agents/skills/` 文件夹应根据用户首选项决定是否保留（默认清理空目录）。
+*   **AC 3.3**: 当 OpenCode 项目目录被迁移或删除后，执行 `prune` 必须移除 `state.json` 中对应的失效项目路径。
 
 ---
 

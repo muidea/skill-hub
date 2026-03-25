@@ -434,4 +434,52 @@ func TestStateManager(t *testing.T) {
 			t.Errorf("complex-skill name variable = %v, want Test Project", name)
 		}
 	})
+
+	t.Run("Prune invalid project states", func(t *testing.T) {
+		pruneStatePath := filepath.Join(t.TempDir(), "state.json")
+		manager := &StateManager{
+			statePath: pruneStatePath,
+			fs:        &fs.RealFileSystem{},
+		}
+
+		validProject := filepath.Join(tmpDir, "valid-project")
+		if err := os.MkdirAll(validProject, 0755); err != nil {
+			t.Fatalf("mkdir valid project: %v", err)
+		}
+
+		missingProject := filepath.Join(tmpDir, "missing-project")
+		stateMap := map[string]spec.ProjectState{
+			validProject: {
+				ProjectPath: filepath.Join(tmpDir, "wrong-path"),
+				Skills:      map[string]spec.SkillVars{},
+			},
+			missingProject: {
+				ProjectPath: missingProject,
+				Skills:      map[string]spec.SkillVars{},
+			},
+		}
+
+		if err := manager.SaveAllProjectStates(stateMap); err != nil {
+			t.Fatalf("SaveAllProjectStates() error = %v", err)
+		}
+
+		removed, err := manager.PruneInvalidProjectStates()
+		if err != nil {
+			t.Fatalf("PruneInvalidProjectStates() error = %v", err)
+		}
+		if len(removed) != 1 || removed[0] != missingProject {
+			t.Fatalf("removed = %#v, want %#v", removed, []string{missingProject})
+		}
+
+		allStates, err := manager.LoadAllProjectStates()
+		if err != nil {
+			t.Fatalf("LoadAllProjectStates() error = %v", err)
+		}
+		if len(allStates) != 1 {
+			t.Fatalf("state count = %d, want 1", len(allStates))
+		}
+		if allStates[validProject].ProjectPath != validProject {
+			t.Fatalf("normalized project path = %q, want %q", allStates[validProject].ProjectPath, validProject)
+		}
+	})
 }

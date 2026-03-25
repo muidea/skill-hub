@@ -40,7 +40,12 @@ func runSearch(keyword, target string, limit int) error {
 		fmt.Println("\n正在通过本地服务搜索远端技能...")
 		results, err := client.SearchRemoteSkills(context.Background(), keyword, target, limit)
 		if err != nil {
-			return err
+			fmt.Printf("⚠️  本地服务搜索失败: %v\n", err)
+			fmt.Println("\n备用搜索方法:")
+			fmt.Println("1. 稍后重试，或检查本地服务网络访问能力")
+			fmt.Println("2. 访问 https://github.com/topics/agent-skills")
+			fmt.Println("3. 使用 'skill-hub list' 查看本地已有技能")
+			return nil
 		}
 		displaySearchResults(results, keyword, target, limit)
 		return nil

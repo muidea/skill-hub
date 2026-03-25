@@ -42,6 +42,7 @@
 | 4.1 | **目录物理清理** | 执行 `remove [id]` 后，对应的 `.agents/skills/[id]/` 文件夹及其所有子文件必须被彻底删除。 | 检查目录是否存在。 |
 | 4.2 | **状态同步移除** | 取消后，该项目的 `state.json` 记录中不再包含该技能 ID。 | 检查 `state.json` 的 `enabled_skills`。 |
 | 4.3 | **安全保护** | 若标记为 OpenCode 的技能文件夹内有未同步的修改，执行 `remove` 必须触发二次确认警告。 | 修改 `SKILL.md` 后直接运行 `remove`。 |
+| 4.4 | **失效项目清理** | 当 OpenCode 项目目录被移动或删除后，执行 `skill-hub prune` 必须清理 `state.json` 中对应的失效项目路径。 | 删除或迁移项目目录后运行 `skill-hub prune`，检查 `state.json`。 |
 
 ---
 

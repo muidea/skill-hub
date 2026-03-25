@@ -35,6 +35,7 @@
 | :--- | :--- | :--- | :--- |
 | 4.1 | **项目绑定记录** | `state.json` 必须实时记录当前项目路径与启用的 Skill 列表、变量值，以及 skill 的来源仓库信息。 | 运行 `skill-hub use <id> [--target <value>]` 后，查看 `~/.skill-hub/state.json`。 |
 | 4.2 | **路径一致性** | 工具需处理软链接路径、相对路径转绝对路径，确保在不同目录下运行状态识别一致。 | 在项目子目录下运行 `skill-hub status [id] [--verbose]`，应能识别根目录状态。 |
+| 4.3 | **失效状态清理** | 当项目目录被移动或删除后，执行 `skill-hub prune` 必须清理 `state.json` 中对应的失效项目记录，且不能误删仍存在的项目。 | 先登记项目状态，再移动或删除项目目录，执行 `skill-hub prune` 后检查 `~/.skill-hub/state.json`。 |
 
 ## 模块 5：闭环反馈功能 (Feedback Loop) —— **重中之重**
 

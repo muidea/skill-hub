@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/muidea/skill-hub/internal/config"
 	"github.com/muidea/skill-hub/pkg/fs"
@@ -120,7 +121,10 @@ func (m *StateManager) SaveProjectState(state *spec.ProjectState) error {
 	// 更新当前项目状态
 	allStates[state.ProjectPath] = *state
 
-	// 写入文件
+	return m.SaveAllProjectStates(allStates)
+}
+
+func (m *StateManager) SaveAllProjectStates(allStates map[string]spec.ProjectState) error {
 	data, err := json.MarshalIndent(allStates, "", "  ")
 	if err != nil {
 		return fmt.Errorf("序列化状态失败: %w", err)
@@ -136,6 +140,47 @@ func (m *StateManager) SaveProjectState(state *spec.ProjectState) error {
 	}
 
 	return nil
+}
+
+func (m *StateManager) PruneInvalidProjectStates() ([]string, error) {
+	allStates, err := m.LoadAllProjectStates()
+	if err != nil {
+		return nil, err
+	}
+
+	var removed []string
+	updatedStates := make(map[string]spec.ProjectState, len(allStates))
+	for projectPath, state := range allStates {
+		if projectPath == "" {
+			removed = append(removed, projectPath)
+			continue
+		}
+
+		info, err := m.fs.Stat(projectPath)
+		if err != nil {
+			if m.fs.IsNotExist(err) {
+				removed = append(removed, projectPath)
+				continue
+			}
+			return nil, fmt.Errorf("检查项目路径失败: %w", err)
+		}
+		if !info.IsDir() {
+			removed = append(removed, projectPath)
+			continue
+		}
+
+		if state.ProjectPath != projectPath {
+			state.ProjectPath = projectPath
+		}
+		updatedStates[projectPath] = state
+	}
+
+	if err := m.SaveAllProjectStates(updatedStates); err != nil {
+		return nil, err
+	}
+
+	sort.Strings(removed)
+	return removed, nil
 }
 
 // AddSkillToProject 添加技能到项目

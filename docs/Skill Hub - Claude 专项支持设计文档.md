@@ -127,6 +127,9 @@ internal/
 *   手动修改 `config.json` 中的指令，执行 `skill-hub feedback` 必须能精准回传至对应的 `SKILL.md`。
 *   JSON 格式在多次 `apply/feedback` 循环后，必须保持语法正确，无非法字符。
 
+### 7.4 状态维护验收
+*   当 Claude 项目目录被迁移或删除后，执行 `skill-hub prune` 必须清理 `state.json` 中对应的失效项目路径，避免旧路径继续影响上下文识别。
+
 ---
 
 ## 8. 总结

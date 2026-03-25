@@ -41,13 +41,20 @@ jobs:
           echo "Generated files in dist/:"
           ls -la dist/
 
+      - name: Extract release notes from annotated tag
+        run: |
+          git tag -l "${{ steps.get_version.outputs.TAG_NAME }}" --format='%(contents)' > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "Release ${{ steps.get_version.outputs.TAG_NAME }}" > release-notes.md
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           name: Release ${{ steps.get_version.outputs.TAG_NAME }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: release-notes.md
           files: |
             dist/*.tar.gz
             dist/*.sha256

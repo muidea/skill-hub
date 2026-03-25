@@ -205,6 +205,7 @@ skill-hub 提供了一系列命令来管理技能和项目。
 | `status` | 检查技能状态 | `skill-hub status [id] [--verbose]` |
 | `apply` | 应用技能到项目 | `skill-hub apply [--dry-run] [--force]` |
 | `feedback` | 反馈项目修改到默认仓库 | `skill-hub feedback <id> [--dry-run] [--force]` |
+| `prune` | 清理 `state.json` 中失效的项目记录 | `skill-hub prune` |
 | `pull` | 拉取默认仓库的远程更新 | `skill-hub pull [--force] [--check]` |
 | `push` | 推送默认仓库的本地更改 | `skill-hub push [--message MESSAGE] [--force] [--dry-run]` |
 
@@ -254,6 +255,9 @@ skill-hub apply
 
 # 检查技能状态
 skill-hub status
+
+# 项目目录迁移或删除后，清理失效状态记录
+skill-hub prune
 
 # 显示详细信息
 skill-hub list --verbose

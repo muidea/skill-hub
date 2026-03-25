@@ -111,6 +111,7 @@ def run_tests(scenarios=None, verbose=False, debug=False):
         "test_feedback_apply_multifile.py",
         "test_feedback_version_upgrade.py",
         "test_skill_content_commands.py",
+        "test_state_prune.py",
         "test_service_mode.py",
     ]
     for test_name in additional_tests:

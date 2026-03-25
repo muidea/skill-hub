@@ -86,11 +86,15 @@ skill-hub/
 2. **多仓库管理业务**
    - `repo add/list/remove/enable/disable/default/sync`
 
-3. **远端搜索业务**
+3. **状态维护业务**
+   - `prune`
+   - 用于清理 `state.json` 中因项目目录移动、删除导致的失效项目记录
+
+4. **远端搜索业务**
    - `search`
    - 设计上在本地 `serve` 实例可用时优先由服务统一承接远端交互，不可用时回退到本地执行
 
-4. **底层运维业务**
+5. **底层运维业务**
    - `git *`
    - `serve`
    - `init`
@@ -102,6 +106,7 @@ skill-hub/
 - `use` 记录来源仓库，`apply` / `status` 基于来源仓库工作
 - `pull` / `push` 默认只操作默认仓库，但仍属于项目工作流的一部分
 - `repo *` 负责多仓库管理，不直接等同于项目工作区命令
+- `prune` 只维护 `~/.skill-hub/state.json` 中的项目记录，不负责恢复或创建新的项目状态
 
 ## 开发环境设置
 
@@ -292,17 +297,24 @@ func TestExample(t *testing.T) {
 
 #### 1. 准备发布
 ```bash
-# 更新版本号
-# 更新CHANGELOG.md
-# 确保所有测试通过
-make test
+# 确保工作区干净
+git status --short
 
-# 清理之前的构建
-make clean
+# 使用发布脚本自动分析自上一个 tag 以来的提交
+./scripts/create-release.sh
 ```
 
 #### 2. 构建发布版本
 ```bash
+# 手动指定版本号（可选）
+./scripts/create-release.sh --version 1.0.0
+
+# 仅预览建议版本和发布清单（不创建 tag）
+./scripts/create-release.sh --dry-run
+
+# 只导出发布清单
+./scripts/create-release.sh --notes-only --output /tmp/release-notes.md
+
 # 构建所有平台
 make release-all VERSION=1.0.0
 
@@ -310,19 +322,14 @@ make release-all VERSION=1.0.0
 ls -la dist/
 sha256sum dist/*
 
-# 创建发布说明
-cat > release-notes.md << EOF
-## 版本 1.0.0
-- 新功能: xxx
-- 修复: yyy
-- 改进: zzz
-EOF
+# 查看脚本生成的发布说明
+cat dist/release-notes-v1.0.0.md
 ```
 
 #### 3. 创建Git标签
 ```bash
-# 创建带注释的标签
-git tag -a v1.0.0 -m "Release v1.0.0"
+# 使用生成的发布说明创建带注释的标签
+git tag -a v1.0.0 -F dist/release-notes-v1.0.0.md
 
 # 推送标签到远程
 git push origin v1.0.0
@@ -333,8 +340,7 @@ git push origin v1.0.0
 项目配置了GitHub Actions工作流，自动处理发布流程：
 
 #### 触发条件
-- 创建新的git标签（格式：v*）
-- 推送到master分支
+- 创建新的 git 标签（格式：v*）
 
 #### 工作流程
 1. **CI检查**: 运行测试和代码检查
@@ -348,11 +354,11 @@ git push origin v1.0.0
 ./scripts/create-release.sh
 
 # 脚本功能：
-# 1. 验证版本格式
-# 2. 更新版本文件
-# 3. 提交更改
-# 4. 创建标签
-# 5. 推送更改
+# 1. 自动识别上一个 tag 与当前提交范围
+# 2. 根据 conventional commit 风格提交建议版本号
+# 3. 自动整理发布清单并写入 tag 注释
+# 4. 运行测试并构建发布二进制
+# 5. 创建并推送带说明的版本 tag
 ```
 
 ### 版本管理

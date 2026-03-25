@@ -79,6 +79,7 @@ go build -o bin/skill-hub ./application/skill-hub/cmd
 
 - **项目本地工作区命令**：`set-target`、`use`、`status`、`apply`、`feedback`、`pull`、`push`、`create`、`remove`、`validate`
 - **多仓库管理命令**：`repo *`
+- **状态维护命令**：`prune`
 - **远端搜索命令**：`search`
 - **底层运维命令**：`git *`、`serve`
 - **引导命令**：`init`
@@ -88,6 +89,7 @@ go build -o bin/skill-hub ./application/skill-hub/cmd
 - `create` / `remove` / `validate` 只作用于项目本地工作区，不参与服务化托管
 - `search` 面向远端能力；当本地 `serve` 实例可用时优先通过服务承接远端交互，不可用时回退到本地执行
 - `repo *` 面向 `~/.skill-hub/` 下的多仓库管理
+- `prune` 用于清理 `state.json` 中因项目目录移动、删除而残留的失效项目记录
 - `use` / `status` / `apply` / `feedback` / `set-target` / `pull` / `push` 都服务于项目工作流，但会依赖全局管理目录中的仓库与状态信息
 
 ## 🚀 快速开始
@@ -153,6 +155,12 @@ skill-hub repo enable community
 skill-hub repo disable personal
 ```
 
+#### 状态维护示例
+```bash
+# 项目目录移动或删除后，清理 state.json 中的失效项目记录
+skill-hub prune
+```
+
 ## 🛠️ 命令参考
 
 ### 核心命令
@@ -170,6 +178,7 @@ skill-hub repo disable personal
 | `status` | `[id] [--verbose]` | 检查技能状态 |
 | `apply` | `[--dry-run] [--force]` | 应用技能到项目 |
 | `feedback` | `<id> [--dry-run] [--force]` | 反馈修改到仓库 |
+| `prune` | `无` | 清理 state.json 中失效的项目记录 |
 | `pull` | `[--force] [--check]` | 拉取默认仓库的远程更新 |
 | `push` | `[--message MESSAGE] [--force] [--dry-run]` | 推送默认仓库的本地更改 |
 

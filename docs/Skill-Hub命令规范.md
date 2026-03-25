@@ -69,7 +69,12 @@
 | `repo default` | 设置默认仓库 | `skill-hub repo default <name>` |
 | `repo sync` | 同步仓库 | `skill-hub repo sync [name]` |
 
-### 3.7. 本地仓库同步
+### 3.7. 本地状态维护
+| 命令 | 功能描述 | 语法 |
+|------|----------|------|
+| `prune` | 清理 `state.json` 中失效的项目记录 | `skill-hub prune` |
+
+### 3.8. 本地仓库同步
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `pull` | 从远程仓库拉取最新技能 | `skill-hub pull [--force] [--check]` |
@@ -466,7 +471,36 @@ skill-hub feedback my-logic
 skill-hub feedback git-expert --dry-run
 ```
 
-### 4.12 pull - 从远程仓库拉取最新技能
+### 4.12 prune - 清理失效项目状态
+
+**语法**: `skill-hub prune`
+
+**功能描述**:
+
+扫描 `~/.skill-hub/state.json` 中记录的项目路径，清理已经失效的项目项。以下记录会被移除：
+
+- 项目路径为空
+- 项目路径不存在
+- 项目路径存在但不是目录
+
+适用场景：
+
+- 项目目录被移动到新位置后，旧路径残留在 `state.json`
+- 项目目录被删除后，`status` 等命令仍命中旧项目记录
+
+当前实现补充：
+
+- 该命令为一级命令，不依赖当前工作目录是否已初始化
+- 该命令只清理失效项目记录，不会自动补建新的项目路径记录
+- 该命令当前仍主要在本地执行，不走服务桥接
+
+**示例**:
+```bash
+# 清理失效项目记录
+skill-hub prune
+```
+
+### 4.13 pull - 从远程仓库拉取最新技能
 
 **语法**: `skill-hub pull [--force] [--check]`
 
@@ -504,7 +538,7 @@ skill-hub pull
 skill-hub pull --check
 ```
 
-### 4.13 push - 推送本地更改到远程仓库
+### 4.14 push - 推送本地更改到远程仓库
 
 **语法**: `skill-hub push [--message MESSAGE] [--force] [--dry-run]`
 
@@ -541,7 +575,7 @@ skill-hub push --message "修复技能描述"
 skill-hub push --dry-run
 ```
 
-### 4.14 git - Git仓库操作
+### 4.15 git - Git仓库操作
 
 **语法**: `skill-hub git <subcommand> [options]`
 
@@ -825,6 +859,7 @@ skill-hub repo sync community
 - `create`
 - `remove`
 - `validate`
+- `prune`
 - `git`
 - `pull`
 - `push`
@@ -838,3 +873,4 @@ skill-hub repo sync community
 | 1.2 | 2026-02-17 | 添加多仓库管理命令，更新init命令描述以支持多仓库架构 |
 | 1.3 | 2026-03-14 | 补充 `serve` 命令、服务模式桥接行为，以及 `repo/list/status/use/apply/feedback` 的当前实现状态 |
 | 1.4 | 2026-03-22 | 同步项目工作区/默认仓库/服务化边界：`search` 目标服务化，`validate` 仅本地校验，`pull/push` 收口为默认仓库语义 |
+| 1.5 | 2026-03-25 | 增加一级命令 `prune`，用于清理 `state.json` 中因项目目录移动或删除导致的失效项目记录 |

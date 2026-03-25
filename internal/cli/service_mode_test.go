@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -207,6 +208,24 @@ func TestRunSearchViaServiceWithoutLocalConfig(t *testing.T) {
 		}
 	})
 	if !strings.Contains(output, "demo/search-skill") {
+		t.Fatalf("unexpected search output: %q", output)
+	}
+}
+
+func TestRunSearchViaServiceFailureIsGraceful(t *testing.T) {
+	reset := stubServiceBridge(t, &fakeServiceBridgeClient{
+		searchRemoteSkillsFn: func(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
+			return nil, errors.New("service unavailable")
+		},
+	})
+	defer reset()
+
+	output := captureStdout(t, func() {
+		if err := runSearch("demo", spec.TargetOpenCode, 5); err != nil {
+			t.Fatalf("runSearch returned error: %v", err)
+		}
+	})
+	if !strings.Contains(output, "本地服务搜索失败") {
 		t.Fatalf("unexpected search output: %q", output)
 	}
 }
