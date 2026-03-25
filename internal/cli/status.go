@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	projectstatusservice "github.com/muidea/skill-hub/internal/modules/kernel/project_status/service"
-	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
 	"github.com/muidea/skill-hub/pkg/utils"
@@ -424,37 +423,4 @@ func compareVersions(v1, v2 string) int {
 		return 1
 	}
 	return -1
-}
-
-func updateSkillStatus(projectPath, skillID, status, version string) error {
-	stateManager, err := newStateManager()
-	if err != nil {
-		return errors.WrapWithCode(err, "updateSkillStatus", errors.ErrSystem, "创建状态管理器失败")
-	}
-
-	projectState, err := stateManager.LoadProjectState(projectPath)
-	if err != nil {
-		return errors.Wrap(err, "加载项目状态失败")
-	}
-
-	if skillVars, exists := projectState.Skills[skillID]; exists {
-		skillVars.Status = status
-		skillVars.Version = version
-		projectState.Skills[skillID] = skillVars
-	} else {
-		projectState.Skills[skillID] = spec.SkillVars{
-			SkillID: skillID,
-			Version: version,
-			Status:  status,
-			Variables: map[string]string{
-				"target": "open_code",
-			},
-		}
-	}
-
-	if err := stateManager.SaveProjectState(projectState); err != nil {
-		return errors.Wrap(err, "保存项目状态失败")
-	}
-
-	return nil
 }

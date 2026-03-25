@@ -100,10 +100,7 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 				}
 				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.SetProjectTargetData]{
 					Code: httpapibiz.CodeOK,
-					Data: httpapibiz.SetProjectTargetData{
-						ProjectPath: payload.ProjectPath,
-						Target:      payload.Target,
-					},
+					Data: httpapibiz.SetProjectTargetData(payload),
 				}), nil
 			case "/api/v1/skills/demo/candidates":
 				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.SkillCandidateListData]{

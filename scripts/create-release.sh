@@ -154,12 +154,17 @@ generate_release_notes() {
     local test_items=""
     local chore_items=""
     local other_items=""
+    local all_commit_items=""
+    local author_summary=""
+    local diff_stat=""
 
-    while IFS='|' read -r sha subject; do
+    while IFS='|' read -r sha subject author; do
         [ -n "$subject" ] || continue
 
         local item
         item="$(normalize_subject "$subject" "$sha")"
+        item+=$'\n'
+        all_commit_items+="$item"
         if is_breaking_commit "$subject"; then
             breaking_items+="$item"
         fi
@@ -174,7 +179,10 @@ generate_release_notes() {
             chore) chore_items+="$item" ;;
             *) other_items+="$item" ;;
         esac
-    done < <(git log --reverse --no-merges --format='%h|%s' "$commit_range")
+    done < <(git log --reverse --format='%h|%s|%an' "$commit_range")
+
+    author_summary="$(git shortlog -sn "$commit_range" || true)"
+    diff_stat="$(git diff --stat "$commit_range" || true)"
 
     local short_head
     short_head="$(git rev-parse --short HEAD)"
@@ -189,6 +197,13 @@ generate_release_notes() {
         echo "- 发布范围: $compare_range"
         echo "- 包含提交: $commit_count"
         echo "- 构建提交: $short_head"
+        if [ -n "$author_summary" ]; then
+            echo
+            echo "## 提交者统计"
+            echo '```text'
+            printf "%s\n" "$author_summary"
+            echo '```'
+        fi
 
         if [ -n "$breaking_items" ]; then
             echo
@@ -234,6 +249,18 @@ generate_release_notes() {
             echo
             echo "## 其他变更"
             printf "%s" "$other_items"
+        fi
+        if [ -n "$all_commit_items" ]; then
+            echo
+            echo "## 完整提交列表"
+            printf "%s" "$all_commit_items"
+        fi
+        if [ -n "$diff_stat" ]; then
+            echo
+            echo "## 文件变更统计"
+            echo '```text'
+            printf "%s\n" "$diff_stat"
+            echo '```'
         fi
     } > "$output_file"
 }
