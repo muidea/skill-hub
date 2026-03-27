@@ -49,6 +49,7 @@ Based on the business scenarios defined in the repo test documents and current C
 
 7. **Service Mode** (`test_service_mode.py`)
    - `skill-hub serve` health check
+   - `skill-hub serve register/start/status/stop/remove` instance management flow
    - Web UI homepage availability
    - CLI bridge for `repo list` / `list` / `status`
    - CLI bridge write path for `use` / `apply` / `feedback`

@@ -12,6 +12,24 @@
 
 同时它支持以 `serve` 模式运行。`serve` 模式会托管用户本地的 `~/.skill-hub/` 目录，提供 Web 管理能力；CLI 在执行命令时会优先与本地 `serve` 实例交互，但 `serve` 不是必选项，本地服务不可用时所有命令都必须回退到本地执行。
 
+当前除了前台直接运行：
+
+```bash
+skill-hub serve
+```
+
+也支持服务实例管理：
+
+```bash
+skill-hub serve register local --host 127.0.0.1 --port 6600
+skill-hub serve start local
+skill-hub serve status
+skill-hub serve stop local
+skill-hub serve remove local
+```
+
+服务注册信息会持久化到 `~/.skill-hub/services.json`，`start` 会记录后台进程 `pid` 与日志路径，`status` 会显示 `running` / `stopped` / `stale` 三种状态。
+
 ### 概念模型
 
 1. **全局管理目录**：`~/.skill-hub/`

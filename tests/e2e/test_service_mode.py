@@ -3,6 +3,7 @@ Service mode end-to-end tests.
 """
 
 import os
+import socket
 import tempfile
 import urllib.request
 from pathlib import Path
@@ -66,6 +67,12 @@ class TestServiceMode:
                 pytest.skip("localhost bind not permitted in current environment")
             raise
 
+    def _reserve_port(self) -> int:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            sock.listen(1)
+            return sock.getsockname()[1]
+
     def test_service_health_ui_and_cli_bridge(self):
         self._prepare_service_skill()
         service = self._start_service()
@@ -94,6 +101,81 @@ class TestServiceMode:
             assert "service-skill" in status_result.stdout
         finally:
             service.stop()
+
+    def test_named_service_instance_management(self):
+        try:
+            port = self._reserve_port()
+        except PermissionError:
+            pytest.skip("localhost bind not permitted in current environment")
+        except OSError as err:
+            if "operation not permitted" in str(err).lower():
+                pytest.skip("localhost bind not permitted in current environment")
+            raise
+
+        register_result = self.cmd.run(
+            "serve",
+            ["register", "managed", "--host", "127.0.0.1", "--port", str(port)],
+            cwd=str(self.project_dir),
+            env=self.service_env,
+        )
+        assert register_result.success, register_result.stderr
+
+        start_result = self.cmd.run(
+            "serve",
+            ["start", "managed"],
+            cwd=str(self.project_dir),
+            env=self.service_env,
+        )
+        assert start_result.success, start_result.stderr
+        assert "已启动" in start_result.stdout
+
+        try:
+            status_result = self.cmd.run(
+                "serve",
+                ["status", "managed"],
+                cwd=str(self.project_dir),
+                env=self.service_env,
+            )
+            assert status_result.success, status_result.stderr
+            assert "managed\trunning" in status_result.stdout
+            assert f"http://127.0.0.1:{port}" in status_result.stdout
+
+            health = urllib.request.urlopen(f"http://127.0.0.1:{port}/api/v1/health", timeout=2).read().decode("utf-8")
+            assert '"status":"ok"' in health
+        finally:
+            stop_result = self.cmd.run(
+                "serve",
+                ["stop", "managed"],
+                cwd=str(self.project_dir),
+                env=self.service_env,
+            )
+            assert stop_result.success, stop_result.stderr
+
+        stopped_status = self.cmd.run(
+            "serve",
+            ["status", "managed"],
+            cwd=str(self.project_dir),
+            env=self.service_env,
+        )
+        assert stopped_status.success, stopped_status.stderr
+        assert "managed\tstopped" in stopped_status.stdout
+
+        remove_result = self.cmd.run(
+            "serve",
+            ["remove", "managed"],
+            cwd=str(self.project_dir),
+            env=self.service_env,
+        )
+        assert remove_result.success, remove_result.stderr
+
+        final_status = self.cmd.run(
+            "serve",
+            ["status"],
+            cwd=str(self.project_dir),
+            env=self.service_env,
+        )
+        assert final_status.success, final_status.stderr
+        assert "managed" not in final_status.stdout
 
     def test_service_bridge_use_apply_feedback_flow(self):
         repo_skill_dir, repo_skill_file = self._prepare_service_skill()

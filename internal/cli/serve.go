@@ -17,11 +17,13 @@ import (
 )
 
 var (
-	serveHost        string
-	servePort        int
-	serveOpenBrowser bool
-	serveInputReader io.Reader = os.Stdin
-	serveRunServer             = func(ctx context.Context, cfg serverservice.Config) error {
+	serveHost         string
+	servePort         int
+	serveOpenBrowser  bool
+	serveRegisterHost string
+	serveRegisterPort int
+	serveInputReader  io.Reader = os.Stdin
+	serveRunServer              = func(ctx context.Context, cfg serverservice.Config) error {
 		return serverservice.New().Run(ctx, cfg)
 	}
 )
@@ -35,10 +37,72 @@ var serveCmd = &cobra.Command{
 	},
 }
 
+var serveRegisterCmd = &cobra.Command{
+	Use:     "register <name>",
+	Aliases: []string{"add"},
+	Short:   "注册本地服务实例",
+	Args:    cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runServeRegister(args[0], serveRegisterHost, serveRegisterPort)
+	},
+}
+
+var serveRemoveCmd = &cobra.Command{
+	Use:               "remove <name>",
+	Aliases:           []string{"rm", "delete"},
+	Short:             "删除已注册的服务实例",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeServeNames,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runServeRemove(args[0])
+	},
+}
+
+var serveStartCmd = &cobra.Command{
+	Use:               "start <name>",
+	Short:             "启动已注册的服务实例",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeServeNames,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runServeStart(args[0])
+	},
+}
+
+var serveStopCmd = &cobra.Command{
+	Use:               "stop <name>",
+	Short:             "停止已注册的服务实例",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeServeNames,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runServeStop(args[0])
+	},
+}
+
+var serveStatusCmd = &cobra.Command{
+	Use:               "status [name]",
+	Short:             "查看服务实例状态",
+	Args:              cobra.MaximumNArgs(1),
+	ValidArgsFunction: completeServeNames,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := ""
+		if len(args) > 0 {
+			name = args[0]
+		}
+		return runServeStatus(name)
+	},
+}
+
 func init() {
 	serveCmd.Flags().StringVar(&serveHost, "host", "127.0.0.1", "监听地址")
 	serveCmd.Flags().IntVar(&servePort, "port", 5525, "监听端口")
 	serveCmd.Flags().BoolVar(&serveOpenBrowser, "open-browser", false, "启动后自动打开浏览器")
+	serveRegisterCmd.Flags().StringVar(&serveRegisterHost, "host", "127.0.0.1", "监听地址")
+	serveRegisterCmd.Flags().IntVar(&serveRegisterPort, "port", 5525, "监听端口")
+	serveCmd.AddCommand(serveRegisterCmd)
+	serveCmd.AddCommand(serveRemoveCmd)
+	serveCmd.AddCommand(serveStartCmd)
+	serveCmd.AddCommand(serveStopCmd)
+	serveCmd.AddCommand(serveStatusCmd)
 }
 
 func runServe() error {

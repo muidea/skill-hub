@@ -474,10 +474,18 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 当前服务模式已经形成完整闭环：
 
 - `skill-hub serve` 可启动本地 HTTP 服务与 Web UI
+- `skill-hub serve register/start/stop/status/remove` 可管理本地命名服务实例
 - Web UI 支持仓库管理、技能查看、项目查看与项目操作
 - CLI 在服务可用时会优先通过服务桥接执行 `repo/list/status/use/apply/feedback`
 - 服务不可用时，上述命令仍会回退到本地逻辑
 - `prune` 为本地状态维护命令，当前不通过服务桥接，直接维护 `state.json`
+
+当前服务实例管理补充：
+
+- 注册信息落盘到 `~/.skill-hub/services.json`
+- `start` 后台拉起 `skill-hub serve --host ... --port ...`
+- `status` 支持查看全部或单个实例状态
+- 后台日志默认写入 `~/.skill-hub/services/logs/<name>.log`
 
 相关实现入口：
 
@@ -504,6 +512,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 - Web UI 首页可访问
 - CLI bridge 的 `repo list` / `list` / `status`
 - CLI bridge 的 `use -> apply -> feedback` 完整写操作链路
+- `serve register -> start -> status -> stop -> remove` 的服务实例管理链路
 
 ---
 
@@ -515,6 +524,10 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 
 ```bash
 skill-hub serve
+skill-hub serve register local --host 127.0.0.1 --port 6600
+skill-hub serve start local
+skill-hub serve status local
+skill-hub serve stop local
 ```
 
 2. 浏览器可访问：
@@ -546,6 +559,12 @@ http://127.0.0.1:5525
 5. 当 service 未启动时：
 
 上述命令仍可本地工作
+
+6. 对于命名服务实例管理：
+
+- `serve status` 能正确区分 `running` / `stopped` / `stale`
+- `serve remove` 不允许删除运行中的实例
+- `serve stop` 会清理注册表中的运行态 `pid`
 
 ---
 

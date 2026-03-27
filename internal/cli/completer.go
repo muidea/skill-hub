@@ -118,6 +118,22 @@ func completeRepoNames(cmd *cobra.Command, args []string, toComplete string) ([]
 	return filterPrefix(names, toComplete), shellCompNoFile
 }
 
+func completeServeNames(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	services, err := listServeRegistrations()
+	if err != nil {
+		return nil, shellCompNoFile
+	}
+	if len(services) == 0 {
+		return nil, shellCompNoFile
+	}
+
+	var names []string
+	for _, service := range services {
+		names = append(names, service.Name)
+	}
+	return filterPrefix(names, toComplete), shellCompNoFile
+}
+
 func readSkillCompletionCache(key string) []string {
 	skillCompletionCache.mu.Lock()
 	defer skillCompletionCache.mu.Unlock()

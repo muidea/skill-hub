@@ -85,7 +85,14 @@
 
 ### 4.0 serve - 以本地服务模式运行
 
-**语法**: `skill-hub serve [--host <value>] [--port <value>] [--open-browser]`
+**语法**:
+
+- `skill-hub serve [--host <value>] [--port <value>] [--open-browser]`
+- `skill-hub serve register <name> [--host <value>] [--port <value>]`
+- `skill-hub serve start <name>`
+- `skill-hub serve stop <name>`
+- `skill-hub serve status [name]`
+- `skill-hub serve remove <name>`
 
 **选项**:
 - `--host <value>`: 监听地址，默认 `127.0.0.1`
@@ -100,6 +107,18 @@
 - 本地 Web UI
 - 供 CLI 复用的服务桥接入口
 
+当前实现补充：
+
+- `serve` 裸命令仍用于前台直接运行服务
+- `serve register/start/stop/status/remove` 用于管理命名服务实例
+- 服务实例注册表保存在 `~/.skill-hub/services.json`
+- `serve start` 会后台启动当前 `skill-hub` 可执行文件，并记录 `pid` 与日志文件路径
+- `serve status` 会输出服务地址与运行状态，其中：
+  - `running` 表示已记录 `pid` 且进程仍存活
+  - `stopped` 表示当前未记录运行中进程
+  - `stale` 表示注册表中仍有 `pid`，但对应进程已不存在
+- `serve remove` 只删除注册信息，不会删除日志文件；若服务仍在运行会拒绝删除
+
 当前 Web UI 支持：
 
 - 仓库管理
@@ -112,6 +131,12 @@
 skill-hub serve
 skill-hub serve --port 6600
 skill-hub serve --host 127.0.0.1 --port 6600 --open-browser
+skill-hub serve register local --host 127.0.0.1 --port 6600
+skill-hub serve start local
+skill-hub serve status
+skill-hub serve status local
+skill-hub serve stop local
+skill-hub serve remove local
 ```
 
 ### 4.1 init - 初始化本地仓库
