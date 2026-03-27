@@ -54,21 +54,20 @@ run_step() {
 
 normalize_subject() {
     local subject="$1"
-    local sha="$2"
     local conventional_regex='^([a-zA-Z]+)(\(([^)]+)\))?(!)?:[[:space:]]*(.+)$'
 
     if [[ $subject =~ $conventional_regex ]]; then
         local scope="${BASH_REMATCH[3]}"
         local message="${BASH_REMATCH[5]}"
         if [ -n "$scope" ]; then
-            printf -- "- **%s**: %s (%s)\n" "$scope" "$message" "$sha"
+            printf -- "- **%s**: %s\n" "$scope" "$message"
         else
-            printf -- "- %s (%s)\n" "$message" "$sha"
+            printf -- "- %s\n" "$message"
         fi
         return
     fi
 
-    printf -- "- %s (%s)\n" "$subject" "$sha"
+    printf -- "- %s\n" "$subject"
 }
 
 classify_commit_type() {
@@ -154,17 +153,12 @@ generate_release_notes() {
     local test_items=""
     local chore_items=""
     local other_items=""
-    local all_commit_items=""
-    local author_summary=""
-    local diff_stat=""
-
-    while IFS='|' read -r sha subject author; do
+    while IFS='|' read -r subject; do
         [ -n "$subject" ] || continue
 
         local item
-        item="$(normalize_subject "$subject" "$sha")"
+        item="$(normalize_subject "$subject")"
         item+=$'\n'
-        all_commit_items+="$item"
         if is_breaking_commit "$subject"; then
             breaking_items+="$item"
         fi
@@ -179,34 +173,10 @@ generate_release_notes() {
             chore) chore_items+="$item" ;;
             *) other_items+="$item" ;;
         esac
-    done < <(git log --reverse --format='%h|%s|%an' "$commit_range")
-
-    author_summary="$(git shortlog -sn "$commit_range" || true)"
-    diff_stat="$(git diff --stat "$commit_range" || true)"
-
-    local short_head
-    short_head="$(git rev-parse --short HEAD)"
-    local commit_count
-    commit_count="$(git rev-list --count "$commit_range")"
-    local compare_range="${last_tag:-首次发布} -> ${short_head}"
+    done < <(git log --reverse --format='%s' "$commit_range")
 
     {
-        echo "Release v$version"
-        echo
-        echo "## 发布摘要"
-        echo "- 发布范围: $compare_range"
-        echo "- 包含提交: $commit_count"
-        echo "- 构建提交: $short_head"
-        if [ -n "$author_summary" ]; then
-            echo
-            echo "## 提交者统计"
-            echo '```text'
-            printf "%s\n" "$author_summary"
-            echo '```'
-        fi
-
         if [ -n "$breaking_items" ]; then
-            echo
             echo "## 破坏性变更"
             printf "%s" "$breaking_items"
         fi
@@ -249,18 +219,6 @@ generate_release_notes() {
             echo
             echo "## 其他变更"
             printf "%s" "$other_items"
-        fi
-        if [ -n "$all_commit_items" ]; then
-            echo
-            echo "## 完整提交列表"
-            printf "%s" "$all_commit_items"
-        fi
-        if [ -n "$diff_stat" ]; then
-            echo
-            echo "## 文件变更统计"
-            echo '```text'
-            printf "%s\n" "$diff_stat"
-            echo '```'
         fi
     } > "$output_file"
 }
