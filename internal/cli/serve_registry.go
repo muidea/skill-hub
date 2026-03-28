@@ -385,9 +385,17 @@ func defaultServeProcessRunning(pid int) bool {
 	return process.Signal(syscall.Signal(0)) == nil
 }
 
+func serveHealthCheckURL(entry serveRegistration) string {
+	host := entry.Host
+	if host == "0.0.0.0" {
+		host = "127.0.0.1"
+	}
+	return fmt.Sprintf("http://%s:%d/api/v1/health", host, entry.Port)
+}
+
 func defaultServeWaitUntilReady(entry serveRegistration, pid int) error {
 	deadline := time.Now().Add(5 * time.Second)
-	healthURL := fmt.Sprintf("http://%s:%d/api/v1/health", entry.Host, entry.Port)
+	healthURL := serveHealthCheckURL(entry)
 	client := &http.Client{Timeout: 300 * time.Millisecond}
 	var lastErr error
 

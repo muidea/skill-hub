@@ -216,3 +216,37 @@ func TestDefaultServeStartProcessReturnsPIDAfterRelease(t *testing.T) {
 		_ = process.Kill()
 	}
 }
+
+func TestServeHealthCheckURL(t *testing.T) {
+	tests := []struct {
+		name  string
+		entry serveRegistration
+		want  string
+	}{
+		{
+			name: "loopback host unchanged",
+			entry: serveRegistration{
+				Host: "127.0.0.1",
+				Port: 5525,
+			},
+			want: "http://127.0.0.1:5525/api/v1/health",
+		},
+		{
+			name: "wildcard host converted to loopback",
+			entry: serveRegistration{
+				Host: "0.0.0.0",
+				Port: 5525,
+			},
+			want: "http://127.0.0.1:5525/api/v1/health",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := serveHealthCheckURL(tt.entry)
+			if got != tt.want {
+				t.Fatalf("serveHealthCheckURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
