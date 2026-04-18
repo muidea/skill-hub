@@ -65,14 +65,6 @@ func init() {
 	validateCmd.Flags().Bool("json", false, "以JSON格式输出验证报告")
 }
 
-func runValidate(skillID string, fix bool) error {
-	return runValidateWithOptions(skillID, validateCLIOptions{Fix: fix})
-}
-
-func runValidateAll(fix bool) error {
-	return runValidateAllWithOptions(validateCLIOptions{Fix: fix, All: true})
-}
-
 func runValidateWithOptions(skillID string, opts validateCLIOptions) error {
 	opts.All = false
 	return runValidateRequest(projectlifecycleservice.ValidateOptions{

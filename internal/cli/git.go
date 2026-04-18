@@ -94,10 +94,6 @@ func init() {
 	gitRemoteCmd.Flags().BoolP("verbose", "v", false, "显示详细远程仓库信息")
 }
 
-func runGitSync() error {
-	return runGitSyncWithOptions(false)
-}
-
 func runGitSyncWithOptions(jsonOutput bool) error {
 	return runGitRepositorySync("sync", jsonOutput)
 }
@@ -150,10 +146,6 @@ func runGitRepositorySyncStructured(command string) (*gitSyncSummary, error) {
 	summary.Status = "synced"
 	summary.SkillCount = skillCount
 	return summary, nil
-}
-
-func runGitStatus() error {
-	return runGitStatusWithOptions(false)
 }
 
 func runGitStatusWithOptions(jsonOutput bool) error {
@@ -262,10 +254,6 @@ func runGitPush() error {
 	// 直接推送已存在的提交（工作区可能仍有未提交更改）
 	fmt.Println("推送到远程仓库...")
 	return pushSkillRepositoryCommits()
-}
-
-func runGitPull() error {
-	return runGitPullWithOptions(false)
 }
 
 func runGitPullWithOptions(jsonOutput bool) error {
