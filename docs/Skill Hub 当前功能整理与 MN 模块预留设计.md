@@ -216,6 +216,13 @@
 - `prune`
 - `git`
 - `create`
+- `register`
+- `import`
+- `dedupe`
+- `sync-copies`
+- `lint`
+- `validate`
+- `audit`
 - `init`
 - `completer`
 - `dependencies`
@@ -225,9 +232,9 @@
 - 默认仓库归档与索引刷新
 - repo 级索引重建
 - 仓库 add / list / remove / sync / enable / disable / default
-- 默认技能仓库 sync / status / push / remote set
+- 默认技能仓库 sync / status / push / remote check / remote set
 - 技能列表元数据读取与 completion 热路径
-- 服务模式下的项目状态、启用、分发、反馈
+- 服务模式下的项目状态、启用、分发、反馈、默认仓库 pull/push 预览/执行、`git status/sync/pull --json`、登记、批量导入、重复治理和路径审计
 
 整理收益：
 
@@ -280,6 +287,13 @@
   - `ApplyProject(...)`
   - `PreviewFeedback(...)`
   - `ApplyFeedback(...)`
+  - `RegisterProjectSkill(...)`
+  - `ImportProjectSkills(...)`
+  - `DedupeProjectSkills(...)`
+  - `SyncProjectSkillCopies(...)`
+  - `LintProjectSkillPaths(...)`
+  - `ValidateProjectSkills(...)`
+  - `AuditProjectSkills(...)`
 
 这些接口的共同特点是：
 
@@ -340,6 +354,13 @@
 - `set-target`
 - `status`
 - `use`
+- `register`
+- `import`
+- `dedupe`
+- `sync-copies`
+- `lint --paths`
+- `validate`
+- `audit`
 - `apply`
 - `feedback`
 
@@ -349,9 +370,8 @@
 - `search`
 - `create`
 - `remove`
-- `validate`
 - `prune`
-- `git/pull/push` 主链路
+- `git` 主链路
 
 ---
 
@@ -381,13 +401,15 @@
 
 ---
 
-## 7. 建议的下一步迁移顺序
+## 7. 后续迁移顺序
 
-### Phase 1：继续完成当前功能边界整理
+当前先收口主业务，不继续扩展服务或 MN 能力。以下内容作为后续阶段保留。
+
+### Phase 1：服务模式补强
 
 1. 服务模式页面级测试补齐
-2. 服务模式错误模型继续收敛
-3. 推进 `search` 的服务桥接闭环
+2. 服务模式安全边界继续收敛
+3. MN 所需 service contract 设计
 
 ### Phase 2：提炼 MN 所需服务接口
 
@@ -422,8 +444,10 @@
 3. `repository / project_state / skill / adapter / git` 已有第一层模块边界
 4. 服务模式已经打通 HTTP API、Web UI 和 CLI bridge
 5. 服务模式已有专项 e2e，并已并入总体验证
+6. HTTP API 已保留业务层稳定错误码，CLI bridge 和 Web UI 可按统一错误模型处理失败态
+7. 默认 loopback 监听下已增加 Host header loopback 校验，继续保留显式非 loopback 绑定兼容性
 
-因此，下一步可以不再回头做基础入口清理，而是继续进入：
+因此，主业务已具备收口条件；后续暂缓进入：
 
 - 服务模式收尾
 - `mn` service contract 设计

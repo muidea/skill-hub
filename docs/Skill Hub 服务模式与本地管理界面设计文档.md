@@ -57,8 +57,10 @@ CLI 与服务的关系：
 
 - `serve` 托管的是用户本地 `~/.skill-hub/` 全局管理目录
 - 项目实际使用的 skill 内容仍位于项目根目录 `.agents/skills/`
-- `create` / `remove` / `validate` 只针对项目本地工作区，不要求服务化
+- `create` / `remove` 只针对项目本地工作区，不要求服务化
+- `validate` 只校验项目本地工作区内容，但可通过服务桥接复用 `serve` 托管的状态与路径上下文
 - `search` 属于远端能力入口，在本地服务可用时优先由服务实例统一承接远端交互；服务不可用时回退到本地执行
+- 默认 loopback 监听会校验 Host header 也必须为 loopback，避免本地服务在浏览器场景下被非本机 Host 间接访问；显式非 loopback 监听保持远程访问兼容
 
 ---
 
@@ -298,6 +300,8 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 - `code` 可机器识别
 - `message` 可直接展示
 - `data` 仅在成功时返回业务内容
+- 业务层抛出的 `pkg/errors.AppError` 会保留原始错误码，例如 `SKILL_NOT_FOUND`、`PROJECT_NOT_FOUND`、`VALIDATION_FAILED`、`INVALID_INPUT`
+- HTTP 状态按错误类别映射：未找到类为 `404`，权限类为 `403`，网络或远端 Git 类为 `502`，未实现为 `501`，系统错误为 `500`，其余输入或校验类错误为 `400`
 
 ---
 
@@ -370,18 +374,28 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 - `use`
 - `apply`
 - `feedback`
+- `pull`
+- `push`
+- `register`
+- `import`
+- `dedupe`
+- `sync-copies`
+- `lint --paths`
+- `validate`
+- `audit`
 
 ### 10.2 当前继续本地执行的命令
 
 - `init`
-- `validate`
 - `create`
 - `remove`
 
 补充说明：
 
 - `search` 当前已接入服务桥接；当本地服务不可用时，CLI 仍保留兼容性本地回退
-- `create` / `remove` / `validate` 仍明确限定为项目本地工作区命令，不参与服务化托管
+- `create` / `remove` 仍明确限定为项目本地工作区命令，不参与服务化托管
+- `validate` 已接入服务桥接，但仍只校验调用方传入的项目工作区路径
+- `pull` / `push` 已接入默认仓库同步、status/push 服务桥接，支持客户端 HOME 无本地配置时通过 `serve` 处理默认仓库同步闭环
 
 ### 10.3 CLI 代理策略
 
@@ -476,7 +490,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 - `skill-hub serve` 可启动本地 HTTP 服务与 Web UI
 - `skill-hub serve register/start/stop/status/remove` 可管理本地命名服务实例
 - Web UI 支持仓库管理、技能查看、项目查看与项目操作
-- CLI 在服务可用时会优先通过服务桥接执行 `repo/list/status/use/apply/feedback`
+- CLI 在服务可用时会优先通过服务桥接执行 `repo/list/status/use/apply/feedback/pull/push` 以及项目技能生命周期命令
 - 服务不可用时，上述命令仍会回退到本地逻辑
 - `prune` 为本地状态维护命令，当前不通过服务桥接，直接维护 `state.json`
 
@@ -511,7 +525,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 - `/api/v1/health`
 - Web UI 首页可访问
 - CLI bridge 的 `repo list` / `list` / `status`
-- CLI bridge 的 `use -> apply -> feedback` 完整写操作链路
+- CLI bridge 的 `use -> apply -> feedback -> push --dry-run --json` 完整写操作链路
 - `serve register -> start -> status -> stop -> remove` 的服务实例管理链路
 
 ---
@@ -565,13 +579,16 @@ http://127.0.0.1:5525
 - `serve status` 能正确区分 `running` / `stopped` / `stale`
 - `serve remove` 不允许删除运行中的实例
 - `serve stop` 会清理注册表中的运行态 `pid`
+- 默认 loopback 监听会拒绝非 loopback Host header，并通过 service mode e2e 覆盖
 
 ---
 
 ## 17. 后续待办
 
+主业务收口期间不继续扩展以下事项，仅作为后续阶段保留：
+
 1. 为 Web UI 补页面级自动化测试，而不是只靠 API 与 CLI e2e
 2. 为服务模式补更细的错误态展示，例如反馈冲突、仓库同步失败、apply 失败原因
 3. 收紧本地服务安全边界，例如本地 token、CSRF 或仅本机 session 保护
-4. 继续评估 `remove`、`validate` 是否需要服务化
+4. 继续评估 `remove` 是否需要服务化，并补齐 validate 在 Web UI 侧的入口
 5. 为后续 `skill-node` / `MN` 对接预留节点管理 API，而不是把本地管理 API 继续做重

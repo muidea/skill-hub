@@ -42,32 +42,38 @@
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `create` | 创建新技能模板 | `skill-hub create <id> [--target <value>]` |
+| `register` | 登记已有项目本地技能 | `skill-hub register <id> [--target <value>] [--skip-validate]` |
+| `import` | 批量登记、验证并可选归档已有技能 | `skill-hub import <skills-dir> [--target <value>] [--fix-frontmatter] [--archive] [--force] [--dry-run] [--fail-fast]` |
+| `dedupe` | 检测嵌套项目中的重复技能副本 | `skill-hub dedupe <scope> [--canonical <dir>] [--strategy newest|canonical|fail-on-conflict] [--json]` |
+| `sync-copies` | 从 canonical 目录同步同 ID 技能副本 | `skill-hub sync-copies --canonical <dir> [--scope <dir>] [--dry-run] [--no-backup] [--json]` |
+| `lint` | 审计项目技能内容 | `skill-hub lint [scope] --paths [--project-root <dir>] [--fix] [--dry-run] [--no-backup] [--json]` |
+| `audit` | 生成技能刷新审计报告 | `skill-hub audit [scope] [--output <file>] [--format markdown|json] [--canonical <dir>] [--project-root <dir>]` |
 | `remove` | 移除项目技能 | `skill-hub remove <id>` |
-| `validate` | 验证技能合规性 | `skill-hub validate <id>` |
+| `validate` | 验证技能合规性 | `skill-hub validate <id> [--fix] [--links] [--json]` 或 `skill-hub validate --all [--fix] [--links] [--json]` |
 | `use` | 使用本地仓库里的指定技能 | `skill-hub use <id> [--target <value>]` |
 
 
 ### 3.4. 技能状态
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
-| `status` | 检查技能状态 | `skill-hub status [id] [--verbose]` |
+| `status` | 检查技能状态 | `skill-hub status [id] [--verbose] [--json]` |
 
 ### 3.5. 项目工作区-本地仓库交互
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `apply` | 应用技能到项目 | `skill-hub apply [--dry-run] [--force]` |
-| `feedback` | 将项目工作区技能修改内容更新至到本地仓库 | `skill-hub feedback <id> [--dry-run] [--force]` |
+| `feedback` | 将项目工作区技能修改内容更新至到本地仓库 | `skill-hub feedback <id> [--dry-run] [--force] [--json]` 或 `skill-hub feedback --all [--dry-run] [--force] [--json]` |
 
 ### 3.6. 多仓库管理
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `repo add` | 添加新仓库 | `skill-hub repo add <name> <url> [--branch BRANCH] [--type TYPE] [--description DESC]` |
-| `repo list` | 列出所有仓库 | `skill-hub repo list` |
+| `repo list` | 列出所有仓库 | `skill-hub repo list [--json]` |
 | `repo remove` | 移除仓库 | `skill-hub repo remove <name>` |
 | `repo enable` | 启用仓库 | `skill-hub repo enable <name>` |
 | `repo disable` | 禁用仓库 | `skill-hub repo disable <name>` |
 | `repo default` | 设置默认仓库 | `skill-hub repo default <name>` |
-| `repo sync` | 同步仓库 | `skill-hub repo sync [name]` |
+| `repo sync` | 同步仓库 | `skill-hub repo sync [name] [--all] [--json]` |
 
 ### 3.7. 本地状态维护
 | 命令 | 功能描述 | 语法 |
@@ -77,8 +83,8 @@
 ### 3.8. 本地仓库同步
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
-| `pull` | 从远程仓库拉取最新技能 | `skill-hub pull [--force] [--check]` |
-| `push` | 推送本地更改到远程仓库 | `skill-hub push [--message MESSAGE] [--force] [--dry-run]` |
+| `pull` | 从远程仓库拉取最新技能 | `skill-hub pull [--force] [--check] [--json]` |
+| `push` | 推送本地更改到远程仓库 | `skill-hub push [--message MESSAGE] [--force] [--dry-run] [--json]` |
 | `git` | Git仓库操作 | `skill-hub git <subcommand>` |
 
 ## 4. 命令详细规范
@@ -118,6 +124,8 @@
   - `stopped` 表示当前未记录运行中进程
   - `stale` 表示注册表中仍有 `pid`，但对应进程已不存在
 - `serve remove` 只删除注册信息，不会删除日志文件；若服务仍在运行会拒绝删除
+- 当服务绑定在 loopback 地址（默认 `127.0.0.1` 或 `localhost`）时，HTTP server 会拒绝非 loopback Host header；显式绑定到非 loopback 地址时保留已有远程访问兼容行为
+- 服务 API 会保留业务层 `pkg/errors` 稳定错误码；未找到类错误返回 `404`，权限类返回 `403`，网络或远端 Git 类返回 `502`，未实现返回 `501`，系统错误返回 `500`，其余输入或校验类错误返回 `400`
 
 当前 Web UI 支持：
 
@@ -254,14 +262,14 @@ skill-hub list --repo skills-repo --target cursor --verbose
 
 **功能描述**:
 
-搜索远端技能入口。命令行仍作为用户入口，但最终的远端搜索交互应由本地 `skill-hub serve` 实例统一承接，以复用本地托管的 `~/.skill-hub/` 上下文、远端访问策略和 Web/CLI 共用能力。
+搜索远端技能入口。命令行仍作为用户入口；当本地 `skill-hub serve` 实例可用时，远端搜索交互会优先由服务实例统一承接，以复用本地托管的 `~/.skill-hub/` 上下文、远端访问策略和 Web/CLI 共用能力。
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
 当前实现状态：
 
-- 当前 CLI 仍包含本地直连实现
-- 目标状态是优先通过服务桥接执行
+- CLI 会优先通过服务桥接执行
+- 服务不可用时，保留本地直连回退以兼容离线或未启动服务的使用方式
 
 **示例**:
 ```bash
@@ -304,6 +312,164 @@ skill-hub create my-logic
 skill-hub create my-logic --target open_code
 ```
 
+### 4.5.1 register - 登记已有项目本地技能
+
+**语法**: `skill-hub register <id> [--target <value>] [--skip-validate]`
+
+**参数**:
+- `id` (必需): 已存在于 `.agents/skills/<id>/SKILL.md` 的技能标识符。
+- `--target <value>` (可选): 技能兼容目标，默认 `open_code`。
+- `--skip-validate` (可选): 跳过 `SKILL.md` 验证，直接登记项目状态。
+
+**功能描述**:
+
+将当前项目中已经存在的技能登记到 `state.json`。该命令不会创建、重写或覆盖 `SKILL.md`，用于替代过去依赖 `create` 登记已有技能的语义。
+
+默认会先验证 `SKILL.md` 的基础 frontmatter。若 legacy 技能缺失 frontmatter，可先执行 `skill-hub validate <id> --fix`，或在明确知道内容可接受时使用 `--skip-validate` 完成登记。
+
+当本地服务模式可用时，CLI 会通过服务桥接执行登记，服务端负责读写其托管的 `~/.skill-hub/state.json`。
+
+**示例**:
+```bash
+skill-hub register existing-skill --target open_code
+skill-hub register legacy-skill --skip-validate
+```
+
+### 4.5.2 import - 批量导入已有技能
+
+**语法**: `skill-hub import <skills-dir> [--target <value>] [--fix-frontmatter] [--archive] [--force] [--dry-run] [--fail-fast]`
+
+**参数**:
+- `skills-dir` (必需): 包含 `<id>/SKILL.md` 子目录的技能目录，典型值为 `.agents/skills`。
+- `--target <value>` (可选): 批量登记时写入的兼容目标，默认 `open_code`。
+- `--fix-frontmatter` (可选): 导入前修复缺失或不完整的 frontmatter，修改前创建 `SKILL.md.bak.<timestamp>`。
+- `--archive` (可选): 验证通过后归档到默认仓库。
+- `--force` (可选): 批量流程不进行交互确认；不会自动删除源技能。
+- `--dry-run` (可选): 只输出将要登记、修复、归档的动作。
+- `--fail-fast` (可选): 遇到首个失败技能时停止，否则默认继续处理并在最后汇总失败项。
+
+**功能描述**:
+
+扫描 `skills-dir/*/SKILL.md`，逐个执行 frontmatter 修复（可选）、验证、项目状态登记，并在指定 `--archive` 时归档到默认仓库。命令结束时输出固定摘要：
+
+- `discovered`
+- `registered`
+- `valid`
+- `archived`
+- `unchanged`
+- `failed`
+
+失败项会列出 `id`、执行阶段、路径和错误信息，便于批量刷新和 CI 审计。
+
+当本地服务模式可用时，CLI 会通过服务桥接执行导入和归档，确保批量操作使用服务端托管的默认仓库与状态文件。
+
+**示例**:
+```bash
+skill-hub import .agents/skills --target open_code --fix-frontmatter --archive --force
+skill-hub import .agents/skills --dry-run
+```
+
+### 4.5.3 dedupe - 检测重复技能副本
+
+**语法**: `skill-hub dedupe <scope> [--canonical <dir>] [--strategy newest|canonical|fail-on-conflict] [--json]`
+
+**参数**:
+- `scope` (必需): 扫描范围。
+- `--canonical <dir>` (可选): canonical 技能目录，典型值为 `.agents/skills`。
+- `--strategy` (可选): canonical source 选择策略，支持 `newest`、`canonical`、`fail-on-conflict`，默认 `newest`。
+- `--json` (可选): 输出机器可读 JSON 报告。
+
+**功能描述**:
+
+扫描 `scope` 下所有 `.agents/skills/<id>/SKILL.md`，按技能 ID 分组，计算技能目录内容 hash，报告所有位置、hash、修改时间、是否 canonical、是否内容冲突以及选定的 canonical source。该命令只报告，不修改文件。
+
+当 `--strategy fail-on-conflict` 且发现同 ID 内容差异时，命令返回失败，适合 CI 严格检查。
+
+当本地服务模式可用时，CLI 会通过服务桥接执行重复检测，服务端按 CLI 当前工作目录解析后的 scope 进行扫描。
+
+**示例**:
+```bash
+skill-hub dedupe . --canonical .agents/skills
+skill-hub dedupe . --canonical .agents/skills --strategy fail-on-conflict
+skill-hub dedupe . --canonical .agents/skills --json
+```
+
+### 4.5.4 sync-copies - 同步重复技能副本
+
+**语法**: `skill-hub sync-copies --canonical <dir> [--scope <dir>] [--dry-run] [--no-backup] [--json]`
+
+**参数**:
+- `--canonical <dir>` (必需): canonical 技能目录，典型值为 `.agents/skills`。
+- `--scope <dir>` (可选): 扫描范围，默认当前目录。
+- `--dry-run` (可选): 只报告将同步的副本，不修改文件。
+- `--no-backup` (可选): 同步前不创建备份。
+- `--json` (可选): 输出机器可读 JSON 结果。
+
+**功能描述**:
+
+扫描 `scope` 下所有重复技能副本。对 canonical 目录中存在的同 ID 技能，将非 canonical 副本同步为 canonical 内容。默认会在修改每个副本前创建 `<skill-dir>.bak.<timestamp>` 目录备份。该命令不会删除任何技能副本目录。
+
+当本地服务模式可用时，CLI 会通过服务桥接执行同步，确保由服务端统一访问托管工作区与文件系统。
+
+**示例**:
+```bash
+skill-hub sync-copies --canonical .agents/skills --scope .
+skill-hub sync-copies --canonical .agents/skills --scope . --dry-run
+skill-hub sync-copies --canonical .agents/skills --scope . --json
+```
+
+### 4.5.5 lint - 审计项目技能内容
+
+**语法**: `skill-hub lint [scope] --paths [--project-root <dir>] [--fix] [--dry-run] [--no-backup] [--json]`
+
+**参数**:
+- `scope` (可选): 扫描范围，默认当前目录。
+- `--paths` (必需): 启用本机路径审计。当前 `lint` 仅支持该模式。
+- `--project-root <dir>` (可选): 用于将本机绝对路径改写为相对路径的项目根目录。未指定时会尝试从 `.agents` 目录位置推断。
+- `--fix` (可选): 将 `project-root` 内的 `/home/...`、`/Users/...`、`file://...` 改写为相对路径。
+- `--dry-run` (可选): 只报告将改写的路径，不修改文件。
+- `--no-backup` (可选): 修复前不创建备份文件。
+- `--json` (可选): 输出机器可读 JSON 报告。
+
+**功能描述**:
+
+扫描 `scope` 下所有 `.agents/skills/<id>/` 技能目录中的 UTF-8 文本文件，报告 `file://`、`vscode://`、`/home/...`、`/Users/...` 等本机路径。`--fix` 只自动改写位于 `project-root` 内的普通本机路径和 `file://` 链接；`vscode://` 链接以及外部路径会标记为 `manual-review`。
+
+默认修复前会创建 `<file>.bak.<timestamp>` 备份。CLI 会先把 `scope` 和 `project-root` 按调用方当前工作目录解析为绝对路径，再发送给服务端，因此在本地 `serve` 实例可用时仍能正确操作调用方项目。
+
+**示例**:
+```bash
+skill-hub lint . --paths --project-root "$PWD"
+skill-hub lint . --paths --project-root "$PWD" --fix
+skill-hub lint . --paths --project-root "$PWD" --fix --dry-run --json
+```
+
+### 4.5.6 audit - 生成技能刷新审计报告
+
+**语法**: `skill-hub audit [scope] [--output <file>] [--format markdown|json] [--canonical <dir>] [--project-root <dir>]`
+
+**参数**:
+- `scope` (可选): 技能扫描范围，默认 `.agents/skills`。
+
+**选项**:
+- `--output <file>`: 报告输出文件。未指定时输出到标准输出。
+- `--format markdown|json`: 报告格式，默认 `markdown`。
+- `--canonical <dir>`: 用于重复检测的 canonical 技能目录。
+- `--project-root <dir>`: 用于路径和链接审计的项目根目录。
+
+**功能描述**:
+
+聚合项目技能刷新状态，报告目标技能数量、已登记数量、未登记技能、`validate --links` 结果、`status` 摘要、重复技能冲突、绝对路径命中、本地 Markdown 链接问题、默认仓库以及默认仓库是否存在未提交或未推送内容。
+
+当本地 `serve` 实例可用时，CLI 会通过服务桥接执行审计聚合；CLI 会把 `scope`、`canonical`、`project-root` 解析为绝对路径后传给服务端。`--output` 文件由 CLI 在调用方侧写入，避免服务进程当前目录不同导致报告写错位置。
+
+**示例**:
+```bash
+skill-hub audit .agents/skills --output .agents/skills-refresh-progress.md
+skill-hub audit .agents/skills --format json
+skill-hub audit . --canonical .agents/skills --project-root "$PWD"
+```
+
 ### 4.6 remove - 移除项目技能
 
 **语法**: `skill-hub remove <id>`
@@ -332,16 +498,28 @@ skill-hub remove git-expert
 
 ### 4.7 validate - 验证技能合规性
 
-**语法**: `skill-hub validate <id>`
+**语法**: `skill-hub validate <id> [--fix] [--links] [--project-root <dir>] [--check-remote] [--json]` 或 `skill-hub validate --all [--fix] [--links] [--project-root <dir>] [--check-remote] [--json]`
 
 **参数**:
 - `id` (必需): 要验证的技能标识符。
+
+**选项**:
+- `--fix`: 修复缺失或不完整的 `SKILL.md` frontmatter，并在修改前创建 `SKILL.md.bak.<timestamp>`。
+- `--all`: 验证当前项目状态中登记的全部技能。
+- `--links`: 检查 `SKILL.md` 和技能目录内 Markdown 文件中的链接。
+- `--project-root <dir>`: 解析项目相对链接的根目录，默认使用当前项目目录或 `metadata.project_root`。
+- `--check-remote`: 同时检查 HTTP/HTTPS 远端链接。默认忽略远端链接。
+- `--json`: 输出机器可读 JSON 验证报告。
 
 **功能描述**:
 
 验证指定技能在项目工作区中的本地文件是否合规，包括检查 `SKILL.md` 的 YAML 语法、必需字段和基本文件结构。
 
-该命令与 `create` 配套，主要用于 `feedback` 前的本地校验，不负责校验仓库侧内容。
+`--fix` 会为 legacy `SKILL.md` 补齐最小 frontmatter：`name`、`description`、`compatibility`、`metadata.version`、`metadata.author`。`name` 使用技能目录名，`description` 优先从正文首个有效段落推断，版本默认 `1.0.0`。修复只重写 frontmatter，不改写正文内容。
+
+`--links` 会解析技能目录内 Markdown 文件中的本地链接。外部 HTTP/HTTPS 链接默认跳过；本地链接会按源文件目录、技能目录、项目根目录依次解析，任一目标存在即视为通过。缺失目标会以 `source_file`、`line`、`link`、`resolved_path` 输出，JSON 报告中汇总为 `link_issues`。
+
+该命令与 `create` 配套，主要用于 `feedback` 前的本地校验，不负责校验仓库侧内容。当前本地 `serve` 实例可用时，CLI 会通过服务桥接执行 validate；CLI 会把 `project_path` 和 `project-root` 解析为绝对路径后传给服务端。
 
 如果该技能未在`state.json`里项目工作区登记，则提示该技能非法
 
@@ -353,6 +531,15 @@ skill-hub remove git-expert
 ```bash
 # 验证 my-logic 技能的合规性
 skill-hub validate my-logic
+
+# 修复 legacy frontmatter 后验证
+skill-hub validate my-logic --fix
+
+# 验证项目中全部已登记技能
+skill-hub validate --all
+
+# 检查本地 Markdown 链接并输出 JSON 报告
+skill-hub validate --all --links --json
 ```
 
 ### 4.8 use - 使用技能
@@ -389,13 +576,14 @@ skill-hub use git-expert --target open_code
 
 ### 4.9 status - 检查技能状态
 
-**语法**: `skill-hub status [id] [--verbose]`
+**语法**: `skill-hub status [id] [--verbose] [--json]`
 
 **参数**:
 - `id` (可选): 特定技能的标识符。如未提供，检查所有技能。
 
 **选项**:
 - `--verbose`: 显示详细差异信息。
+- `--json`: 以机器可读 JSON 输出状态摘要，字段包含 `skill_id`、`status`、`local_version`、`repo_version`、`local_path`、`repo_path`、`source_repository` 等。
 
 **功能描述**:
 
@@ -423,6 +611,9 @@ skill-hub status git-expert
 
 # 显示详细差异
 skill-hub status --verbose
+
+# 输出机器可读状态
+skill-hub status --json
 ```
 
 ### 4.10 apply - 应用技能到项目工作区
@@ -457,14 +648,16 @@ skill-hub apply --dry-run
 
 ### 4.11 feedback - 将项目工作区里技能修改更新至本地仓库
 
-**语法**: `skill-hub feedback <id> [--dry-run] [--force]`
+**语法**: `skill-hub feedback <id> [--dry-run] [--force] [--json]` 或 `skill-hub feedback --all [--dry-run] [--force] [--json]`
 
 **参数**:
-- `id` (必需): 要更新的技能标识符。
+- `id` (单技能模式必需): 要更新的技能标识符。
 
 **选项**:
 - `--dry-run`: 演习模式，仅显示将要同步的差异。
 - `--force`: 强制更新，即使有冲突也继续执行。
+- `--all`: 反馈当前项目状态中登记的全部技能。
+- `--json`: 输出机器可读反馈摘要，包含 `total`、`applied`、`planned`、`skipped`、`failed` 和每个技能的预览/结果。实际写入时需要配合 `--force`；也可以配合 `--dry-run` 仅预览。
 
 **功能描述**:
 
@@ -479,6 +672,7 @@ skill-hub apply --dry-run
 - 当本地服务模式可用时，CLI 会优先通过服务桥接执行
 - 服务桥接路径会先执行反馈预览，再根据参数或确认执行实际归档
 - 服务端负责版本推进、归档和索引刷新
+- `--all` 会按当前项目状态中登记的技能逐个执行反馈。为避免误批量归档，实际写入时必须显式提供 `--force`；也可以使用 `--dry-run` 预览。`--json` 模式不会进入交互确认，实际写入同样必须显式提供 `--force`。
 
 **多仓库说明**：技能会被归档到默认仓库（通过 `skill-hub repo default` 命令设置）。如果技能在默认仓库中不存在则新增，存在则覆盖更新。
 
@@ -494,6 +688,9 @@ skill-hub feedback my-logic
 
 # 演习模式查看将要同步的差异
 skill-hub feedback git-expert --dry-run
+
+# 批量反馈并输出机器可读摘要
+skill-hub feedback --all --force --json
 ```
 
 ### 4.12 prune - 清理失效项目状态
@@ -527,28 +724,32 @@ skill-hub prune
 
 ### 4.13 pull - 从远程仓库拉取最新技能
 
-**语法**: `skill-hub pull [--force] [--check]`
+**语法**: `skill-hub pull [--force] [--check] [--json]`
 
 **选项**:
 - `--force`: 强制拉取，忽略本地未提交的修改。
 - `--check`: 检查模式，仅显示可用的更新，不实际执行拉取操作。
+- `--json`: 输出机器可读拉取摘要。
 
 **功能描述**:
 
 从默认仓库对应的远程拉取最新更改到本地仓库（`~/.skill-hub/repositories/<default>/`），并更新技能索引。此命令仅同步仓库层，不涉及项目工作目录的更新。
 
+`--check` 会执行不修改工作树的远端检查：有远端时通过 fetch 更新远端引用并比较 `main` 分支提交；无远端时返回 `no_remote`。JSON 输出中的 `status` 可能为 `no_remote`、`up_to_date`、`updates_available`、`ahead` 或 `divergent`，并包含 `ahead` / `behind` 计数。
+
 `git sync`、`git pull` 以及 `repo sync` 也遵循同样的索引刷新原则：仓库内容变化后会重建对应 repo 的 `registry.json`，默认仓库同时会刷新根目录兼容索引。
 
 **多仓库说明**：此命令仅处理默认仓库。如需同步指定仓库或所有启用仓库，请使用 `skill-hub repo sync`。
 
-该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
+本地执行时该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化。本地 `serve` 实例可用时，CLI 会优先通过服务桥接执行默认仓库同步，以兼容客户端 HOME 中没有本地 skill-hub 配置的场景。
 
 
 **关键行为**:
-1. 对默认仓库执行 `git pull` 从远程仓库获取最新技能
-2. 更新本地技能注册表（作为只读缓存）
-3. 不修改项目状态或项目工作目录中的文件
-4. 不更新项目的 `LastSync` 时间戳
+1. `--check` 只检查默认仓库远端引用，不修改工作树或项目目录
+2. 对默认仓库执行 `git pull` 从远程仓库获取最新技能
+3. 更新本地技能注册表（作为只读缓存）
+4. 不修改项目状态或项目工作目录中的文件
+5. 不更新项目的 `LastSync` 时间戳
 
 **后续操作**:
 - 使用 `skill-hub status` 检查项目技能状态
@@ -561,16 +762,20 @@ skill-hub pull
 
 # 检查可用更新但不实际执行拉取
 skill-hub pull --check
+
+# 检查模式，输出 JSON 摘要供 CI 或脚本读取
+skill-hub pull --check --json
 ```
 
 ### 4.14 push - 推送本地更改到远程仓库
 
-**语法**: `skill-hub push [--message MESSAGE] [--force] [--dry-run]`
+**语法**: `skill-hub push [--message MESSAGE] [--force] [--dry-run] [--json]`
 
 **选项**:
 - `--message MESSAGE`, `-m MESSAGE`: 提交消息。如未提供，使用默认消息"更新技能"。
 - `--force`: 强制推送，跳过确认检查。
 - `--dry-run`: 演习模式，仅显示将要推送的更改，不实际执行。
+- `--json`: 输出机器可读推送摘要；实际写入推送时必须同时使用 `--force`，或使用 `--dry-run` 只预览。
 
 **功能描述**:
 
@@ -578,7 +783,14 @@ skill-hub pull --check
 
 **多仓库说明**：默认推送到默认仓库（归档仓库）。可使用 `skill-hub repo default` 命令设置默认仓库。
 
-该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
+本地执行时该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化。本地 `serve` 实例可用时，CLI 会优先通过服务桥接获取默认仓库状态并执行推送，以兼容客户端 HOME 中没有本地 skill-hub 配置的场景。
+
+服务 API 中默认仓库推送为受保护写操作：
+
+- `GET /api/v1/skill-repository/push-preview` 返回默认仓库、远端 URL、待推送文件列表、建议提交消息和原始状态。
+- `POST /api/v1/skill-repository/push` 必须携带 `confirm: true`。
+- 请求可携带 `expected_changed_files`；服务端执行前会重新检查默认仓库状态，若文件列表已变化则拒绝推送。
+- 无待推送变更时服务端拒绝推送。
 
 **关键行为**:
 1. 检查默认仓库是否有未提交的更改（Modified、Untracked、Deleted文件）
@@ -598,6 +810,9 @@ skill-hub push --message "修复技能描述"
 
 # 演习模式，仅查看将要推送的更改
 skill-hub push --dry-run
+
+# 演习模式，输出 JSON 摘要供 CI 或脚本读取
+skill-hub push --dry-run --json
 ```
 
 ### 4.15 git - Git仓库操作
@@ -606,24 +821,24 @@ skill-hub push --dry-run
 
 **子命令**:
 - `clone [url]` - 克隆远程技能仓库到本地
-- `sync` - 同步技能仓库（拉取最新更改）
-- `status` - 查看仓库状态（未提交的更改等）
+- `sync` - 同步技能仓库（拉取最新更改，支持 `--json`）
+- `status` - 查看仓库状态（未提交的更改等，支持 `--json`）
 - `commit` - 提交更改到本地仓库（交互式输入消息）
 - `push` - 推送本地提交到远程仓库（检查未提交更改）
-- `pull` - 从远程仓库拉取更新（同 `sync`）
+- `pull` - 从远程仓库拉取更新（同 `sync`，支持 `--json`）
 - `remote [url]` - 设置或更新远程仓库URL
 
 **子命令语法**:
 - `skill-hub git clone [url]` - 克隆远程技能仓库到本地
-- `skill-hub git sync` - 同步技能仓库（拉取最新更改）
-- `skill-hub git status` - 查看仓库状态（未提交的更改等）
+- `skill-hub git sync [--json]` - 同步技能仓库（拉取最新更改）
+- `skill-hub git status [--json]` - 查看仓库状态（未提交的更改等）
 - `skill-hub git commit` - 提交更改到本地仓库（交互式输入消息）
 - `skill-hub git push` - 推送本地提交到远程仓库（检查未提交更改）
-- `skill-hub git pull` - 从远程仓库拉取更新（同 `sync`）
+- `skill-hub git pull [--json]` - 从远程仓库拉取更新（同 `sync`）
 - `skill-hub git remote [url]` - 设置或更新远程仓库URL
 
 **功能描述**:
-提供底层Git仓库操作接口，适用于需要精细控制Git工作流的用户。这些命令直接操作本地技能仓库（`~/.skill-hub/repositories/<name>/`），与高级命令（如 `repo sync`、`push`）功能重叠但提供更多控制选项。
+提供底层Git仓库操作接口，适用于需要精细控制Git工作流的用户。这些命令默认操作本地技能仓库（`~/.skill-hub/repositories/<name>/`），与高级命令（如 `repo sync`、`push`）功能重叠但提供更多控制选项。其中 `git status --json`、`git sync --json`、`git pull --json` 在本地 `serve` 实例可用时会优先通过服务桥接读取或同步默认仓库，以便客户端 HOME 无本地配置时仍可用于脚本检查。
 
 **与高级命令的关系**:
 - `skill-hub pull` = `skill-hub git sync`（但包含注册表更新）
@@ -637,6 +852,15 @@ skill-hub git clone https://github.com/example/skills-repo.git
 
 # 查看仓库状态
 skill-hub git status
+
+# 查看仓库状态，输出 JSON
+skill-hub git status --json
+
+# 同步技能仓库，输出 JSON
+skill-hub git sync --json
+
+# 拉取更新，输出 JSON
+skill-hub git pull --json
 
 # 提交更改（交互式输入消息）
 skill-hub git commit
@@ -659,8 +883,9 @@ skill-hub git remote https://github.com/your-username/skills-repo.git
   ```
 
 ### 5.3 通用选项
-- `--dry-run`: 演习模式（支持命令: `apply`, `feedback`, `push`）
-- `--force`: 强制模式（支持命令: `apply`, `feedback`, `pull`, `push`）
+- `--dry-run`: 演习模式（支持命令: `apply`, `feedback`, `import`, `sync-copies`, `lint`, `push`）
+- `--force`: 强制模式（支持命令: `apply`, `feedback`, `import`, `pull`, `push`）
+- `--json`: 机器可读输出（支持命令: `status`, `repo list`, `repo sync`, `feedback`, `validate`, `dedupe`, `sync-copies`, `lint`, `audit`, `pull`, `push`）
 
 ## 6. 使用示例
 
@@ -746,7 +971,10 @@ skill-hub repo add local --type user
 
 ### 7.2 repo list - 列出所有仓库
 
-**语法**: `skill-hub repo list`
+**语法**: `skill-hub repo list [--json]`
+
+**选项**:
+- `--json`: 输出机器可读仓库列表，包含 `default_repo` 和 `items`。
 
 **功能描述**:
 列出所有已配置的Git仓库，显示仓库状态和基本信息，包括：
@@ -764,6 +992,9 @@ skill-hub repo add local --type user
 ```bash
 # 列出所有仓库
 skill-hub repo list
+
+# 输出 JSON 仓库列表
+skill-hub repo list --json
 ```
 
 ### 7.3 repo remove - 移除仓库
@@ -837,10 +1068,14 @@ skill-hub repo default main
 
 ### 7.7 repo sync - 同步仓库
 
-**语法**: `skill-hub repo sync [name]`
+**语法**: `skill-hub repo sync [name] [--all] [--json]`
 
 **参数**:
 - `name` (可选): 要同步的仓库名称。如未提供，同步所有启用的仓库
+
+**选项**:
+- `--all`: 同步所有仓库，包括已禁用仓库。默认只同步启用仓库。
+- `--json`: 输出机器可读同步摘要，包含 `total`、`synced`、`skipped`、`failed` 和每个仓库的同步状态。
 
 **功能描述**:
 同步指定仓库或所有启用的仓库。对于远程仓库，会执行 `git pull` 获取最新内容。
@@ -853,6 +1088,9 @@ skill-hub repo sync
 
 # 同步特定仓库
 skill-hub repo sync community
+
+# 输出 JSON 同步摘要
+skill-hub repo sync --json
 ```
 
 ## 8. 服务模式与 CLI 交互说明
@@ -871,23 +1109,32 @@ skill-hub repo sync community
 
 - `repo *`
 - `list`
+- `search`
 - `set-target`
 - `status`
 - `use`
+- `register`
+- `import`
+- `dedupe`
+- `sync-copies`
+- `lint --paths`
+- `validate`
+- `audit`
 - `apply`
 - `feedback`
+- `pull`
+- `push`
+- `git status --json`
+- `git sync --json`
+- `git pull --json`
 
 当前未桥接、仍主要本地执行的命令：
 
 - `init`
-- `search`
 - `create`
 - `remove`
-- `validate`
 - `prune`
-- `git`
-- `pull`
-- `push`
+- `git` 的交互式或非 JSON 子命令
 
 ## 9. 更新记录
 
@@ -899,3 +1146,18 @@ skill-hub repo sync community
 | 1.3 | 2026-03-14 | 补充 `serve` 命令、服务模式桥接行为，以及 `repo/list/status/use/apply/feedback` 的当前实现状态 |
 | 1.4 | 2026-03-22 | 同步项目工作区/默认仓库/服务化边界：`search` 目标服务化，`validate` 仅本地校验，`pull/push` 收口为默认仓库语义 |
 | 1.5 | 2026-03-25 | 增加一级命令 `prune`，用于清理 `state.json` 中因项目目录移动或删除导致的失效项目记录 |
+| 1.6 | 2026-04-18 | 增加 `register`、`import`、`dedupe`、`sync-copies`、`validate --fix/--all` 与 `status --json`，支撑批量技能刷新、重复副本治理和自动化审计 |
+| 1.7 | 2026-04-18 | 增加 `lint --paths` 路径可移植性审计与服务桥接说明 |
+| 1.8 | 2026-04-18 | 增加 `validate --links/--json` 与 validate 服务桥接说明 |
+| 1.9 | 2026-04-18 | 增加 `audit` Markdown/JSON 审计报告与服务桥接说明 |
+| 1.10 | 2026-04-18 | 增加 `feedback --all` 与 `feedback --json` 批量反馈说明 |
+| 1.11 | 2026-04-18 | 增加 `repo list --json` 机器可读输出 |
+| 1.12 | 2026-04-18 | 增加 `repo sync --json` 同步摘要输出 |
+| 1.13 | 2026-04-18 | 增加 `push --json` 推送摘要输出，并补齐默认仓库 push/status 服务桥接 |
+| 1.14 | 2026-04-18 | 增加 `pull --json` 拉取摘要输出，并补齐默认仓库 pull 服务桥接 |
+| 1.15 | 2026-04-18 | 增加 `git status --json` 默认仓库状态摘要，并复用 serve 状态桥接 |
+| 1.16 | 2026-04-18 | 增加 `git sync --json` 与 `git pull --json` 底层同步摘要，并复用默认仓库 sync 服务桥接 |
+| 1.17 | 2026-04-18 | 增加默认仓库 `push-preview` API，并要求服务端 push 显式 `confirm=true` 与变更复核 |
+| 1.18 | 2026-04-18 | Web UI 管理端增加默认仓库 push 预览与二次确认流程 |
+| 1.19 | 2026-04-18 | 服务 API 包装错误保留 `pkg/errors` 稳定错误码并按错误类别映射 HTTP 状态 |
+| 1.20 | 2026-04-18 | `serve` 默认 loopback 监听下增加 Host header loopback 校验，并保留非 loopback 绑定兼容性 |

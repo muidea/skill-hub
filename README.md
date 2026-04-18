@@ -85,7 +85,10 @@ go build -o bin/skill-hub ./application/skill-hub/cmd
 
 - **技能管理**：查看、启用、禁用技能
 - **技能创建**：从当前项目创建新的技能模板
-- **本地验证**：校验 create 生成的项目本地 skill 是否符合规范
+- **已有技能登记**：将 `.agents/skills/<id>/SKILL.md` 中的存量技能登记到项目状态
+- **批量导入**：扫描 `.agents/skills/*/SKILL.md`，批量登记、修复、验证并可选归档
+- **重复检测与副本同步**：扫描嵌套项目中的同 ID 技能副本，报告冲突，并可从 canonical 目录同步副本
+- **本地验证**：校验项目本地 skill 是否符合规范，并可用 `--fix` 修复 legacy frontmatter
 - **技能归档**：将验证通过的技能归档到正式仓库
 - **跨工具同步**：支持 Cursor、Claude Code、OpenCode 等AI工具
 - **版本控制**：基于Git的技能版本管理
@@ -95,7 +98,7 @@ go build -o bin/skill-hub ./application/skill-hub/cmd
 
 ### 命令分层
 
-- **项目本地工作区命令**：`set-target`、`use`、`status`、`apply`、`feedback`、`pull`、`push`、`create`、`remove`、`validate`
+- **项目本地工作区命令**：`set-target`、`use`、`status`、`apply`、`feedback`、`pull`、`push`、`create`、`register`、`import`、`dedupe`、`sync-copies`、`lint`、`audit`、`remove`、`validate`
 - **多仓库管理命令**：`repo *`
 - **状态维护命令**：`prune`
 - **远端搜索命令**：`search`
@@ -104,11 +107,12 @@ go build -o bin/skill-hub ./application/skill-hub/cmd
 
 其中：
 
-- `create` / `remove` / `validate` 只作用于项目本地工作区，不参与服务化托管
+- `create` / `remove` 只作用于项目本地工作区，不参与服务化托管
 - `search` 面向远端能力；当本地 `serve` 实例可用时优先通过服务承接远端交互，不可用时回退到本地执行
 - `repo *` 面向 `~/.skill-hub/` 下的多仓库管理
 - `prune` 用于清理 `state.json` 中因项目目录移动、删除而残留的失效项目记录
 - `use` / `status` / `apply` / `feedback` / `set-target` / `pull` / `push` 都服务于项目工作流，但会依赖全局管理目录中的仓库与状态信息
+- `register` / `import` / `dedupe` / `sync-copies` / `lint --paths` / `validate` / `audit` / `pull` / `push` 在本地 `serve` 实例可用时会优先通过服务桥接执行；涉及项目路径的命令会把路径解析为绝对路径再交给服务端，避免 `serve` 进程工作目录不同导致误扫或误改
 
 ## 🚀 快速开始
 
@@ -158,6 +162,89 @@ skill-hub validate my-new-skill
 
 # 3. 反馈手动修改并归档到默认仓库
 skill-hub feedback my-new-skill
+
+# 批量反馈当前项目中已登记的所有技能，适合批量刷新后归档
+skill-hub feedback --all --force --json
+
+# 预览默认仓库待推送变更，输出机器可读摘要
+skill-hub push --dry-run --json
+
+# 检查默认仓库拉取动作，输出机器可读摘要
+skill-hub pull --check --json
+
+# 查看默认仓库工作区状态，输出机器可读摘要
+skill-hub git status --json
+
+# 执行底层默认仓库同步，输出机器可读摘要
+skill-hub git sync --json
+```
+
+`pull --check --json` 会返回 `no_remote`、`up_to_date`、`updates_available`、`ahead` 或 `divergent`，并包含本地/远端提交与 `ahead` / `behind` 计数，便于自动化判断是否需要执行实际拉取。
+
+服务 API 的默认仓库推送必须先预览再确认：`GET /api/v1/skill-repository/push-preview` 返回 `changed_files`，`POST /api/v1/skill-repository/push` 必须携带 `confirm: true`，并可携带 `expected_changed_files` 防止预览后文件变化仍继续推送。
+
+Web UI 管理端的默认仓库推送入口也遵循同一约束：先点击“预览推送”取得变更列表，勾选确认后才会启用“推送默认仓库”。
+
+服务 API 的业务错误会保留稳定错误码，例如 `SKILL_NOT_FOUND`、`PROJECT_NOT_FOUND`、`VALIDATION_FAILED`、`INVALID_INPUT`，并按错误类别映射到对应 HTTP 状态，便于 CLI bridge 和 Web UI 统一处理。
+
+`serve` 默认绑定 `127.0.0.1`，在 loopback 监听下还会校验 Host header 必须为 loopback；显式绑定到非 loopback 地址时保留远程访问兼容行为。
+
+#### 存量技能登记与批量导入流程
+```bash
+# 登记已有 .agents/skills/<id>/SKILL.md，不创建或覆盖内容
+skill-hub register existing-skill --target open_code
+
+# 修复 legacy SKILL.md frontmatter（修改前自动创建 SKILL.md.bak.<timestamp>）
+skill-hub validate existing-skill --fix
+
+# 检查 SKILL.md 和技能目录内 Markdown 文件的本地链接
+skill-hub validate existing-skill --links
+
+# 批量扫描、修复、登记、验证，并归档到默认仓库
+skill-hub import .agents/skills \
+  --target open_code \
+  --fix-frontmatter \
+  --archive \
+  --force
+
+# 面向自动化脚本输出状态 JSON
+skill-hub status --json
+```
+
+#### 重复检测与副本同步流程
+```bash
+# 检测 scope 下所有 .agents/skills/<id>/SKILL.md 重复副本
+skill-hub dedupe . --canonical .agents/skills --strategy newest
+
+# 输出机器可读报告
+skill-hub dedupe . --canonical .agents/skills --json
+
+# 从 canonical 目录同步所有同 ID 副本，默认先创建 <skill-dir>.bak.<timestamp>
+skill-hub sync-copies --canonical .agents/skills --scope .
+
+# 只预览将同步的副本
+skill-hub sync-copies --canonical .agents/skills --scope . --dry-run
+```
+
+#### 路径可移植性审计流程
+```bash
+# 扫描技能内容中的本机绝对路径、file://、vscode:// 链接
+skill-hub lint . --paths --project-root "$PWD"
+
+# 自动将 project-root 内的本机路径改写为相对路径，默认创建 SKILL.md.bak.<timestamp>
+skill-hub lint . --paths --project-root "$PWD" --fix
+
+# 演习模式输出 JSON，适合脚本审计
+skill-hub lint . --paths --project-root "$PWD" --fix --dry-run --json
+```
+
+#### 技能刷新审计报告
+```bash
+# 生成 Markdown 审计报告，聚合数量、登记、validate、status、dedupe、lint 和默认仓库推送状态
+skill-hub audit .agents/skills --output .agents/skills-refresh-progress.md
+
+# 输出 JSON 报告，适合 CI 或 agent 自动化消费
+skill-hub audit .agents/skills --format json
 ```
 
 #### 多仓库管理示例
@@ -165,8 +252,14 @@ skill-hub feedback my-new-skill
 # 查看所有仓库
 skill-hub repo list
 
+# 机器可读仓库列表
+skill-hub repo list --json
+
 # 同步所有仓库
 skill-hub repo sync
+
+# 机器可读同步摘要
+skill-hub repo sync --json
 
 # 启用/禁用仓库
 skill-hub repo enable community
@@ -190,27 +283,33 @@ skill-hub prune
 | `list` | `[--target <value>] [--verbose]` | 列出可用技能 |
 | `search` | `<keyword> [--target <value>] [--limit <number>]` | 搜索远程技能 |
 | `create` | `<id> [--target <value>]` | 创建新技能模板 |
+| `register` | `<id> [--target <value>] [--skip-validate]` | 登记已有项目本地技能，不覆盖内容 |
+| `import` | `<skills-dir> [--target <value>] [--fix-frontmatter] [--archive] [--force] [--dry-run] [--fail-fast]` | 批量登记、验证并可选归档已有技能 |
+| `dedupe` | `<scope> [--canonical <dir>] [--strategy newest\|canonical\|fail-on-conflict] [--json]` | 检测嵌套项目中的重复技能副本 |
+| `sync-copies` | `--canonical <dir> [--scope <dir>] [--dry-run] [--no-backup] [--json]` | 从 canonical 目录同步同 ID 技能副本 |
+| `lint` | `[scope] --paths [--project-root <dir>] [--fix] [--dry-run] [--no-backup] [--json]` | 审计并可修复技能内容中的本机路径 |
+| `audit` | `[scope] [--output <file>] [--format markdown\|json] [--canonical <dir>] [--project-root <dir>]` | 生成技能刷新审计报告 |
 | `remove` | `<id>` | 移除项目技能 |
-| `validate` | `<id>` | 验证项目工作区中新建 skill 的合规性 |
+| `validate` | `<id> [--fix] [--links] [--json]` 或 `--all [--fix] [--links] [--json]` | 验证项目工作区 skill 的合规性，可修复 legacy frontmatter 并检查本地 Markdown 链接 |
 | `use` | `<id> [--target <value>]` | 使用指定技能 |
-| `status` | `[id] [--verbose]` | 检查技能状态 |
+| `status` | `[id] [--verbose] [--json]` | 检查技能状态；`--json` 便于CI和脚本处理 |
 | `apply` | `[--dry-run] [--force]` | 应用技能到项目 |
-| `feedback` | `<id> [--dry-run] [--force]` | 反馈修改到仓库 |
+| `feedback` | `<id> [--dry-run] [--force] [--json]` 或 `--all [--dry-run] [--force] [--json]` | 反馈单个或全部已登记技能修改到默认仓库 |
 | `prune` | `无` | 清理 state.json 中失效的项目记录 |
-| `pull` | `[--force] [--check]` | 拉取默认仓库的远程更新 |
-| `push` | `[--message MESSAGE] [--force] [--dry-run]` | 推送默认仓库的本地更改 |
+| `pull` | `[--force] [--check] [--json]` | 拉取默认仓库的远程更新 |
+| `push` | `[--message MESSAGE] [--force] [--dry-run] [--json]` | 推送默认仓库的本地更改 |
 
 ### 多仓库管理命令
 
 | 命令 | 参数 | 功能说明 |
 |------|------|----------|
 | `repo add` | `<name> <git_url>` | 添加新技能仓库 |
-| `repo list` | `无` | 列出所有技能仓库 |
+| `repo list` | `[--json]` | 列出所有技能仓库 |
 | `repo remove` | `<name>` | 移除技能仓库 |
 | `repo enable` | `<name>` | 启用技能仓库 |
 | `repo disable` | `<name>` | 禁用技能仓库 |
 | `repo default` | `<name>` | 设置默认（归档）仓库 |
-| `repo sync` | `[name] [--all]` | 同步指定仓库或所有启用仓库 |
+| `repo sync` | `[name] [--all] [--json]` | 同步指定仓库或所有启用仓库 |
 
 **语法说明**：`<参数>`为必需参数，`[参数]`为可选参数
 

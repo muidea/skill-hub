@@ -188,9 +188,9 @@ skill-hub/
 | `apply` | `skill-hub apply [--dry-run] [--force]` | **分发**：根据 `state.json` 中的启用记录和目标环境设置，将技能物理分发到项目工作区。 |
 | `feedback`| `skill-hub feedback <id> [--dry-run] [--force]` | **回收**：将项目工作区的指定技能修改归档到默认仓库。 |
 | `prune` | `skill-hub prune` | **维护**：清理 `state.json` 中因项目目录移动、删除而残留的失效项目记录。 |
-| `pull` | `skill-hub pull [--force] [--check]` | 拉取默认仓库的远程更新到本地仓库，并刷新索引。 |
-| `push` | `skill-hub push [--message MESSAGE] [--force] [--dry-run]` | 提交并推送默认仓库中的本地更改到对应远程仓库。 |
-| `git` | `skill-hub git <subcommand>` | 提供底层Git仓库操作接口，适用于需要精细控制Git工作流的用户。 |
+| `pull` | `skill-hub pull [--force] [--check] [--json]` | 拉取默认仓库的远程更新到本地仓库，并刷新索引，可输出 JSON 摘要。 |
+| `push` | `skill-hub push [--message MESSAGE] [--force] [--dry-run] [--json]` | 提交并推送默认仓库中的本地更改到对应远程仓库，可输出 JSON 摘要。 |
+| `git` | `skill-hub git <subcommand>` | 提供底层Git仓库操作接口，适用于需要精细控制Git工作流的用户；`git status/sync/pull --json` 可输出默认仓库状态或同步摘要。 |
 
 ---
 
