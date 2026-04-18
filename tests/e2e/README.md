@@ -51,13 +51,48 @@ Based on the business scenarios defined in the repo test documents and current C
    - `skill-hub serve` health check
    - `skill-hub serve register/start/status/stop/remove` instance management flow
    - Web UI homepage availability
-   - CLI bridge for `repo list` / `list` / `status`
+   - CLI bridge for `repo list` / `repo list --json` / `list` / `status`
    - CLI bridge write path for `use` / `apply` / `feedback`
+   - CLI bridge lifecycle path for `register` / `import --fix-frontmatter --archive`
+   - CLI bridge duplicate-management path for `dedupe` / `sync-copies`
+   - CLI bridge portability audit path for `lint --paths --fix`
+   - CLI bridge validation path for `validate --links --json`
+   - CLI bridge audit report path for `audit --output`
+   - CLI bridge batch feedback path for `feedback --all --force --json`
+   - Unit-covered service bridge path for `repo sync --json`
    - Verify service-managed project skill files and repo archive updates
 
 8. **State Prune** (`test_state_prune.py`)
    - `skill-hub prune` keeps valid `state.json` project records unchanged
    - After project directory deletion, stale state records are removed
+
+9. **Bulk Import, Register, and JSON Status** (`test_bulk_import_register_status.py`)
+   - `skill-hub register` records existing `.agents/skills/<id>/SKILL.md` without overwriting content
+   - `skill-hub status --json` returns machine-readable project status
+   - `skill-hub validate <id> --fix` repairs legacy frontmatter and creates backups
+   - `skill-hub import .agents/skills --fix-frontmatter --archive --force` registers, validates, and archives multiple skills
+
+10. **Duplicate Detection and Canonical Sync** (`test_dedupe_sync_copies.py`)
+   - `skill-hub dedupe . --canonical .agents/skills --json` reports same-id duplicate groups and content conflicts
+   - `skill-hub sync-copies --canonical .agents/skills --scope . --dry-run` previews copy synchronization
+   - `skill-hub sync-copies --canonical .agents/skills --scope .` backs up and synchronizes non-canonical copies
+
+11. **Path Portability Lint** (`test_path_lint.py`)
+   - `skill-hub lint . --paths --project-root <dir> --json` reports fixable and manual-review local paths
+   - `skill-hub lint . --paths --project-root <dir> --fix` rewrites project-local paths and creates backups
+   - `skill-hub lint . --paths --project-root <dir> --fix --dry-run --json` reports would-rewrite items without modifying files
+
+12. **Markdown Link Validation** (`test_validate_links.py`)
+   - `skill-hub validate <id> --links --json` reports broken local Markdown links with source file and line
+   - `skill-hub validate --all --links --json` passes after missing bundled/project-local links are restored
+
+13. **Audit Report** (`test_audit_report.py`)
+   - `skill-hub audit .agents/skills --output <file>` writes a Markdown refresh progress report
+   - `skill-hub audit .agents/skills --format json` emits machine-readable audit metrics
+
+14. **Batch Feedback JSON** (`test_feedback_all_json.py`)
+   - `skill-hub feedback --all --force --json` archives all registered project skills
+   - JSON output reports total, applied, skipped, planned, failed, and per-skill results
 
 ## Architecture
 
@@ -94,6 +129,12 @@ tests/e2e/
 ├── test_scenario*.py           # Scenario test implementations
 ├── test_skill_content_commands.py  # create/status/feedback/apply/use skill content
 ├── test_state_prune.py           # prune invalid state.json project records
+├── test_bulk_import_register_status.py # register/status JSON/frontmatter fix/import archive
+├── test_dedupe_sync_copies.py      # duplicate detection and canonical copy sync
+├── test_path_lint.py              # local path portability lint and fix
+├── test_validate_links.py         # Markdown local link validation
+├── test_audit_report.py           # Markdown/JSON audit report generation
+├── test_feedback_all_json.py      # batch feedback, pull/push previews, and JSON output
 ├── test_feedback_apply_multifile.py # Multi-file skill feedback & apply
 └── test_feedback_version_upgrade.py # Version upgrade on feedback
 ```
@@ -113,6 +154,8 @@ tests/e2e/
 - Python 3.8 or higher
 - `skill-hub` binary: when running from the repo, `bin/skill-hub` is used if present (run `make build` first); otherwise PATH or `SKILL_HUB_BIN` is used
 - Network connectivity (for pull/push/git remote tests)
+
+`pull --check --json`, `push --dry-run --json`, `git status --json`, and `git sync --json` failure summaries are covered without network access. Actual pull/push tests still require a configured remote.
 
 ### Python Dependencies
 Install with: `pip install -r tests/e2e/requirements.txt`

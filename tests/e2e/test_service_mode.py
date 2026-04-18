@@ -2,9 +2,14 @@
 Service mode end-to-end tests.
 """
 
+import json
+import http.client
 import os
+import random
 import socket
 import tempfile
+import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -68,10 +73,13 @@ class TestServiceMode:
             raise
 
     def _reserve_port(self) -> int:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.bind(("127.0.0.1", 0))
-            sock.listen(1)
-            return sock.getsockname()[1]
+        for _ in range(50):
+            port = random.randint(20000, 60999)
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(0.1)
+                if sock.connect_ex(("127.0.0.1", port)) != 0:
+                    return port
+        raise OSError("unable to find available localhost port")
 
     def test_service_health_ui_and_cli_bridge(self):
         self._prepare_service_skill()
@@ -81,9 +89,41 @@ class TestServiceMode:
             health = urllib.request.urlopen(f"{service.base_url}/api/v1/health", timeout=2).read().decode("utf-8")
             assert '"status":"ok"' in health
 
+            parsed_url = urllib.parse.urlparse(service.base_url)
+            bad_host_conn = http.client.HTTPConnection(parsed_url.hostname, parsed_url.port, timeout=2)
+            try:
+                bad_host_conn.request("GET", "/api/v1/health", headers={"Host": "example.com"})
+                bad_host_resp = bad_host_conn.getresponse()
+                assert bad_host_resp.status == 403
+            finally:
+                bad_host_conn.close()
+
             ui = urllib.request.urlopen(f"{service.base_url}/", timeout=2).read().decode("utf-8")
             assert "Skill Hub" in ui
             assert "技能目录" in ui
+
+            admin_ui = urllib.request.urlopen(f"{service.base_url}/admin.html", timeout=2).read().decode("utf-8")
+            assert "默认仓库状态" in admin_ui
+            assert "/api/v1/skill-repository/sync-check" in admin_ui
+            assert "/api/v1/skill-repository/push-preview" in admin_ui
+            assert "expected_changed_files" in admin_ui
+            assert "default-repo-push-confirm" in admin_ui
+
+            push_preview = urllib.request.urlopen(
+                f"{service.base_url}/api/v1/skill-repository/push-preview",
+                timeout=2,
+            ).read().decode("utf-8")
+            assert '"has_changes":true' in push_preview
+
+            push_without_confirm_req = urllib.request.Request(
+                f"{service.base_url}/api/v1/skill-repository/push",
+                data=b'{"message":"test"}',
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with pytest.raises(urllib.error.HTTPError) as push_err:
+                urllib.request.urlopen(push_without_confirm_req, timeout=2)
+            assert push_err.value.code == 400
 
             bridge_env = self.client_env.copy()
             bridge_env["SKILL_HUB_SERVICE_URL"] = service.base_url
@@ -92,6 +132,16 @@ class TestServiceMode:
             assert repo_list.success, repo_list.stderr
             assert "main" in repo_list.stdout
 
+            repo_list_json = self.cmd.run("repo", ["list", "--json"], cwd=str(self.project_dir), env=bridge_env)
+            assert repo_list_json.success, repo_list_json.stderr
+            assert '"default_repo": "main"' in repo_list_json.stdout
+
+            pull_check_json = self.cmd.run("pull", ["--check", "--json"], cwd=str(self.project_dir), env=bridge_env)
+            assert pull_check_json.success, pull_check_json.stderr
+            pull_data = json.loads(pull_check_json.stdout)
+            assert pull_data["check"] is True
+            assert pull_data["status"] in {"no_remote", "up_to_date", "updates_available", "ahead", "divergent"}
+
             skill_list = self.cmd.run("list", cwd=str(self.project_dir), env=bridge_env)
             assert skill_list.success, skill_list.stderr
             assert "service-skill" in skill_list.stdout
@@ -99,6 +149,18 @@ class TestServiceMode:
             status_result = self.cmd.run("status", cwd=str(self.project_dir), env=bridge_env)
             assert status_result.success, status_result.stderr
             assert "service-skill" in status_result.stdout
+
+            git_status_json = self.cmd.run("git", ["status", "--json"], cwd=str(self.project_dir), env=bridge_env)
+            assert git_status_json.success, git_status_json.stderr
+            git_status_data = json.loads(git_status_json.stdout)
+            assert git_status_data["state"] in {"clean", "dirty", "not_initialized"}
+            assert "raw_status" in git_status_data
+
+            git_sync_json = self.cmd.run("git", ["sync", "--json"], cwd=str(self.project_dir), env=bridge_env)
+            assert not git_sync_json.success
+            git_sync_data = json.loads(git_sync_json.stdout)
+            assert git_sync_data["command"] == "sync"
+            assert git_sync_data["status"] == "failed"
         finally:
             service.stop()
 
@@ -223,6 +285,180 @@ class TestServiceMode:
             updated_repo_content = repo_skill_file.read_text(encoding="utf-8")
             assert "<!-- updated via service mode -->" in updated_repo_content
             assert updated_repo_content != initial_repo_content
+
+            feedback_all_result = self.cmd.run(
+                "feedback",
+                ["--all", "--force", "--json"],
+                cwd=str(self.consumer_project_dir),
+                env=bridge_env,
+            )
+            assert feedback_all_result.success, feedback_all_result.stderr
+            assert '"total": 1' in feedback_all_result.stdout
+            assert '"failed": 0' in feedback_all_result.stdout
+
+            push_preview = self.cmd.run(
+                "push",
+                ["--dry-run", "--json"],
+                cwd=str(self.consumer_project_dir),
+                env=bridge_env,
+            )
+            assert push_preview.success, push_preview.stderr
+            push_data = json.loads(push_preview.stdout)
+            assert push_data["status"] == "planned"
+            assert push_data["has_changes"] is True
+            assert any("service-skill" in item for item in push_data["changed_files"])
+        finally:
+            service.stop()
+
+    def test_service_bridge_register_and_import_flow(self):
+        init_result = self.cmd.run("init", cwd=str(self.project_dir), env=self.service_env)
+        assert init_result.success, init_result.stderr
+
+        skills_dir = self.project_dir / ".agents" / "skills"
+        skills_dir.mkdir(parents=True, exist_ok=True)
+        docs_dir = self.project_dir / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        (docs_dir / "service.md").write_text("# Service Doc\n", encoding="utf-8")
+        manual_dir = skills_dir / "service-register"
+        manual_dir.mkdir(parents=True, exist_ok=True)
+        (manual_dir / "SKILL.md").write_text(
+            """---
+name: service-register
+description: Service bridge register skill.
+compatibility: Compatible with open_code
+metadata:
+  version: "1.0.0"
+  author: "tester"
+---
+# Service Register
+
+Use /home/tester/workspace/docs/service.md during setup.
+Read [service doc](docs/service.md).
+""",
+            encoding="utf-8",
+        )
+        imported_dir = skills_dir / "service-import"
+        imported_dir.mkdir(parents=True, exist_ok=True)
+        (imported_dir / "SKILL.md").write_text(
+            "# Service Import\n\nLegacy service import body.\n",
+            encoding="utf-8",
+        )
+
+        service = self._start_service()
+        try:
+            bridge_env = self.client_env.copy()
+            bridge_env["SKILL_HUB_SERVICE_URL"] = service.base_url
+
+            lint_result = self.cmd.run(
+                "lint",
+                [".", "--paths", "--project-root", "/home/tester/workspace", "--fix"],
+                cwd=str(self.project_dir),
+                env=bridge_env,
+            )
+            assert lint_result.success, lint_result.stderr
+            assert "rewritten:     1" in lint_result.stdout
+            assert "docs/service.md" in (manual_dir / "SKILL.md").read_text(encoding="utf-8")
+
+            register_result = self.cmd.run(
+                "register",
+                ["service-register"],
+                cwd=str(self.project_dir),
+                env=bridge_env,
+            )
+            assert register_result.success, register_result.stderr
+            assert "已登记到项目状态" in register_result.stdout
+
+            validate_result = self.cmd.run(
+                "validate",
+                ["service-register", "--links", "--json"],
+                cwd=str(self.project_dir),
+                env=bridge_env,
+            )
+            assert validate_result.success, validate_result.stderr
+            assert '"link_issue_count": 0' in validate_result.stdout
+
+            audit_path = self.project_dir / ".agents" / "service-audit.md"
+            audit_result = self.cmd.run(
+                "audit",
+                [".agents/skills", "--output", str(audit_path)],
+                cwd=str(self.project_dir),
+                env=bridge_env,
+            )
+            assert audit_result.success, audit_result.stderr
+            assert audit_path.exists()
+            assert "Skill Hub Audit Report" in audit_path.read_text(encoding="utf-8")
+
+            import_result = self.cmd.run(
+                "import",
+                [".agents/skills", "--fix-frontmatter", "--archive", "--force"],
+                cwd=str(self.project_dir),
+                env=bridge_env,
+            )
+            assert import_result.success, import_result.stderr
+            assert "discovered: 2" in import_result.stdout
+            assert "failed:     0" in import_result.stdout
+
+            repo_skills = Path(self.service_home) / ".skill-hub" / "repositories" / "main" / "skills"
+            assert (repo_skills / "service-register" / "SKILL.md").exists()
+            imported_skill = repo_skills / "service-import" / "SKILL.md"
+            assert imported_skill.exists()
+            assert "name: service-import" in imported_skill.read_text(encoding="utf-8")
+
+            status_result = self.cmd.run("status", ["--json"], cwd=str(self.project_dir), env=bridge_env)
+            assert status_result.success, status_result.stderr
+            assert "service-register" in status_result.stdout
+            assert "service-import" in status_result.stdout
+        finally:
+            service.stop()
+
+    def test_service_bridge_dedupe_and_sync_copies_flow(self):
+        init_result = self.cmd.run("init", cwd=str(self.project_dir), env=self.service_env)
+        assert init_result.success, init_result.stderr
+
+        root_skill_dir = self.project_dir / ".agents" / "skills" / "service-dup"
+        child_skill_dir = self.project_dir / "child" / ".agents" / "skills" / "service-dup"
+        root_skill_dir.mkdir(parents=True, exist_ok=True)
+        child_skill_dir.mkdir(parents=True, exist_ok=True)
+        root_content = """---
+name: service-dup
+description: Canonical service duplicate skill.
+compatibility: Compatible with open_code
+metadata:
+  version: "1.0.0"
+  author: "tester"
+---
+# service-dup
+
+canonical service body
+"""
+        child_content = root_content.replace("canonical service body", "child service body")
+        (root_skill_dir / "SKILL.md").write_text(root_content, encoding="utf-8")
+        child_skill_file = child_skill_dir / "SKILL.md"
+        child_skill_file.write_text(child_content, encoding="utf-8")
+
+        service = self._start_service()
+        try:
+            bridge_env = self.client_env.copy()
+            bridge_env["SKILL_HUB_SERVICE_URL"] = service.base_url
+
+            dedupe_result = self.cmd.run(
+                "dedupe",
+                [".", "--canonical", ".agents/skills", "--json"],
+                cwd=str(self.project_dir),
+                env=bridge_env,
+            )
+            assert dedupe_result.success, dedupe_result.stderr
+            assert '"conflicts": 1' in dedupe_result.stdout
+
+            sync_result = self.cmd.run(
+                "sync-copies",
+                ["--canonical", ".agents/skills", "--scope", "."],
+                cwd=str(self.project_dir),
+                env=bridge_env,
+            )
+            assert sync_result.success, sync_result.stderr
+            assert "synced:    1" in sync_result.stdout
+            assert child_skill_file.read_text(encoding="utf-8") == root_content
         finally:
             service.stop()
 
