@@ -99,6 +99,27 @@ func completeEnabledSkillIDsForCwd(cmd *cobra.Command, args []string, toComplete
 	return filterPrefix(ids, toComplete), shellCompNoFile
 }
 
+func completeLocalSkillIDsForCwd(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, shellCompNoFile
+	}
+	entries, err := os.ReadDir(filepath.Join(cwd, ".agents", "skills"))
+	if err != nil {
+		return nil, shellCompNoFile
+	}
+	var ids []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(cwd, ".agents", "skills", entry.Name(), "SKILL.md")); err == nil {
+			ids = append(ids, entry.Name())
+		}
+	}
+	return filterPrefix(ids, toComplete), shellCompNoFile
+}
+
 func completeTargetValues(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return filterPrefix(targetValues, toComplete), shellCompNoFile
 }

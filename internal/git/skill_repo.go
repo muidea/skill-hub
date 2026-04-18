@@ -59,6 +59,10 @@ func (sr *SkillRepository) Sync() error {
 	return nil
 }
 
+func (sr *SkillRepository) CheckUpdates() (*RemoteUpdateStatus, error) {
+	return sr.repo.CheckRemoteUpdates()
+}
+
 // PushChanges 推送本地更改到远程仓库
 func (sr *SkillRepository) PushChanges(message string) error {
 	if !sr.repo.IsInitialized() {

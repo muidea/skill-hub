@@ -24,6 +24,17 @@ type Repository struct {
 	remoteName string
 }
 
+type RemoteUpdateStatus struct {
+	Status       string `json:"status"`
+	Message      string `json:"message,omitempty"`
+	RemoteURL    string `json:"remote_url,omitempty"`
+	LocalCommit  string `json:"local_commit,omitempty"`
+	RemoteCommit string `json:"remote_commit,omitempty"`
+	HasUpdates   bool   `json:"has_updates"`
+	Ahead        int    `json:"ahead"`
+	Behind       int    `json:"behind"`
+}
+
 // NewRepository 创建或打开一个Git仓库
 func NewRepository(repoPath string) (*Repository, error) {
 	// 确保目录存在
@@ -213,19 +224,9 @@ func (r *Repository) Pull() error {
 		return fmt.Errorf("获取工作树失败: %w", err)
 	}
 
-	// 获取认证信息
-	var auth transport.AuthMethod
-	if strings.HasPrefix(r.remoteURL, "git@") || strings.Contains(r.remoteURL, "ssh://") {
-		auth, err = r.getSSHAuth()
-		if err != nil {
-			return fmt.Errorf("SSH认证失败: %w", err)
-		}
-	} else {
-		httpAuth, err := r.getAuth()
-		if err != nil {
-			return err
-		}
-		auth = httpAuth
+	auth, err := r.authMethod()
+	if err != nil {
+		return err
 	}
 
 	err = worktree.Pull(&git.PullOptions{
@@ -254,6 +255,126 @@ func (r *Repository) Pull() error {
 	return nil
 }
 
+func (r *Repository) CheckRemoteUpdates() (*RemoteUpdateStatus, error) {
+	result := &RemoteUpdateStatus{
+		Status:    "unknown",
+		RemoteURL: r.remoteURL,
+	}
+	if r.remoteURL == "" {
+		result.Status = "no_remote"
+		result.Message = "未设置远程仓库URL"
+		return result, nil
+	}
+	if !r.IsInitialized() {
+		result.Status = "not_initialized"
+		result.Message = "技能仓库未初始化"
+		return result, nil
+	}
+
+	auth, err := r.authMethod()
+	if err != nil {
+		return nil, err
+	}
+	err = r.repo.Fetch(&git.FetchOptions{
+		RemoteName: r.remoteName,
+		Auth:       auth,
+		Progress:   nil,
+	})
+	if err != nil && err != git.NoErrAlreadyUpToDate {
+		return nil, fmt.Errorf("检查远程更新失败: %w", err)
+	}
+
+	localRef, err := r.repo.Head()
+	if err != nil {
+		return nil, fmt.Errorf("获取本地HEAD失败: %w", err)
+	}
+	remoteRef, err := r.repo.Reference(plumbing.NewRemoteReferenceName(r.remoteName, "main"), true)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程分支失败: %w", err)
+	}
+
+	localHash := localRef.Hash()
+	remoteHash := remoteRef.Hash()
+	result.LocalCommit = localHash.String()
+	result.RemoteCommit = remoteHash.String()
+	if localHash == remoteHash {
+		result.Status = "up_to_date"
+		result.Message = "默认仓库已是最新"
+		return result, nil
+	}
+
+	ahead, behind, err := r.countAheadBehind(localHash, remoteHash)
+	if err != nil {
+		return nil, err
+	}
+	result.Ahead = ahead
+	result.Behind = behind
+	result.HasUpdates = behind > 0
+	switch {
+	case behind > 0 && ahead > 0:
+		result.Status = "divergent"
+		result.Message = "默认仓库与远程存在分叉"
+	case behind > 0:
+		result.Status = "updates_available"
+		result.Message = "远程存在可拉取更新"
+	case ahead > 0:
+		result.Status = "ahead"
+		result.Message = "本地存在未推送提交"
+	default:
+		result.Status = "unknown"
+		result.Message = "无法判断默认仓库更新状态"
+	}
+	return result, nil
+}
+
+func (r *Repository) countAheadBehind(localHash, remoteHash plumbing.Hash) (int, int, error) {
+	localReachable, err := r.reachableCommits(localHash)
+	if err != nil {
+		return 0, 0, err
+	}
+	remoteReachable, err := r.reachableCommits(remoteHash)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	ahead := 0
+	for hash := range localReachable {
+		if !remoteReachable[hash] {
+			ahead++
+		}
+	}
+	behind := 0
+	for hash := range remoteReachable {
+		if !localReachable[hash] {
+			behind++
+		}
+	}
+	return ahead, behind, nil
+}
+
+func (r *Repository) reachableCommits(start plumbing.Hash) (map[plumbing.Hash]bool, error) {
+	seen := map[plumbing.Hash]bool{}
+	stack := []plumbing.Hash{start}
+	for len(stack) > 0 {
+		hash := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if seen[hash] {
+			continue
+		}
+		seen[hash] = true
+		commit, err := r.repo.CommitObject(hash)
+		if err != nil {
+			return nil, fmt.Errorf("读取提交对象失败: %w", err)
+		}
+		for _, parent := range commit.ParentHashes {
+			if !seen[parent] {
+				stack = append(stack, parent)
+			}
+		}
+	}
+	return seen, nil
+}
+
 // Push 推送本地更改
 func (r *Repository) Push() error {
 	if r.remoteURL == "" {
@@ -261,22 +382,9 @@ func (r *Repository) Push() error {
 	}
 
 	// 根据URL类型选择认证方式
-	var auth transport.AuthMethod
-	var err error
-
-	if strings.HasPrefix(r.remoteURL, "git@") || strings.Contains(r.remoteURL, "ssh://") {
-		// SSH URL，使用SSH认证
-		auth, err = r.getSSHAuth()
-		if err != nil {
-			return fmt.Errorf("SSH认证失败: %w", err)
-		}
-	} else {
-		// HTTP/HTTPS URL，使用HTTP认证
-		httpAuth, err := r.getAuth()
-		if err != nil {
-			return err
-		}
-		auth = httpAuth
+	auth, err := r.authMethod()
+	if err != nil {
+		return err
 	}
 
 	err = r.repo.Push(&git.PushOptions{
@@ -308,6 +416,20 @@ func (r *Repository) Push() error {
 	}
 
 	return nil
+}
+
+func (r *Repository) authMethod() (transport.AuthMethod, error) {
+	if strings.HasPrefix(r.remoteURL, "git@") || strings.Contains(r.remoteURL, "ssh://") {
+		auth, err := r.getSSHAuth()
+		if err != nil {
+			return nil, fmt.Errorf("SSH认证失败: %w", err)
+		}
+		return auth, nil
+	}
+	if !strings.HasPrefix(r.remoteURL, "http://") && !strings.HasPrefix(r.remoteURL, "https://") {
+		return nil, nil
+	}
+	return r.getAuth()
 }
 
 // Commit 提交更改

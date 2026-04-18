@@ -87,6 +87,46 @@ func (c *Client) SetDefaultRepo(ctx context.Context, name string) error {
 	return err
 }
 
+func (c *Client) SkillRepositoryStatus(ctx context.Context) (*httpapibiz.SkillRepositoryStatusData, error) {
+	data, err := get[httpapibiz.SkillRepositoryStatusData](ctx, c, "/api/v1/skill-repository/status")
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) CheckSkillRepositoryUpdates(ctx context.Context) (*httpapibiz.SkillRepositoryCheckData, error) {
+	data, err := get[httpapibiz.SkillRepositoryCheckData](ctx, c, "/api/v1/skill-repository/sync-check")
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) SyncSkillRepositoryAndRefresh(ctx context.Context) (*httpapibiz.SyncSkillRepositoryData, error) {
+	data, err := post[httpapibiz.SyncSkillRepositoryData](ctx, c, "/api/v1/skill-repository/sync", nil)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) PushSkillRepositoryPreview(ctx context.Context) (*httpapibiz.PushSkillRepositoryPreviewData, error) {
+	data, err := get[httpapibiz.PushSkillRepositoryPreviewData](ctx, c, "/api/v1/skill-repository/push-preview")
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) PushSkillRepositoryChanges(ctx context.Context, req httpapibiz.PushSkillRepositoryRequest) (*httpapibiz.PushSkillRepositoryData, error) {
+	data, err := post[httpapibiz.PushSkillRepositoryData](ctx, c, "/api/v1/skill-repository/push", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
 func (c *Client) ListSkills(ctx context.Context, repoNames []string, target string) ([]spec.SkillMetadata, error) {
 	query := url.Values{}
 	if len(repoNames) > 0 {
@@ -163,6 +203,62 @@ func (c *Client) GetSkillDetail(ctx context.Context, skillID, repoName string) (
 
 func (c *Client) UseSkill(ctx context.Context, req httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error) {
 	data, err := post[httpapibiz.UseSkillData](ctx, c, "/api/v1/project-skills/use", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) RegisterSkill(ctx context.Context, req httpapibiz.RegisterSkillRequest) (*httpapibiz.RegisterSkillData, error) {
+	data, err := post[httpapibiz.RegisterSkillData](ctx, c, "/api/v1/project-skills/register", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) ImportSkills(ctx context.Context, req httpapibiz.ImportSkillsRequest) (*httpapibiz.ImportSkillsData, error) {
+	data, err := post[httpapibiz.ImportSkillsData](ctx, c, "/api/v1/project-skills/import", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) DedupeSkills(ctx context.Context, req httpapibiz.DedupeRequest) (*httpapibiz.DedupeData, error) {
+	data, err := post[httpapibiz.DedupeData](ctx, c, "/api/v1/project-skills/dedupe", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) SyncCopies(ctx context.Context, req httpapibiz.SyncCopiesRequest) (*httpapibiz.SyncCopiesData, error) {
+	data, err := post[httpapibiz.SyncCopiesData](ctx, c, "/api/v1/project-skills/sync-copies", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) LintPaths(ctx context.Context, req httpapibiz.PathLintRequest) (*httpapibiz.PathLintData, error) {
+	data, err := post[httpapibiz.PathLintData](ctx, c, "/api/v1/project-skills/lint-paths", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) ValidateProjectSkills(ctx context.Context, req httpapibiz.ValidateProjectSkillsRequest) (*httpapibiz.ValidateProjectSkillsData, error) {
+	data, err := post[httpapibiz.ValidateProjectSkillsData](ctx, c, "/api/v1/project-skills/validate", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) AuditProjectSkills(ctx context.Context, req httpapibiz.AuditProjectSkillsRequest) (*httpapibiz.AuditProjectSkillsData, error) {
+	data, err := post[httpapibiz.AuditProjectSkillsData](ctx, c, "/api/v1/project-skills/audit", req)
 	if err != nil {
 		return nil, err
 	}

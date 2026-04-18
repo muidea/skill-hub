@@ -2,12 +2,15 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	"github.com/muidea/skill-hub/pkg/errors"
 )
 
@@ -15,6 +18,7 @@ var (
 	pushMessage string
 	pushForce   bool
 	pushDryRun  bool
+	pushJSON    bool
 )
 
 var pushCmd = &cobra.Command{
@@ -33,23 +37,37 @@ func init() {
 	pushCmd.Flags().StringVarP(&pushMessage, "message", "m", "", "提交消息。如未提供，使用默认消息\"更新技能\"")
 	pushCmd.Flags().BoolVar(&pushForce, "force", false, "强制推送，跳过确认检查")
 	pushCmd.Flags().BoolVar(&pushDryRun, "dry-run", false, "演习模式，仅显示将要推送的更改，不实际执行")
+	pushCmd.Flags().BoolVar(&pushJSON, "json", false, "以JSON格式输出推送摘要")
 }
 
 func runPush() error {
-	// 检查init依赖（规范4.13：该命令依赖init命令）
-	if err := CheckInitDependency(); err != nil {
+	if pushJSON {
+		if !pushDryRun && !pushForce {
+			return errors.NewWithCode("runPush", errors.ErrInvalidInput, "JSON推送写入需要 --force，或使用 --dry-run 预览")
+		}
+		summary, err := runPushStructured()
+		if writeErr := writeJSON(summary); writeErr != nil {
+			return writeErr
+		}
 		return err
 	}
 
-	// 初始化技能仓库
-	status, err := skillRepositoryStatus()
+	client, useService := hubClientIfAvailable()
+	if !useService {
+		// 检查init依赖（规范4.13：该命令依赖init命令）
+		if err := CheckInitDependency(); err != nil {
+			return err
+		}
+	}
+
+	status, err := pushRepositoryStatus(client, useService)
 	if err != nil {
 		return errors.Wrap(err, "获取仓库状态失败")
 	}
 
 	// 检查是否有未提交的更改
-	hasChanges := strings.Contains(status, " M ") || strings.Contains(status, "?? ") || strings.Contains(status, " D ")
-	if !hasChanges {
+	changedLines := pushChangedLines(status)
+	if len(changedLines) == 0 {
 		fmt.Println("没有要推送的更改")
 		return nil
 	}
@@ -58,19 +76,8 @@ func runPush() error {
 	fmt.Println("检测到以下未提交的更改:")
 	fmt.Println(strings.Repeat("-", 50))
 
-	// 解析状态输出，显示简要信息
-	lines := strings.Split(status, "\n")
-	changesFound := false
-	for _, line := range lines {
-		if strings.HasPrefix(line, " M ") || strings.HasPrefix(line, "?? ") || strings.HasPrefix(line, " D ") {
-			fmt.Println(line)
-			changesFound = true
-		}
-	}
-
-	if !changesFound {
-		// 如果状态格式不同，显示原始状态
-		fmt.Println(status)
+	for _, line := range changedLines {
+		fmt.Println(line)
 	}
 
 	fmt.Println(strings.Repeat("-", 50))
@@ -103,10 +110,155 @@ func runPush() error {
 
 	fmt.Println("正在提交并推送默认仓库更改...")
 
-	if err := pushSkillRepositoryChanges(message); err != nil {
+	if err := pushRepositoryChanges(client, useService, message); err != nil {
 		return errors.Wrap(err, "推送失败")
 	}
 
 	fmt.Println("✅ 默认仓库更改已成功推送到远程仓库")
 	return nil
+}
+
+type pushSummary struct {
+	DryRun       bool     `json:"dry_run"`
+	Force        bool     `json:"force"`
+	Message      string   `json:"message,omitempty"`
+	HasChanges   bool     `json:"has_changes"`
+	ChangedFiles []string `json:"changed_files"`
+	Status       string   `json:"status"`
+	Error        string   `json:"error,omitempty"`
+}
+
+func runPushStructured() (*pushSummary, error) {
+	summary := &pushSummary{
+		DryRun: pushDryRun,
+		Force:  pushForce,
+		Status: "unknown",
+	}
+
+	message := pushMessage
+	if message == "" {
+		message = "更新技能"
+	}
+	summary.Message = message
+
+	client, useService := hubClientIfAvailable()
+	if !useService {
+		if err := CheckInitDependency(); err != nil {
+			summary.Status = "failed"
+			summary.Error = err.Error()
+			return summary, err
+		}
+	}
+
+	status, err := pushRepositoryStatus(client, useService)
+	if err != nil {
+		summary.Status = "failed"
+		summary.Error = err.Error()
+		return summary, errors.Wrap(err, "获取仓库状态失败")
+	}
+
+	changedLines := pushChangedLines(status)
+	summary.HasChanges = len(changedLines) > 0
+	summary.ChangedFiles = pushChangedFiles(changedLines)
+	if !summary.HasChanges {
+		summary.Status = "no_changes"
+		return summary, nil
+	}
+
+	if pushDryRun {
+		summary.Status = "planned"
+		return summary, nil
+	}
+
+	var pushErr error
+	if useService {
+		_, pushErr = client.PushSkillRepositoryChanges(context.Background(), httpapibiz.PushSkillRepositoryRequest{
+			Message:              message,
+			Confirm:              true,
+			ExpectedChangedFiles: summary.ChangedFiles,
+		})
+	} else {
+		pushErr = runSilencingStdout(func() error {
+			return pushSkillRepositoryChanges(message)
+		})
+	}
+	if pushErr != nil {
+		summary.Status = "failed"
+		summary.Error = pushErr.Error()
+		return summary, errors.Wrap(pushErr, "推送失败")
+	}
+
+	summary.Status = "pushed"
+	return summary, nil
+}
+
+func pushRepositoryStatus(client serviceBridgeClient, useService bool) (string, error) {
+	if useService {
+		data, err := client.SkillRepositoryStatus(context.Background())
+		if err != nil {
+			return "", err
+		}
+		return data.Status, nil
+	}
+	return skillRepositoryStatus()
+}
+
+func pushRepositoryChanges(client serviceBridgeClient, useService bool, message string) error {
+	if useService {
+		_, err := client.PushSkillRepositoryChanges(context.Background(), httpapibiz.PushSkillRepositoryRequest{Message: message, Confirm: true})
+		return err
+	}
+	return pushSkillRepositoryChanges(message)
+}
+
+func pushChangedLines(status string) []string {
+	var changed []string
+	for _, line := range strings.Split(status, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if isPushChangeLine(line) {
+			changed = append(changed, line)
+		}
+	}
+	return changed
+}
+
+func pushChangedFiles(changedLines []string) []string {
+	files := make([]string, 0, len(changedLines))
+	for _, line := range changedLines {
+		if len(line) > 3 {
+			files = append(files, strings.TrimSpace(line[3:]))
+			continue
+		}
+		files = append(files, strings.TrimSpace(line))
+	}
+	return files
+}
+
+func isPushChangeLine(line string) bool {
+	for _, prefix := range []string{" M ", "?? ", " D ", "M  ", "A  ", "D  ", "R  ", "C  ", "AM ", "MM ", "AD ", "MD "} {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func runSilencingStdout(fn func() error) error {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		return fn()
+	}
+	os.Stdout = w
+	done := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(io.Discard, r)
+		close(done)
+	}()
+	err = fn()
+	_ = w.Close()
+	os.Stdout = oldStdout
+	<-done
+	_ = r.Close()
+	return err
 }

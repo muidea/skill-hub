@@ -23,6 +23,11 @@ type serviceBridgeClient interface {
 	EnableRepo(ctx context.Context, name string) error
 	DisableRepo(ctx context.Context, name string) error
 	SetDefaultRepo(ctx context.Context, name string) error
+	SkillRepositoryStatus(ctx context.Context) (*httpapibiz.SkillRepositoryStatusData, error)
+	CheckSkillRepositoryUpdates(ctx context.Context) (*httpapibiz.SkillRepositoryCheckData, error)
+	SyncSkillRepositoryAndRefresh(ctx context.Context) (*httpapibiz.SyncSkillRepositoryData, error)
+	PushSkillRepositoryPreview(ctx context.Context) (*httpapibiz.PushSkillRepositoryPreviewData, error)
+	PushSkillRepositoryChanges(ctx context.Context, req httpapibiz.PushSkillRepositoryRequest) (*httpapibiz.PushSkillRepositoryData, error)
 	ListSkills(ctx context.Context, repoNames []string, target string) ([]spec.SkillMetadata, error)
 	SearchRemoteSkills(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error)
 	GetProjectStatus(ctx context.Context, projectPath, skillID string) (*httpapibiz.ProjectStatusData, error)
@@ -30,6 +35,13 @@ type serviceBridgeClient interface {
 	FindSkillCandidates(ctx context.Context, skillID string) ([]spec.SkillMetadata, error)
 	GetSkillDetail(ctx context.Context, skillID, repoName string) (*spec.Skill, error)
 	UseSkill(ctx context.Context, req httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error)
+	RegisterSkill(ctx context.Context, req httpapibiz.RegisterSkillRequest) (*httpapibiz.RegisterSkillData, error)
+	ImportSkills(ctx context.Context, req httpapibiz.ImportSkillsRequest) (*httpapibiz.ImportSkillsData, error)
+	DedupeSkills(ctx context.Context, req httpapibiz.DedupeRequest) (*httpapibiz.DedupeData, error)
+	SyncCopies(ctx context.Context, req httpapibiz.SyncCopiesRequest) (*httpapibiz.SyncCopiesData, error)
+	LintPaths(ctx context.Context, req httpapibiz.PathLintRequest) (*httpapibiz.PathLintData, error)
+	ValidateProjectSkills(ctx context.Context, req httpapibiz.ValidateProjectSkillsRequest) (*httpapibiz.ValidateProjectSkillsData, error)
+	AuditProjectSkills(ctx context.Context, req httpapibiz.AuditProjectSkillsRequest) (*httpapibiz.AuditProjectSkillsData, error)
 	ApplyProject(ctx context.Context, req httpapibiz.ApplyProjectRequest) (*httpapibiz.ApplyProjectData, error)
 	PreviewFeedback(ctx context.Context, req httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error)
 	ApplyFeedback(ctx context.Context, req httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error)
@@ -71,6 +83,26 @@ func (h *hubBridgeClient) SetDefaultRepo(ctx context.Context, name string) error
 	return h.client.Service().SetDefaultRepo(ctx, name)
 }
 
+func (h *hubBridgeClient) SkillRepositoryStatus(ctx context.Context) (*httpapibiz.SkillRepositoryStatusData, error) {
+	return h.client.Service().SkillRepositoryStatus(ctx)
+}
+
+func (h *hubBridgeClient) CheckSkillRepositoryUpdates(ctx context.Context) (*httpapibiz.SkillRepositoryCheckData, error) {
+	return h.client.Service().CheckSkillRepositoryUpdates(ctx)
+}
+
+func (h *hubBridgeClient) SyncSkillRepositoryAndRefresh(ctx context.Context) (*httpapibiz.SyncSkillRepositoryData, error) {
+	return h.client.Service().SyncSkillRepositoryAndRefresh(ctx)
+}
+
+func (h *hubBridgeClient) PushSkillRepositoryPreview(ctx context.Context) (*httpapibiz.PushSkillRepositoryPreviewData, error) {
+	return h.client.Service().PushSkillRepositoryPreview(ctx)
+}
+
+func (h *hubBridgeClient) PushSkillRepositoryChanges(ctx context.Context, req httpapibiz.PushSkillRepositoryRequest) (*httpapibiz.PushSkillRepositoryData, error) {
+	return h.client.Service().PushSkillRepositoryChanges(ctx, req)
+}
+
 func (h *hubBridgeClient) ListSkills(ctx context.Context, repoNames []string, target string) ([]spec.SkillMetadata, error) {
 	return h.client.Service().ListSkills(ctx, repoNames, target)
 }
@@ -97,6 +129,34 @@ func (h *hubBridgeClient) GetSkillDetail(ctx context.Context, skillID, repoName 
 
 func (h *hubBridgeClient) UseSkill(ctx context.Context, req httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error) {
 	return h.client.Service().UseSkill(ctx, req)
+}
+
+func (h *hubBridgeClient) RegisterSkill(ctx context.Context, req httpapibiz.RegisterSkillRequest) (*httpapibiz.RegisterSkillData, error) {
+	return h.client.Service().RegisterSkill(ctx, req)
+}
+
+func (h *hubBridgeClient) ImportSkills(ctx context.Context, req httpapibiz.ImportSkillsRequest) (*httpapibiz.ImportSkillsData, error) {
+	return h.client.Service().ImportSkills(ctx, req)
+}
+
+func (h *hubBridgeClient) DedupeSkills(ctx context.Context, req httpapibiz.DedupeRequest) (*httpapibiz.DedupeData, error) {
+	return h.client.Service().DedupeSkills(ctx, req)
+}
+
+func (h *hubBridgeClient) SyncCopies(ctx context.Context, req httpapibiz.SyncCopiesRequest) (*httpapibiz.SyncCopiesData, error) {
+	return h.client.Service().SyncCopies(ctx, req)
+}
+
+func (h *hubBridgeClient) LintPaths(ctx context.Context, req httpapibiz.PathLintRequest) (*httpapibiz.PathLintData, error) {
+	return h.client.Service().LintPaths(ctx, req)
+}
+
+func (h *hubBridgeClient) ValidateProjectSkills(ctx context.Context, req httpapibiz.ValidateProjectSkillsRequest) (*httpapibiz.ValidateProjectSkillsData, error) {
+	return h.client.Service().ValidateProjectSkills(ctx, req)
+}
+
+func (h *hubBridgeClient) AuditProjectSkills(ctx context.Context, req httpapibiz.AuditProjectSkillsRequest) (*httpapibiz.AuditProjectSkillsData, error) {
+	return h.client.Service().AuditProjectSkills(ctx, req)
 }
 
 func (h *hubBridgeClient) ApplyProject(ctx context.Context, req httpapibiz.ApplyProjectRequest) (*httpapibiz.ApplyProjectData, error) {

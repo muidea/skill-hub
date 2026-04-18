@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -22,7 +23,8 @@ var gitSyncCmd = &cobra.Command{
 	Short: "同步技能仓库",
 	Long:  "从远程仓库拉取最新技能，更新本地副本。",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runGitSync()
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		return runGitSyncWithOptions(jsonOutput)
 	},
 }
 
@@ -31,7 +33,8 @@ var gitStatusCmd = &cobra.Command{
 	Short: "查看仓库状态",
 	Long:  "显示技能Git仓库的当前状态，包括未提交的更改。",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runGitStatus()
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		return runGitStatusWithOptions(jsonOutput)
 	},
 }
 
@@ -58,7 +61,8 @@ var gitPullCmd = &cobra.Command{
 	Short: "拉取更新",
 	Long:  "从远程技能仓库拉取最新更改。",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runGitPull()
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		return runGitPullWithOptions(jsonOutput)
 	},
 }
 
@@ -84,31 +88,128 @@ func init() {
 	gitCmd.AddCommand(gitPullCmd)
 	gitCmd.AddCommand(gitRemoteCmd)
 
+	gitSyncCmd.Flags().Bool("json", false, "以JSON格式输出同步摘要")
+	gitStatusCmd.Flags().Bool("json", false, "以JSON格式输出仓库状态")
+	gitPullCmd.Flags().Bool("json", false, "以JSON格式输出拉取摘要")
 	gitRemoteCmd.Flags().BoolP("verbose", "v", false, "显示详细远程仓库信息")
 }
 
 func runGitSync() error {
-	// 检查init依赖（规范4.14：该命令依赖init命令）
-	if err := CheckInitDependency(); err != nil {
+	return runGitSyncWithOptions(false)
+}
+
+func runGitSyncWithOptions(jsonOutput bool) error {
+	return runGitRepositorySync("sync", jsonOutput)
+}
+
+func runGitRepositorySync(command string, jsonOutput bool) error {
+	if jsonOutput {
+		summary, err := runGitRepositorySyncStructured(command)
+		if writeErr := writeJSON(summary); writeErr != nil {
+			return writeErr
+		}
 		return err
 	}
 
-	return syncSkillRepositoryAndRefresh()
+	client, useService := hubClientIfAvailable()
+	if !useService {
+		// 检查init依赖（规范4.14：该命令依赖init命令）
+		if err := CheckInitDependency(); err != nil {
+			return err
+		}
+	}
+	_, err := pullSyncDefaultRepository(client, useService)
+	return err
+}
+
+type gitSyncSummary struct {
+	Command    string `json:"command"`
+	Status     string `json:"status"`
+	SkillCount int    `json:"skill_count,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+func runGitRepositorySyncStructured(command string) (*gitSyncSummary, error) {
+	summary := &gitSyncSummary{Command: command, Status: "unknown"}
+
+	client, useService := hubClientIfAvailable()
+	if !useService {
+		if err := CheckInitDependency(); err != nil {
+			summary.Status = "failed"
+			summary.Error = err.Error()
+			return summary, err
+		}
+	}
+
+	skillCount, err := pullSyncDefaultRepositoryQuiet(client, useService)
+	if err != nil {
+		summary.Status = "failed"
+		summary.Error = err.Error()
+		return summary, errors.Wrap(err, "同步技能仓库失败")
+	}
+	summary.Status = "synced"
+	summary.SkillCount = skillCount
+	return summary, nil
 }
 
 func runGitStatus() error {
-	// 检查init依赖（规范4.14：该命令依赖init命令）
-	if err := CheckInitDependency(); err != nil {
-		return err
+	return runGitStatusWithOptions(false)
+}
+
+func runGitStatusWithOptions(jsonOutput bool) error {
+	client, useService := hubClientIfAvailable()
+	if !useService {
+		// 检查init依赖（规范4.14：该命令依赖init命令）
+		if err := CheckInitDependency(); err != nil {
+			return err
+		}
 	}
 
-	status, err := skillRepositoryStatus()
+	status, err := gitRepositoryStatus(client, useService)
 	if err != nil {
 		return errors.Wrap(err, "获取状态失败")
 	}
 
+	if jsonOutput {
+		return writeJSON(buildGitStatusSummary(status))
+	}
+
 	fmt.Println(status)
 	return nil
+}
+
+type gitStatusSummary struct {
+	State        string   `json:"state"`
+	HasChanges   bool     `json:"has_changes"`
+	ChangedFiles []string `json:"changed_files"`
+	RawStatus    string   `json:"raw_status"`
+}
+
+func gitRepositoryStatus(client serviceBridgeClient, useService bool) (string, error) {
+	if useService {
+		data, err := client.SkillRepositoryStatus(context.Background())
+		if err != nil {
+			return "", err
+		}
+		return data.Status, nil
+	}
+	return skillRepositoryStatus()
+}
+
+func buildGitStatusSummary(status string) gitStatusSummary {
+	changedLines := pushChangedLines(status)
+	state := "clean"
+	if strings.Contains(status, "技能仓库未初始化") {
+		state = "not_initialized"
+	} else if len(changedLines) > 0 {
+		state = "dirty"
+	}
+	return gitStatusSummary{
+		State:        state,
+		HasChanges:   len(changedLines) > 0,
+		ChangedFiles: pushChangedFiles(changedLines),
+		RawStatus:    status,
+	}
 }
 
 func runGitCommit() error {
@@ -164,12 +265,11 @@ func runGitPush() error {
 }
 
 func runGitPull() error {
-	// 检查init依赖（规范4.14：该命令依赖init命令）
-	if err := CheckInitDependency(); err != nil {
-		return err
-	}
+	return runGitPullWithOptions(false)
+}
 
-	return syncSkillRepositoryAndRefresh()
+func runGitPullWithOptions(jsonOutput bool) error {
+	return runGitRepositorySync("pull", jsonOutput)
 }
 
 func runGitRemoteSet(url string) error {

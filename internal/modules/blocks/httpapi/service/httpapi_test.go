@@ -11,6 +11,7 @@ import (
 
 	"github.com/muidea/skill-hub/internal/config"
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
+	apperrors "github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
 )
 
@@ -136,5 +137,48 @@ func TestHTTPAPI_FeedbackRequiresFields(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHTTPAPI_PushRequiresConfirm(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/skill-repository/push", bytes.NewBufferString(`{"message":"test"}`))
+	rec := httptest.NewRecorder()
+
+	New().Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("confirm=true")) {
+		t.Fatalf("expected confirm error, got %s", rec.Body.String())
+	}
+}
+
+func TestWriteWrappedErrorUsesAppErrorCode(t *testing.T) {
+	rec := httptest.NewRecorder()
+
+	writeWrappedError(rec, apperrors.NewWithCode("test", apperrors.ErrSkillNotFound, "技能不存在"))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+	var payload map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if payload["code"] != string(apperrors.ErrSkillNotFound) {
+		t.Fatalf("expected code %q, got %q", apperrors.ErrSkillNotFound, payload["code"])
+	}
+	if payload["message"] != "技能不存在" {
+		t.Fatalf("expected app error message, got %q", payload["message"])
+	}
+}
+
+func TestSkillRepositoryChangedFiles(t *testing.T) {
+	status := "技能仓库状态:\n文件状态:\n M  skills/one/SKILL.md\n?? skills/two/SKILL.md\n D  skills/old/SKILL.md\n"
+	files := skillRepositoryChangedFiles(status)
+	want := []string{"skills/one/SKILL.md", "skills/two/SKILL.md", "skills/old/SKILL.md"}
+	if !sameStringSet(files, want) {
+		t.Fatalf("files = %#v, want %#v", files, want)
 	}
 }

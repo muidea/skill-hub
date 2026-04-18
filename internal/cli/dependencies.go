@@ -153,6 +153,10 @@ func syncSkillRepositoryAndRefresh() error {
 	return runtimeSvc.SyncSkillRepositoryAndRefresh()
 }
 
+func checkSkillRepositoryUpdates() (*gitpkg.RemoteUpdateStatus, error) {
+	return runtimeSvc.CheckSkillRepositoryUpdates()
+}
+
 func skillRepositoryStatus() (string, error) {
 	return runtimeSvc.SkillRepositoryStatus()
 }

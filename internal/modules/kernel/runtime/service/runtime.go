@@ -10,6 +10,8 @@ import (
 	projectapplyservice "github.com/muidea/skill-hub/internal/modules/kernel/project_apply/service"
 	projectfeedbackmodule "github.com/muidea/skill-hub/internal/modules/kernel/project_feedback"
 	projectfeedbackservice "github.com/muidea/skill-hub/internal/modules/kernel/project_feedback/service"
+	projectlifecyclemodule "github.com/muidea/skill-hub/internal/modules/kernel/project_lifecycle"
+	projectlifecycleservice "github.com/muidea/skill-hub/internal/modules/kernel/project_lifecycle/service"
 	projectstatemodule "github.com/muidea/skill-hub/internal/modules/kernel/project_state"
 	projectusemodule "github.com/muidea/skill-hub/internal/modules/kernel/project_use"
 	projectuseservice "github.com/muidea/skill-hub/internal/modules/kernel/project_use/service"
@@ -22,26 +24,28 @@ import (
 )
 
 type Runtime struct {
-	repositorySvc      *repositorymodule.Repository
-	projectApplySvc    *projectapplymodule.ProjectApply
-	projectFeedbackSvc *projectfeedbackmodule.ProjectFeedback
-	projectStateSvc    *projectstatemodule.ProjectState
-	projectUseSvc      *projectusemodule.ProjectUse
-	skillSvc           *skillmodule.Skill
-	adapterSvc         *adaptermodule.Adapter
-	gitSvc             *gitmodule.Git
+	repositorySvc       *repositorymodule.Repository
+	projectApplySvc     *projectapplymodule.ProjectApply
+	projectFeedbackSvc  *projectfeedbackmodule.ProjectFeedback
+	projectLifecycleSvc *projectlifecyclemodule.ProjectLifecycle
+	projectStateSvc     *projectstatemodule.ProjectState
+	projectUseSvc       *projectusemodule.ProjectUse
+	skillSvc            *skillmodule.Skill
+	adapterSvc          *adaptermodule.Adapter
+	gitSvc              *gitmodule.Git
 }
 
 func New() *Runtime {
 	return &Runtime{
-		repositorySvc:      repositorymodule.New(),
-		projectApplySvc:    projectapplymodule.New(),
-		projectFeedbackSvc: projectfeedbackmodule.New(),
-		projectStateSvc:    projectstatemodule.New(),
-		projectUseSvc:      projectusemodule.New(),
-		skillSvc:           skillmodule.New(),
-		adapterSvc:         adaptermodule.New(),
-		gitSvc:             gitmodule.New(),
+		repositorySvc:       repositorymodule.New(),
+		projectApplySvc:     projectapplymodule.New(),
+		projectFeedbackSvc:  projectfeedbackmodule.New(),
+		projectLifecycleSvc: projectlifecyclemodule.New(),
+		projectStateSvc:     projectstatemodule.New(),
+		projectUseSvc:       projectusemodule.New(),
+		skillSvc:            skillmodule.New(),
+		adapterSvc:          adaptermodule.New(),
+		gitSvc:              gitmodule.New(),
 	}
 }
 
@@ -169,6 +173,10 @@ func (r *Runtime) SyncSkillRepositoryAndRefresh() error {
 	return r.gitSvc.Service().SyncSkillRepositoryAndRefresh()
 }
 
+func (r *Runtime) CheckSkillRepositoryUpdates() (*gitpkg.RemoteUpdateStatus, error) {
+	return r.gitSvc.Service().CheckSkillRepositoryUpdates()
+}
+
 func (r *Runtime) SkillRepositoryStatus() (string, error) {
 	return r.gitSvc.Service().SkillRepositoryStatus()
 }
@@ -203,4 +211,32 @@ func (r *Runtime) PreviewFeedback(projectPath, skillID string) (*projectfeedback
 
 func (r *Runtime) ApplyFeedback(projectPath, skillID string) (*projectfeedbackservice.PreviewResult, error) {
 	return r.projectFeedbackSvc.Service().Apply(projectPath, skillID)
+}
+
+func (r *Runtime) RegisterProjectSkill(projectPath, skillID, target string, skipValidate bool) (*projectlifecycleservice.RegisterResult, error) {
+	return r.projectLifecycleSvc.Service().Register(projectPath, skillID, target, skipValidate)
+}
+
+func (r *Runtime) ImportProjectSkills(projectPath, skillsDir string, opts projectlifecycleservice.ImportOptions) (*projectlifecycleservice.ImportSummary, error) {
+	return r.projectLifecycleSvc.Service().Import(projectPath, skillsDir, opts)
+}
+
+func (r *Runtime) DedupeProjectSkills(scope string, opts projectlifecycleservice.DedupeOptions) (*projectlifecycleservice.DuplicateReport, error) {
+	return r.projectLifecycleSvc.Service().Dedupe(scope, opts)
+}
+
+func (r *Runtime) SyncProjectSkillCopies(opts projectlifecycleservice.SyncCopiesOptions) (*projectlifecycleservice.SyncCopiesResult, error) {
+	return r.projectLifecycleSvc.Service().SyncCopies(opts)
+}
+
+func (r *Runtime) LintProjectSkillPaths(opts projectlifecycleservice.PathLintOptions) (*projectlifecycleservice.PathLintReport, error) {
+	return r.projectLifecycleSvc.Service().LintPaths(opts)
+}
+
+func (r *Runtime) ValidateProjectSkills(opts projectlifecycleservice.ValidateOptions) (*projectlifecycleservice.ValidateReport, error) {
+	return r.projectLifecycleSvc.Service().ValidateProjectSkills(opts)
+}
+
+func (r *Runtime) AuditProjectSkills(opts projectlifecycleservice.AuditOptions) (*projectlifecycleservice.AuditReport, error) {
+	return r.projectLifecycleSvc.Service().Audit(opts)
 }

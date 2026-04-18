@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	httpapimodule "github.com/muidea/skill-hub/internal/modules/blocks/httpapi"
@@ -35,7 +37,7 @@ func (s *Server) Run(ctx context.Context, cfg Config) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           localOnlyHostGuard(mux, cfg.Host),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -50,4 +52,37 @@ func (s *Server) Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 	return nil
+}
+
+func localOnlyHostGuard(next http.Handler, bindHost string) http.Handler {
+	if !isLoopbackHost(bindHost) {
+		return next
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isLoopbackHost(r.Host) {
+			http.Error(w, "skill-hub serve only accepts loopback host headers", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isLoopbackHost(value string) bool {
+	host := normalizeHost(value)
+	if host == "" || strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func normalizeHost(value string) string {
+	value = strings.TrimSpace(value)
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		value = host
+	}
+	value = strings.Trim(value, "[]")
+	value = strings.TrimSuffix(value, ".")
+	return value
 }

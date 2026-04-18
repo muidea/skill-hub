@@ -15,6 +15,7 @@ import (
 	projectstatusmodule "github.com/muidea/skill-hub/internal/modules/kernel/project_status"
 	projectusemodule "github.com/muidea/skill-hub/internal/modules/kernel/project_use"
 	runtimemodule "github.com/muidea/skill-hub/internal/modules/kernel/runtime"
+	apperrors "github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
 )
 
@@ -43,6 +44,11 @@ func (h *HTTPAPI) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/health", h.handleHealth)
 	mux.HandleFunc("/api/v1/repos", h.handleRepos)
 	mux.HandleFunc("/api/v1/repos/", h.handleRepoActions)
+	mux.HandleFunc("/api/v1/skill-repository/status", h.handleSkillRepositoryStatus)
+	mux.HandleFunc("/api/v1/skill-repository/sync-check", h.handleCheckSkillRepository)
+	mux.HandleFunc("/api/v1/skill-repository/sync", h.handleSyncSkillRepository)
+	mux.HandleFunc("/api/v1/skill-repository/push-preview", h.handlePushSkillRepositoryPreview)
+	mux.HandleFunc("/api/v1/skill-repository/push", h.handlePushSkillRepository)
 	mux.HandleFunc("/api/v1/search", h.handleSearch)
 	mux.HandleFunc("/api/v1/skills", h.handleSkills)
 	mux.HandleFunc("/api/v1/skills/", h.handleSkillActions)
@@ -51,6 +57,13 @@ func (h *HTTPAPI) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/project-status", h.handleProjectStatus)
 	mux.HandleFunc("/api/v1/project-target", h.handleSetProjectTarget)
 	mux.HandleFunc("/api/v1/project-skills/use", h.handleUseSkill)
+	mux.HandleFunc("/api/v1/project-skills/register", h.handleRegisterSkill)
+	mux.HandleFunc("/api/v1/project-skills/import", h.handleImportSkills)
+	mux.HandleFunc("/api/v1/project-skills/dedupe", h.handleDedupeSkills)
+	mux.HandleFunc("/api/v1/project-skills/sync-copies", h.handleSyncCopies)
+	mux.HandleFunc("/api/v1/project-skills/lint-paths", h.handleLintPaths)
+	mux.HandleFunc("/api/v1/project-skills/validate", h.handleValidateProjectSkills)
+	mux.HandleFunc("/api/v1/project-skills/audit", h.handleAuditProjectSkills)
 	mux.HandleFunc("/api/v1/project-apply", h.handleApplyProject)
 	mux.HandleFunc("/api/v1/project-feedback/preview", h.handlePreviewFeedback)
 	mux.HandleFunc("/api/v1/project-feedback/apply", h.handleApplyFeedback)
@@ -161,6 +174,149 @@ func (h *HTTPAPI) handleRepoActions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, httpapibiz.Response[map[string]string]{Code: httpapibiz.CodeOK, Data: map[string]string{"status": "ok"}})
+}
+
+func (h *HTTPAPI) handleSkillRepositoryStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	status, err := h.runtimeSvc.Service().SkillRepositoryStatus()
+	if err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.SkillRepositoryStatusData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.SkillRepositoryStatusData{Status: status},
+	})
+}
+
+func (h *HTTPAPI) handleCheckSkillRepository(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	result, err := h.runtimeSvc.Service().CheckSkillRepositoryUpdates()
+	if err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.SkillRepositoryCheckData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.SkillRepositoryCheckData{
+			Status:       result.Status,
+			Message:      result.Message,
+			RemoteURL:    result.RemoteURL,
+			LocalCommit:  result.LocalCommit,
+			RemoteCommit: result.RemoteCommit,
+			HasUpdates:   result.HasUpdates,
+			Ahead:        result.Ahead,
+			Behind:       result.Behind,
+		},
+	})
+}
+
+func (h *HTTPAPI) handleSyncSkillRepository(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	if err := h.runtimeSvc.Service().SyncSkillRepositoryAndRefresh(); err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+	skillCount := 0
+	if defaultRepo, err := h.runtimeSvc.Service().DefaultRepository(); err == nil && defaultRepo != nil {
+		if skills, err := h.runtimeSvc.Service().ListSkillMetadata([]string{defaultRepo.Name}); err == nil {
+			skillCount = len(skills)
+		}
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.SyncSkillRepositoryData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.SyncSkillRepositoryData{Status: "synced", SkillCount: skillCount},
+	})
+}
+
+func (h *HTTPAPI) handlePushSkillRepositoryPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	preview, err := h.pushSkillRepositoryPreview()
+	if err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.PushSkillRepositoryPreviewData]{
+		Code: httpapibiz.CodeOK,
+		Data: preview,
+	})
+}
+
+func (h *HTTPAPI) handlePushSkillRepository(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.PushSkillRepositoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+	if !req.Confirm {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "推送默认仓库需要 confirm=true")
+		return
+	}
+	preview, err := h.pushSkillRepositoryPreview()
+	if err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+	if !preview.HasChanges {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "没有要推送的更改")
+		return
+	}
+	if len(req.ExpectedChangedFiles) > 0 && !sameStringSet(req.ExpectedChangedFiles, preview.ChangedFiles) {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "待推送文件已变化，请重新预览后再推送")
+		return
+	}
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		message = preview.SuggestedMessage
+	}
+	if err := h.runtimeSvc.Service().PushSkillRepositoryChanges(message); err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.PushSkillRepositoryData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.PushSkillRepositoryData{Status: "pushed", Message: message, ChangedFiles: preview.ChangedFiles},
+	})
+}
+
+func (h *HTTPAPI) pushSkillRepositoryPreview() (httpapibiz.PushSkillRepositoryPreviewData, error) {
+	status, err := h.runtimeSvc.Service().SkillRepositoryStatus()
+	if err != nil {
+		return httpapibiz.PushSkillRepositoryPreviewData{}, err
+	}
+	changedFiles := skillRepositoryChangedFiles(status)
+	preview := httpapibiz.PushSkillRepositoryPreviewData{
+		HasChanges:       len(changedFiles) > 0,
+		ChangedFiles:     changedFiles,
+		SuggestedMessage: "更新技能",
+		RawStatus:        status,
+	}
+	if defaultRepo, err := h.runtimeSvc.Service().DefaultRepository(); err == nil && defaultRepo != nil {
+		preview.DefaultRepo = defaultRepo.Name
+		preview.RemoteURL = defaultRepo.URL
+	}
+	return preview, nil
 }
 
 func (h *HTTPAPI) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -430,6 +586,199 @@ func (h *HTTPAPI) handleUseSkill(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *HTTPAPI) handleRegisterSkill(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.RegisterSkillRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+	if strings.TrimSpace(req.ProjectPath) == "" || strings.TrimSpace(req.SkillID) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 project_path 或 skill_id")
+		return
+	}
+
+	result, err := h.runtimeSvc.Service().RegisterProjectSkill(req.ProjectPath, req.SkillID, req.Target, req.SkipValidate)
+	if err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.RegisterSkillData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.RegisterSkillData{Item: result},
+	})
+}
+
+func (h *HTTPAPI) handleImportSkills(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.ImportSkillsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+	if strings.TrimSpace(req.ProjectPath) == "" || strings.TrimSpace(req.SkillsDir) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 project_path 或 skills_dir")
+		return
+	}
+
+	result, err := h.runtimeSvc.Service().ImportProjectSkills(req.ProjectPath, req.SkillsDir, req.Options)
+	if err != nil && result == nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.ImportSkillsData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.ImportSkillsData{Item: result},
+	})
+}
+
+func (h *HTTPAPI) handleDedupeSkills(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.DedupeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+	if strings.TrimSpace(req.Scope) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 scope")
+		return
+	}
+
+	result, err := h.runtimeSvc.Service().DedupeProjectSkills(req.Scope, req.Options)
+	if err != nil && result == nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.DedupeData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.DedupeData{Item: result},
+	})
+}
+
+func (h *HTTPAPI) handleSyncCopies(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.SyncCopiesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+	if strings.TrimSpace(req.Options.Scope) == "" || strings.TrimSpace(req.Options.Canonical) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 scope 或 canonical")
+		return
+	}
+
+	result, err := h.runtimeSvc.Service().SyncProjectSkillCopies(req.Options)
+	if err != nil && result == nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.SyncCopiesData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.SyncCopiesData{Item: result},
+	})
+}
+
+func (h *HTTPAPI) handleLintPaths(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.PathLintRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+	if strings.TrimSpace(req.Options.Scope) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 scope")
+		return
+	}
+
+	result, err := h.runtimeSvc.Service().LintProjectSkillPaths(req.Options)
+	if err != nil && result == nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.PathLintData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.PathLintData{Item: result},
+	})
+}
+
+func (h *HTTPAPI) handleValidateProjectSkills(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.ValidateProjectSkillsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+	if strings.TrimSpace(req.Options.ProjectPath) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 project_path")
+		return
+	}
+	if !req.Options.All && strings.TrimSpace(req.Options.SkillID) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 skill_id")
+		return
+	}
+
+	result, err := h.runtimeSvc.Service().ValidateProjectSkills(req.Options)
+	if err != nil && result == nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.ValidateProjectSkillsData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.ValidateProjectSkillsData{Item: result},
+	})
+}
+
+func (h *HTTPAPI) handleAuditProjectSkills(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.AuditProjectSkillsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+	if strings.TrimSpace(req.Options.ProjectPath) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 project_path")
+		return
+	}
+
+	result, err := h.runtimeSvc.Service().AuditProjectSkills(req.Options)
+	if err != nil && result == nil {
+		writeWrappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.AuditProjectSkillsData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.AuditProjectSkillsData{Item: result},
+	})
+}
+
 func (h *HTTPAPI) handleApplyProject(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
@@ -536,6 +885,48 @@ func filterSkillsByTarget(skills []spec.SkillMetadata, target string) []spec.Ski
 	return filtered
 }
 
+func skillRepositoryChangedFiles(status string) []string {
+	var files []string
+	for _, line := range strings.Split(status, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if !isSkillRepositoryChangeLine(line) {
+			continue
+		}
+		if len(line) > 3 {
+			files = append(files, strings.TrimSpace(line[3:]))
+		} else {
+			files = append(files, strings.TrimSpace(line))
+		}
+	}
+	return files
+}
+
+func isSkillRepositoryChangeLine(line string) bool {
+	for _, prefix := range []string{" M ", "?? ", " D ", "M  ", "A  ", "D  ", "R  ", "C  ", "AM ", "MM ", "AD ", "MD "} {
+		if strings.HasPrefix(line, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func sameStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	seen := map[string]int{}
+	for _, item := range left {
+		seen[item]++
+	}
+	for _, item := range right {
+		seen[item]--
+		if seen[item] < 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -550,5 +941,30 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 func writeWrappedError(w http.ResponseWriter, err error) {
-	writeError(w, http.StatusBadRequest, "REQUEST_FAILED", err.Error())
+	code := apperrors.Code(err)
+	if code == "" {
+		code = apperrors.ErrSystem
+	}
+	message := apperrors.Message(err)
+	if message == "" {
+		message = err.Error()
+	}
+	writeError(w, httpStatusForErrorCode(code), string(code), message)
+}
+
+func httpStatusForErrorCode(code apperrors.ErrorCode) int {
+	switch code {
+	case apperrors.ErrSkillNotFound, apperrors.ErrProjectNotFound, apperrors.ErrFileNotFound:
+		return http.StatusNotFound
+	case apperrors.ErrFilePermission:
+		return http.StatusForbidden
+	case apperrors.ErrNetwork, apperrors.ErrAPIRequest, apperrors.ErrGitRemote:
+		return http.StatusBadGateway
+	case apperrors.ErrNotImplemented:
+		return http.StatusNotImplemented
+	case apperrors.ErrSystem:
+		return http.StatusInternalServerError
+	default:
+		return http.StatusBadRequest
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -20,10 +21,12 @@ import (
 var (
 	feedbackDryRun bool
 	feedbackForce  bool
+	feedbackAll    bool
+	feedbackJSON   bool
 )
 
 var feedbackCmd = &cobra.Command{
-	Use:   "feedback <id>",
+	Use:   "feedback [id]",
 	Short: "将项目工作区技能修改内容更新至到本地仓库",
 	Long: `将项目工作区本地的技能修改同步回本地技能仓库。
 
@@ -35,9 +38,18 @@ var feedbackCmd = &cobra.Command{
 
 使用 --dry-run 参数演习模式，仅显示将要同步的差异。
 使用 --force 参数强制更新，即使有冲突也继续执行。`,
-	Args:              cobra.ExactArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		all, _ := cmd.Flags().GetBool("all")
+		if all {
+			return cobra.NoArgs(cmd, args)
+		}
+		return cobra.ExactArgs(1)(cmd, args)
+	},
 	ValidArgsFunction: completeEnabledSkillIDsForCwd,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if feedbackAll {
+			return runFeedbackAll()
+		}
 		return runFeedback(args[0])
 	},
 }
@@ -45,9 +57,28 @@ var feedbackCmd = &cobra.Command{
 func init() {
 	feedbackCmd.Flags().BoolVar(&feedbackDryRun, "dry-run", false, "演习模式，仅显示将要同步的差异")
 	feedbackCmd.Flags().BoolVar(&feedbackForce, "force", false, "强制更新，即使有冲突也继续执行")
+	feedbackCmd.Flags().BoolVar(&feedbackAll, "all", false, "反馈当前项目状态中登记的全部技能")
+	feedbackCmd.Flags().BoolVar(&feedbackJSON, "json", false, "以JSON格式输出反馈结果")
 }
 
 func runFeedback(skillID string) error {
+	if feedbackJSON {
+		if !feedbackForce && !feedbackDryRun {
+			return errors.NewWithCode("runFeedback", errors.ErrInvalidInput, "JSON反馈写入需要 --force，或使用 --dry-run 预览")
+		}
+		summary, err := runFeedbackStructured([]string{skillID}, false)
+		if writeErr := writeJSON(summary); writeErr != nil {
+			return writeErr
+		}
+		if err != nil {
+			return err
+		}
+		if summary.Failed > 0 {
+			return errors.NewWithCodef("runFeedback", errors.ErrValidation, "%d 个技能反馈失败", summary.Failed)
+		}
+		return nil
+	}
+
 	if client, ok := hubClientIfAvailable(); ok {
 		return runFeedbackViaService(client, skillID)
 	}
@@ -249,6 +280,109 @@ func runFeedback(skillID string) error {
 	return nil
 }
 
+type feedbackSummary struct {
+	ProjectPath string         `json:"project_path"`
+	DryRun      bool           `json:"dry_run"`
+	Force       bool           `json:"force"`
+	Total       int            `json:"total"`
+	Applied     int            `json:"applied"`
+	Skipped     int            `json:"skipped"`
+	Planned     int            `json:"planned"`
+	Failed      int            `json:"failed"`
+	Items       []feedbackItem `json:"items"`
+}
+
+type feedbackItem struct {
+	SkillID string                                `json:"skill_id"`
+	Status  string                                `json:"status"`
+	Preview *projectfeedbackservice.PreviewResult `json:"preview,omitempty"`
+	Result  *projectfeedbackservice.PreviewResult `json:"result,omitempty"`
+	Error   string                                `json:"error,omitempty"`
+}
+
+func runFeedbackAll() error {
+	if !feedbackForce && !feedbackDryRun {
+		return errors.NewWithCode("runFeedbackAll", errors.ErrInvalidInput, "批量反馈需要 --force，或使用 --dry-run 预览")
+	}
+	summary, err := runFeedbackStructured(nil, true)
+	if feedbackJSON {
+		if writeErr := writeJSON(summary); writeErr != nil {
+			return writeErr
+		}
+	} else {
+		renderFeedbackSummary(summary)
+	}
+	if err != nil {
+		return err
+	}
+	if summary.Failed > 0 {
+		return errors.NewWithCodef("runFeedbackAll", errors.ErrValidation, "%d 个技能反馈失败", summary.Failed)
+	}
+	return nil
+}
+
+func runFeedbackStructured(skillIDs []string, all bool) (*feedbackSummary, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, utils.GetCwdErr(err)
+	}
+	summary := &feedbackSummary{
+		ProjectPath: cwd,
+		DryRun:      feedbackDryRun,
+		Force:       feedbackForce,
+	}
+
+	if client, ok := hubClientIfAvailable(); ok {
+		if all {
+			statusData, statusErr := client.GetProjectStatus(context.Background(), cwd, "")
+			if statusErr != nil {
+				return summary, errors.Wrap(statusErr, "通过服务读取项目技能状态失败")
+			}
+			for _, item := range statusData.Item.Items {
+				skillIDs = append(skillIDs, item.SkillID)
+			}
+		}
+		runFeedbackItems(summary, skillIDs, func(skillID string) feedbackItem {
+			return feedbackOneViaService(client, cwd, skillID, false)
+		})
+		return summary, nil
+	}
+
+	ctx, err := RequireInitAndWorkspace(cwd, "")
+	if err != nil {
+		return summary, err
+	}
+	summary.ProjectPath = ctx.Cwd
+	if all {
+		for skillID := range ctx.ProjectState.Skills {
+			skillIDs = append(skillIDs, skillID)
+		}
+	}
+	runFeedbackItems(summary, skillIDs, func(skillID string) feedbackItem {
+		return feedbackOneLocal(ctx.Cwd, skillID, false)
+	})
+	return summary, nil
+}
+
+func runFeedbackItems(summary *feedbackSummary, skillIDs []string, fn func(string) feedbackItem) {
+	sort.Strings(skillIDs)
+	summary.Total = len(skillIDs)
+	for _, skillID := range skillIDs {
+		item := fn(skillID)
+		summary.Items = append(summary.Items, item)
+		switch item.Status {
+		case "applied":
+			summary.Applied++
+		case "skipped":
+			summary.Skipped++
+		case "planned":
+			summary.Planned++
+		case "failed":
+			summary.Failed++
+		}
+	}
+}
+
 type serviceFeedbackClient interface {
 	PreviewFeedback(ctx context.Context, req httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error)
 	ApplyFeedback(ctx context.Context, req httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error)
@@ -260,46 +394,126 @@ func runFeedbackViaService(client serviceFeedbackClient, skillID string) error {
 		return utils.GetCwdErr(err)
 	}
 
+	item := feedbackOneViaService(client, cwd, skillID, true)
+	if item.Error != "" {
+		return errors.NewWithCode("runFeedbackViaService", errors.ErrValidation, item.Error)
+	}
+	return nil
+}
+
+func feedbackOneViaService(client serviceFeedbackClient, projectPath, skillID string, render bool) feedbackItem {
 	req := httpapibiz.FeedbackRequest{
-		ProjectPath: cwd,
+		ProjectPath: projectPath,
 		SkillID:     skillID,
 	}
 
 	preview, err := client.PreviewFeedback(context.Background(), req)
 	if err != nil {
-		return errors.Wrap(err, "通过服务预览反馈失败")
+		return feedbackItem{SkillID: skillID, Status: "failed", Error: errors.Wrap(err, "通过服务预览反馈失败").Error()}
 	}
-	renderFeedbackPreview(preview.Item)
+	if render {
+		renderFeedbackPreview(preview.Item)
+	}
 
 	if preview.Item != nil && preview.Item.NoChanges {
-		fmt.Println("✅ 技能内容未修改")
-		return nil
+		if render {
+			fmt.Println("✅ 技能内容未修改")
+		}
+		return feedbackItem{SkillID: skillID, Status: "skipped", Preview: preview.Item}
 	}
 
 	if feedbackDryRun {
-		fmt.Println("\n✅ 演习模式完成，未进行实际修改")
-		return nil
+		if render {
+			fmt.Println("\n✅ 演习模式完成，未进行实际修改")
+		}
+		return feedbackItem{SkillID: skillID, Status: "planned", Preview: preview.Item}
 	}
 
-	if feedbackForce {
-		fmt.Println("\n🔧 强制模式，直接更新本地仓库...")
-	} else {
-		fmt.Print("\n是否将这些修改更新到本地仓库？ [y/N]: ")
-		var response string
-		fmt.Scanln(&response)
-		response = strings.TrimSpace(response)
-		if response != "y" && response != "Y" {
-			fmt.Println("❌ 取消反馈操作")
-			return nil
+	if render {
+		if feedbackForce {
+			fmt.Println("\n🔧 强制模式，直接更新本地仓库...")
+		} else if !confirmFeedback() {
+			return feedbackItem{SkillID: skillID, Status: "skipped", Preview: preview.Item}
 		}
 	}
 
 	result, err := client.ApplyFeedback(context.Background(), req)
 	if err != nil {
-		return errors.Wrap(err, "通过服务执行反馈失败")
+		return feedbackItem{SkillID: skillID, Status: "failed", Preview: preview.Item, Error: errors.Wrap(err, "通过服务执行反馈失败").Error()}
 	}
-	renderFeedbackCompletion(result.Item)
-	return nil
+	if render {
+		renderFeedbackCompletion(result.Item)
+	}
+	return feedbackItem{SkillID: skillID, Status: "applied", Preview: preview.Item, Result: result.Item}
+}
+
+func feedbackOneLocal(projectPath, skillID string, render bool) feedbackItem {
+	feedbackSvc := projectfeedbackservice.New()
+	preview, err := feedbackSvc.Preview(projectPath, skillID)
+	if err != nil {
+		return feedbackItem{SkillID: skillID, Status: "failed", Error: err.Error()}
+	}
+	if render {
+		renderFeedbackPreview(preview)
+	}
+	if preview.NoChanges {
+		if render {
+			fmt.Println("✅ 技能内容未修改")
+		}
+		return feedbackItem{SkillID: skillID, Status: "skipped", Preview: preview}
+	}
+	if feedbackDryRun {
+		if render {
+			fmt.Println("\n✅ 演习模式完成，未进行实际修改")
+		}
+		return feedbackItem{SkillID: skillID, Status: "planned", Preview: preview}
+	}
+	result, err := feedbackSvc.Apply(projectPath, skillID)
+	if err != nil {
+		return feedbackItem{SkillID: skillID, Status: "failed", Preview: preview, Error: err.Error()}
+	}
+	if render {
+		renderFeedbackCompletion(result)
+	}
+	return feedbackItem{SkillID: skillID, Status: "applied", Preview: preview, Result: result}
+}
+
+func confirmFeedback() bool {
+	fmt.Print("\n是否将这些修改更新到本地仓库？ [y/N]: ")
+	var response string
+	fmt.Scanln(&response)
+	response = strings.TrimSpace(response)
+	if response != "y" && response != "Y" {
+		fmt.Println("❌ 取消反馈操作")
+		return false
+	}
+	return true
+}
+
+func renderFeedbackSummary(summary *feedbackSummary) {
+	if summary == nil {
+		fmt.Println("未返回反馈摘要")
+		return
+	}
+	if summary.DryRun {
+		fmt.Println("🔎 feedback 演习模式，未修改仓库")
+	}
+	fmt.Printf("项目路径: %s\n", summary.ProjectPath)
+	fmt.Printf("total:   %d\n", summary.Total)
+	fmt.Printf("applied: %d\n", summary.Applied)
+	fmt.Printf("planned: %d\n", summary.Planned)
+	fmt.Printf("skipped: %d\n", summary.Skipped)
+	fmt.Printf("failed:  %d\n", summary.Failed)
+	for _, item := range summary.Items {
+		fmt.Printf("- [%s] %s", item.Status, item.SkillID)
+		if item.Preview != nil && item.Preview.ResolvedVersion != "" && item.Preview.NeedsVersionBump {
+			fmt.Printf(" version=%s", item.Preview.ResolvedVersion)
+		}
+		if item.Error != "" {
+			fmt.Printf(" error=%s", item.Error)
+		}
+		fmt.Println()
+	}
 }
 
 func renderFeedbackPreview(preview *projectfeedbackservice.PreviewResult) {

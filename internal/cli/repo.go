@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/muidea/skill-hub/internal/config"
+	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	"github.com/muidea/skill-hub/pkg/errors"
 
 	"github.com/spf13/cobra"
@@ -44,7 +45,8 @@ var repoListCmd = &cobra.Command{
 	Short: "列出所有仓库",
 	Long:  `列出所有已配置的Git仓库，显示仓库状态和基本信息。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runRepoList()
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		return runRepoList(jsonOutput)
 	},
 }
 
@@ -71,7 +73,8 @@ var repoSyncCmd = &cobra.Command{
 	ValidArgsFunction: completeRepoNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		syncAll, _ := cmd.Flags().GetBool("all")
-		return runRepoSync(args, syncAll)
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		return runRepoSync(args, syncAll, jsonOutput)
 	},
 }
 
@@ -116,8 +119,10 @@ func init() {
 	repoAddCmd.Flags().String("branch", "main", "Git分支")
 	repoAddCmd.Flags().String("type", "community", "仓库类型 (user/community/official)")
 	repoAddCmd.Flags().String("description", "", "仓库描述")
+	repoListCmd.Flags().Bool("json", false, "以JSON格式输出仓库列表")
 
 	repoSyncCmd.Flags().Bool("all", false, "同步所有仓库（包括禁用的）")
+	repoSyncCmd.Flags().Bool("json", false, "以JSON格式输出同步摘要")
 
 	// 添加子命令
 	repoCmd.AddCommand(repoAddCmd)
@@ -183,11 +188,14 @@ func runRepoAdd(cmd *cobra.Command, args []string) error {
 }
 
 // runRepoList 执行列出仓库操作
-func runRepoList() error {
+func runRepoList(jsonOutput bool) error {
 	if client, ok := hubClientIfAvailable(); ok {
 		data, err := client.ListRepos(context.Background())
 		if err != nil {
 			return errors.Wrap(err, "通过服务获取仓库列表失败")
+		}
+		if jsonOutput {
+			return writeJSON(data)
 		}
 		renderRepositoryList(data.Items, data.DefaultRepo)
 		return nil
@@ -203,6 +211,12 @@ func runRepoList() error {
 		defaultRepo = repo.Name
 	}
 
+	if jsonOutput {
+		return writeJSON(httpapibiz.RepoListData{
+			DefaultRepo: defaultRepo,
+			Items:       repos,
+		})
+	}
 	renderRepositoryList(repos, defaultRepo)
 	return nil
 }
@@ -233,8 +247,38 @@ func runRepoRemove(name string) error {
 	return nil
 }
 
+type repoSyncSummary struct {
+	All     bool           `json:"all"`
+	Total   int            `json:"total"`
+	Synced  int            `json:"synced"`
+	Skipped int            `json:"skipped"`
+	Failed  int            `json:"failed"`
+	Items   []repoSyncItem `json:"items"`
+}
+
+type repoSyncItem struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Enabled bool   `json:"enabled"`
+	Error   string `json:"error,omitempty"`
+}
+
 // runRepoSync 执行同步仓库操作
-func runRepoSync(args []string, syncAll bool) error {
+func runRepoSync(args []string, syncAll bool, jsonOutput bool) error {
+	if jsonOutput {
+		summary, err := runRepoSyncStructured(args, syncAll)
+		if writeErr := writeJSON(summary); writeErr != nil {
+			return writeErr
+		}
+		if err != nil {
+			return err
+		}
+		if summary.Failed > 0 {
+			return errors.NewWithCodef("runRepoSync", errors.ErrGitOperation, "%d 个仓库同步失败", summary.Failed)
+		}
+		return nil
+	}
+
 	if len(args) > 0 {
 		// 同步指定仓库
 		name := args[0]
@@ -306,6 +350,81 @@ func runRepoSync(args []string, syncAll bool) error {
 	}
 
 	return nil
+}
+
+func runRepoSyncStructured(args []string, syncAll bool) (*repoSyncSummary, error) {
+	summary := &repoSyncSummary{All: len(args) == 0}
+	client, useService := hubClientIfAvailable()
+
+	if len(args) > 0 {
+		name := args[0]
+		item := repoSyncItem{Name: name, Enabled: true}
+		var err error
+		if useService {
+			err = client.SyncRepo(context.Background(), name)
+		} else {
+			err = syncRepository(name)
+		}
+		if err != nil {
+			item.Status = "failed"
+			item.Error = err.Error()
+			summary.Failed = 1
+			summary.Items = append(summary.Items, item)
+			summary.Total = 1
+			return summary, err
+		}
+		item.Status = "synced"
+		summary.Synced = 1
+		summary.Total = 1
+		summary.Items = append(summary.Items, item)
+		return summary, nil
+	}
+
+	repos, err := reposForSync(client, useService)
+	if err != nil {
+		return summary, err
+	}
+	summary.Total = len(repos)
+	for _, repo := range repos {
+		item := repoSyncItem{Name: repo.Name, Enabled: repo.Enabled}
+		if !repo.Enabled && !syncAll {
+			item.Status = "skipped"
+			summary.Skipped++
+			summary.Items = append(summary.Items, item)
+			continue
+		}
+		var syncErr error
+		if useService {
+			syncErr = client.SyncRepo(context.Background(), repo.Name)
+		} else {
+			syncErr = syncRepository(repo.Name)
+		}
+		if syncErr != nil {
+			item.Status = "failed"
+			item.Error = syncErr.Error()
+			summary.Failed++
+		} else {
+			item.Status = "synced"
+			summary.Synced++
+		}
+		summary.Items = append(summary.Items, item)
+	}
+	return summary, nil
+}
+
+func reposForSync(client serviceBridgeClient, useService bool) ([]config.RepositoryConfig, error) {
+	if useService {
+		data, err := client.ListRepos(context.Background())
+		if err != nil {
+			return nil, errors.Wrap(err, "通过服务获取仓库列表失败")
+		}
+		return data.Items, nil
+	}
+	repos, err := listRepositories(true)
+	if err != nil {
+		return nil, errors.Wrap(err, "获取仓库列表失败")
+	}
+	return repos, nil
 }
 
 // runRepoEnable 执行启用仓库操作

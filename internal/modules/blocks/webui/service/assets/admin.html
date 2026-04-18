@@ -514,6 +514,7 @@
           </div>
         </div>
         <div class="hint">删除仓库只会移除配置，不会删除本地目录。</div>
+        <div id="default-repo-panel" class="detail empty"></div>
         <ul id="repos" class="list"><li class="card-item empty">加载中...</li></ul>
         <div id="repos-pagination" class="pagination"></div>
       </section>
@@ -554,6 +555,7 @@
       repos: [],
       projects: [],
       defaultRepo: "",
+      defaultPushPreview: null,
       pagination: {
         repos: { page: 1, pageSize: 4 },
         projects: { page: 1, pageSize: 3 }
@@ -698,6 +700,31 @@
       renderPagination("repos", "repos-pagination", pageData);
     }
 
+    function renderDefaultRepositoryPanel() {
+      const root = document.getElementById("default-repo-panel");
+      root.classList.remove("empty");
+      root.innerHTML = `
+        <div class="detail-title"><span class="bullet"></span>默认仓库状态</div>
+        <div class="meta-line">
+          <span class="chip chip-primary">${escapeHtml(state.defaultRepo || "未设置")}</span>
+          <span class="chip chip-neutral">默认仓库同步链路</span>
+        </div>
+        <div class="actions" style="margin-top:12px;">
+          <button class="secondary" type="button" onclick="checkDefaultRepository()">检查远端</button>
+          <button class="secondary" type="button" onclick="loadDefaultRepositoryStatus()">工作区状态</button>
+          <button class="secondary" type="button" onclick="syncDefaultRepository()">同步默认仓库</button>
+          <button class="secondary" type="button" onclick="previewDefaultRepositoryPush()">预览推送</button>
+        </div>
+        <div id="default-repo-push" class="project-workspace hidden"></div>
+        <pre id="default-repo-output" class="log">等待操作...</pre>
+      `;
+    }
+
+    function setDefaultRepoOutput(content) {
+      const root = document.getElementById("default-repo-output");
+      if (root) root.textContent = content;
+    }
+
     function renderProjects() {
       const root = document.getElementById("projects");
       const pageData = paginate("projects");
@@ -789,6 +816,7 @@
       state.defaultRepo = repoData.default_repo || "";
       state.allProjects = projectData.items || [];
       render();
+      renderDefaultRepositoryPanel();
     }
 
     async function repoAction(name, action) {
@@ -799,6 +827,133 @@
     async function deleteRepo(name) {
       await api(`/api/v1/repos/${encodeURIComponent(name)}`, { method: "DELETE" });
       await refreshAdmin();
+    }
+
+    async function checkDefaultRepository() {
+      setDefaultRepoOutput("检查默认仓库远端中...");
+      try {
+        const data = await api("/api/v1/skill-repository/sync-check");
+        setDefaultRepoOutput([
+          `status: ${data.status || "-"}`,
+          `message: ${data.message || "-"}`,
+          `remote: ${data.remote_url || "-"}`,
+          `local: ${shortCommit(data.local_commit)}`,
+          `remote head: ${shortCommit(data.remote_commit)}`,
+          `ahead: ${Number(data.ahead || 0)}`,
+          `behind: ${Number(data.behind || 0)}`
+        ].join("\n"));
+      } catch (err) {
+        setDefaultRepoOutput(err.message);
+      }
+    }
+
+    async function loadDefaultRepositoryStatus() {
+      setDefaultRepoOutput("读取默认仓库工作区状态中...");
+      try {
+        const data = await api("/api/v1/skill-repository/status");
+        setDefaultRepoOutput(data.status || "无状态");
+      } catch (err) {
+        setDefaultRepoOutput(err.message);
+      }
+    }
+
+    async function syncDefaultRepository() {
+      setDefaultRepoOutput("同步默认仓库中...");
+      try {
+        const data = await api("/api/v1/skill-repository/sync", { method: "POST" });
+        setDefaultRepoOutput(`status: ${data.status || "-"}\nskill_count: ${Number(data.skill_count || 0)}`);
+        await refreshAdmin();
+      } catch (err) {
+        setDefaultRepoOutput(err.message);
+      }
+    }
+
+    async function previewDefaultRepositoryPush() {
+      setDefaultRepoOutput("读取默认仓库待推送变更中...");
+      try {
+        const data = await api("/api/v1/skill-repository/push-preview");
+        state.defaultPushPreview = data;
+        renderDefaultRepositoryPushForm(data);
+        const files = data.changed_files || [];
+        setDefaultRepoOutput([
+          `default_repo: ${data.default_repo || "-"}`,
+          `remote: ${data.remote_url || "-"}`,
+          `has_changes: ${Boolean(data.has_changes)}`,
+          `changed_files: ${files.length}`,
+          ...files.map(file => `- ${file}`)
+        ].join("\n"));
+      } catch (err) {
+        state.defaultPushPreview = null;
+        renderDefaultRepositoryPushForm(null);
+        setDefaultRepoOutput(err.message);
+      }
+    }
+
+    function renderDefaultRepositoryPushForm(data) {
+      const root = document.getElementById("default-repo-push");
+      if (!root) return;
+      const files = data?.changed_files || [];
+      if (!data || !data.has_changes || !files.length) {
+        root.classList.add("hidden");
+        root.innerHTML = "";
+        return;
+      }
+      root.classList.remove("hidden");
+      root.innerHTML = `
+        <form class="inline-form" onsubmit="event.preventDefault(); pushDefaultRepository(this);">
+          <div class="rowline">
+            <div class="field">
+              <label>提交消息</label>
+              <input name="message" value="${escapeHtml(data.suggested_message || "更新技能")}" required>
+            </div>
+            <label class="field">
+              <span>确认</span>
+              <input id="default-repo-push-confirm" name="confirm" type="checkbox" onchange="updateDefaultPushButton()">
+            </label>
+            <button id="default-repo-push-submit" type="submit" disabled>推送默认仓库</button>
+          </div>
+        </form>
+      `;
+    }
+
+    function updateDefaultPushButton() {
+      const confirmInput = document.getElementById("default-repo-push-confirm");
+      const submitButton = document.getElementById("default-repo-push-submit");
+      if (!submitButton) return;
+      const files = state.defaultPushPreview?.changed_files || [];
+      submitButton.disabled = !(confirmInput?.checked && files.length > 0);
+    }
+
+    async function pushDefaultRepository(form) {
+      const preview = state.defaultPushPreview;
+      const files = preview?.changed_files || [];
+      const confirmed = Boolean(new FormData(form).get("confirm"));
+      if (!preview || !files.length || !confirmed) {
+        updateDefaultPushButton();
+        return;
+      }
+      setDefaultRepoOutput("推送默认仓库中...");
+      try {
+        const data = await api("/api/v1/skill-repository/push", {
+          method: "POST",
+          body: JSON.stringify({
+            message: String(new FormData(form).get("message") || "").trim(),
+            confirm: true,
+            expected_changed_files: files
+          })
+        });
+        state.defaultPushPreview = null;
+        renderDefaultRepositoryPushForm(null);
+        setDefaultRepoOutput([
+          `status: ${data.status || "-"}`,
+          `message: ${data.message || "-"}`,
+          `changed_files: ${(data.changed_files || []).length}`,
+          ...(data.changed_files || []).map(file => `- ${file}`)
+        ].join("\n"));
+        await refreshAdmin();
+      } catch (err) {
+        setDefaultRepoOutput(err.message);
+      }
     }
 
     function toggleProjectWorkspace(id, button) {
@@ -966,6 +1121,11 @@ ${escapeHtml((item.changes || []).join("\n") || "无")}</pre>`;
 
     function escapeKey(value) {
       return String(value ?? "").replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+    }
+
+    function shortCommit(value) {
+      const text = String(value || "");
+      return text.length > 8 ? text.slice(0, 8) : (text || "-");
     }
 
     document.getElementById("repo-form").addEventListener("submit", async (event) => {

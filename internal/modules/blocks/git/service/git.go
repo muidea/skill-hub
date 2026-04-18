@@ -31,6 +31,14 @@ func (g *Git) SyncSkillRepositoryAndRefresh() error {
 	return repo.UpdateRegistry()
 }
 
+func (g *Git) CheckSkillRepositoryUpdates() (*gitpkg.RemoteUpdateStatus, error) {
+	repo, err := g.SkillRepository()
+	if err != nil {
+		return nil, err
+	}
+	return repo.CheckUpdates()
+}
+
 func (g *Git) SkillRepositoryStatus() (string, error) {
 	repo, err := g.SkillRepository()
 	if err != nil {

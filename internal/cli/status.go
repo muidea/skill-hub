@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,15 +31,22 @@ var statusCmd = &cobra.Command{
 			skillID = args[0]
 		}
 		verbose, _ := cmd.Flags().GetBool("verbose")
-		return runStatus(skillID, verbose)
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		return runStatus(skillID, verbose, jsonOutput)
 	},
 }
 
 func init() {
 	statusCmd.Flags().Bool("verbose", false, "显示详细差异信息")
+	statusCmd.Flags().Bool("json", false, "以JSON格式输出状态，便于CI和自动化脚本处理")
 }
 
-func runStatus(skillID string, verbose bool) error {
+func runStatus(skillID string, verbose bool, jsonOutputOpt ...bool) error {
+	jsonOutput := false
+	if len(jsonOutputOpt) > 0 {
+		jsonOutput = jsonOutputOpt[0]
+	}
+
 	if client, ok := hubClientIfAvailable(); ok {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -47,6 +55,9 @@ func runStatus(skillID string, verbose bool) error {
 
 		data, err := client.GetProjectStatus(context.Background(), cwd, skillID)
 		if err == nil && data.Item != nil {
+			if jsonOutput {
+				return writeJSON(data.Item)
+			}
 			renderProjectStatusSummary(data.Item)
 			if verbose {
 				fmt.Println("\n服务模式当前仅返回状态摘要，详细 diff 仍需本地模式执行。")
@@ -66,6 +77,10 @@ func runStatus(skillID string, verbose bool) error {
 	summary, err := projectstatusservice.New().Inspect(ctx.Cwd, skillID)
 	if err != nil {
 		return err
+	}
+
+	if jsonOutput {
+		return writeJSON(summary)
 	}
 
 	renderProjectStatusSummary(summary)
@@ -92,6 +107,12 @@ func runStatus(skillID string, verbose bool) error {
 	}
 
 	return nil
+}
+
+func writeJSON(v interface{}) error {
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(v)
 }
 
 func renderProjectStatusSummary(summary *projectstatusservice.ProjectStatusSummary) {
