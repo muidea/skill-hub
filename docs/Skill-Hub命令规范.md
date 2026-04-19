@@ -125,6 +125,8 @@
   - `stale` 表示注册表中仍有 `pid`，但对应进程已不存在
 - `serve remove` 只删除注册信息，不会删除日志文件；若服务仍在运行会拒绝删除
 - 当服务绑定在 loopback 地址（默认 `127.0.0.1` 或 `localhost`）时，HTTP server 会拒绝非 loopback Host header；显式绑定到非 loopback 地址时保留已有远程访问兼容行为
+- 当服务绑定在 loopback 地址时，修改类 HTTP 方法会拒绝非 loopback `Origin` / `Referer`，并拒绝 `Sec-Fetch-Site: cross-site`；CLI bridge 不携带浏览器来源头，继续保持兼容
+- 服务响应会设置基础安全响应头，包括 `Content-Security-Policy`、`X-Frame-Options`、`X-Content-Type-Options` 与 `Referrer-Policy`
 - 服务 API 会保留业务层 `pkg/errors` 稳定错误码；未找到类错误返回 `404`，权限类返回 `403`，网络或远端 Git 类返回 `502`，未实现返回 `501`，系统错误返回 `500`，其余输入或校验类错误返回 `400`
 
 当前 Web UI 支持：
@@ -1161,3 +1163,4 @@ skill-hub repo sync --json
 | 1.18 | 2026-04-18 | Web UI 管理端增加默认仓库 push 预览与二次确认流程 |
 | 1.19 | 2026-04-18 | 服务 API 包装错误保留 `pkg/errors` 稳定错误码并按错误类别映射 HTTP 状态 |
 | 1.20 | 2026-04-18 | `serve` 默认 loopback 监听下增加 Host header loopback 校验，并保留非 loopback 绑定兼容性 |
+| 1.21 | 2026-04-19 | Web UI/API 增加基础安全响应头，并在默认 loopback 监听下拒绝跨站写请求 |

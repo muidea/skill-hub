@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -37,7 +38,7 @@ func (s *Server) Run(ctx context.Context, cfg Config) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           localOnlyHostGuard(mux, cfg.Host),
+		Handler:           secureLocalHandler(mux, cfg.Host),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -54,6 +55,10 @@ func (s *Server) Run(ctx context.Context, cfg Config) error {
 	return nil
 }
 
+func secureLocalHandler(next http.Handler, bindHost string) http.Handler {
+	return securityHeaders(localOnlyBrowserGuard(localOnlyHostGuard(next, bindHost), bindHost))
+}
+
 func localOnlyHostGuard(next http.Handler, bindHost string) http.Handler {
 	if !isLoopbackHost(bindHost) {
 		return next
@@ -66,6 +71,61 @@ func localOnlyHostGuard(next http.Handler, bindHost string) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func localOnlyBrowserGuard(next http.Handler, bindHost string) http.Handler {
+	if !isLoopbackHost(bindHost) {
+		return next
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isUnsafeMethod(r.Method) && !isAllowedBrowserWriteRequest(r) {
+			http.Error(w, "skill-hub serve rejected non-loopback browser write request", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := w.Header()
+		header.Set("X-Content-Type-Options", "nosniff")
+		header.Set("X-Frame-Options", "DENY")
+		header.Set("Referrer-Policy", "no-referrer")
+		header.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isUnsafeMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return false
+	default:
+		return true
+	}
+}
+
+func isAllowedBrowserWriteRequest(r *http.Request) bool {
+	if site := strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")); strings.EqualFold(site, "cross-site") {
+		return false
+	}
+	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+		return isLoopbackURL(origin)
+	}
+	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
+		return isLoopbackURL(referer)
+	}
+	return true
+}
+
+func isLoopbackURL(value string) bool {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	return isLoopbackHost(parsed.Host)
 }
 
 func isLoopbackHost(value string) bool {

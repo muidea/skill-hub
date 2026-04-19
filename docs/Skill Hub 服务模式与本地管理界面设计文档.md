@@ -436,10 +436,14 @@ SKILL_HUB_DISABLE_SERVICE_BRIDGE=1
 
 ## 12. 安全约束
 
-当前只做最小安全约束：
+当前服务模式的安全约束：
 
 - 默认仅监听 `127.0.0.1`
 - 不监听 `0.0.0.0`
+- 默认 loopback 监听下校验 Host header 必须为 loopback
+- 默认 loopback 监听下，修改类 HTTP 方法会拒绝非 loopback `Origin` / `Referer`，并拒绝 `Sec-Fetch-Site: cross-site`
+- 显式绑定到非 loopback 地址时保留远程访问兼容性，不强制套用本地浏览器来源校验
+- 响应统一增加基础安全响应头：`Content-Security-Policy`、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy`
 - 不在 Web 页面显示 `git_token`
 - 修改类接口仅面向本地访问场景设计
 
@@ -448,6 +452,7 @@ SKILL_HUB_DISABLE_SERVICE_BRIDGE=1
 - 登录认证
 - RBAC
 - 远程会话管理
+- token / session 级别的本地登录态
 
 ---
 
@@ -580,6 +585,8 @@ http://127.0.0.1:5525
 - `serve remove` 不允许删除运行中的实例
 - `serve stop` 会清理注册表中的运行态 `pid`
 - 默认 loopback 监听会拒绝非 loopback Host header，并通过 service mode e2e 覆盖
+- 默认 loopback 监听会拒绝跨站写请求，并通过 service mode e2e 覆盖
+- 响应安全头通过 server handler 单测与 service mode e2e 覆盖
 
 ---
 

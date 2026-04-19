@@ -86,7 +86,10 @@ class TestServiceMode:
         service = self._start_service()
 
         try:
-            health = urllib.request.urlopen(f"{service.base_url}/api/v1/health", timeout=2).read().decode("utf-8")
+            health_resp = urllib.request.urlopen(f"{service.base_url}/api/v1/health", timeout=2)
+            assert health_resp.headers.get("X-Content-Type-Options") == "nosniff"
+            assert health_resp.headers.get("X-Frame-Options") == "DENY"
+            health = health_resp.read().decode("utf-8")
             assert '"status":"ok"' in health
 
             parsed_url = urllib.parse.urlparse(service.base_url)
@@ -97,6 +100,18 @@ class TestServiceMode:
                 assert bad_host_resp.status == 403
             finally:
                 bad_host_conn.close()
+
+            cross_site_conn = http.client.HTTPConnection(parsed_url.hostname, parsed_url.port, timeout=2)
+            try:
+                cross_site_conn.request(
+                    "POST",
+                    "/api/v1/skill-repository/sync",
+                    headers={"Origin": "https://example.com"},
+                )
+                cross_site_resp = cross_site_conn.getresponse()
+                assert cross_site_resp.status == 403
+            finally:
+                cross_site_conn.close()
 
             ui = urllib.request.urlopen(f"{service.base_url}/", timeout=2).read().decode("utf-8")
             assert "Skill Hub" in ui

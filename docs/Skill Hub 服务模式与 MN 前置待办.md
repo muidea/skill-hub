@@ -46,7 +46,8 @@
 - 已完成：Web UI 默认仓库 push 预览与二次确认 UI，推送请求携带 `expected_changed_files`
 - 已完成：HTTP API 包装错误按 `pkg/errors` 稳定错误码返回，并映射到 4xx/5xx 状态
 - 已完成：默认 loopback 监听下增加 Host header loopback 校验，降低本地服务被非本机 Host 访问的风险
-- 后续暂缓：更完整的服务安全边界，例如本地 token、session 或 CSRF 防护
+- 已完成：Web UI/API 增加基础安全响应头；默认 loopback 监听下拒绝非 loopback Origin/Referer 或 cross-site Fetch Metadata 的写请求
+- 后续暂缓：更完整的服务安全边界，例如本地 token、session 或登录态
 
 ## 3. CLI / Service 边界整理
 
