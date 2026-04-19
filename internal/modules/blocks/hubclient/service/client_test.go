@@ -14,6 +14,7 @@ import (
 	projectfeedbackservice "github.com/muidea/skill-hub/internal/modules/kernel/project_feedback/service"
 	projectstatusservice "github.com/muidea/skill-hub/internal/modules/kernel/project_status/service"
 	projectuseservice "github.com/muidea/skill-hub/internal/modules/kernel/project_use/service"
+	apperrors "github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
 )
 
@@ -305,6 +306,54 @@ func TestClientSendsSecretKeyHeader(t *testing.T) {
 	}
 	if !seen["/api/v1/health"] || !seen["/api/v1/repos/main/sync"] {
 		t.Fatalf("expected health and sync requests, got %+v", seen)
+	}
+}
+
+func TestClientPreservesAPIErrorCode(t *testing.T) {
+	client := New("http://127.0.0.1:5525")
+	client.httpClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return jsonResponse(http.StatusForbidden, httpapibiz.Response[map[string]string]{
+				Code:    httpapibiz.CodeReadOnly,
+				Message: "serve 未配置 secretKey，当前为只读模式",
+				Data:    map[string]string{},
+			}), nil
+		}),
+	}
+
+	err := client.SyncRepo(context.Background(), "main")
+	if err == nil {
+		t.Fatal("expected SyncRepo to return error")
+	}
+	if got := apperrors.Code(err); got != apperrors.ErrorCode(httpapibiz.CodeReadOnly) {
+		t.Fatalf("expected READ_ONLY code, got %q from %v", got, err)
+	}
+	if !strings.Contains(err.Error(), "serve 未配置 secretKey") {
+		t.Fatalf("expected read-only message, got %v", err)
+	}
+}
+
+func TestClientPreservesPayloadErrorCode(t *testing.T) {
+	client := New("http://127.0.0.1:5525")
+	client.httpClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return jsonResponse(http.StatusOK, httpapibiz.Response[map[string]string]{
+				Code:    httpapibiz.CodeUnauthorized,
+				Message: "secretKey 无效或缺失",
+				Data:    map[string]string{},
+			}), nil
+		}),
+	}
+
+	err := client.SyncRepo(context.Background(), "main")
+	if err == nil {
+		t.Fatal("expected SyncRepo to return error")
+	}
+	if got := apperrors.Code(err); got != apperrors.ErrorCode(httpapibiz.CodeUnauthorized) {
+		t.Fatalf("expected UNAUTHORIZED code, got %q from %v", got, err)
+	}
+	if !strings.Contains(err.Error(), "secretKey 无效或缺失") {
+		t.Fatalf("expected unauthorized message, got %v", err)
 	}
 }
 

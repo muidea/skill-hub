@@ -217,6 +217,11 @@ class TestServiceMode:
             assert status_result.success, status_result.stderr
             assert "service-skill" in status_result.stdout
 
+            repo_sync_read_only = self.cmd.run("repo", ["sync", "main"], cwd=str(self.project_dir), env=bridge_env)
+            assert not repo_sync_read_only.success
+            assert "READ_ONLY" in repo_sync_read_only.stderr
+            assert "SYSTEM_ERROR" not in repo_sync_read_only.stderr
+
             git_status_json = self.cmd.run("git", ["status", "--json"], cwd=str(self.project_dir), env=bridge_env)
             assert git_status_json.success, git_status_json.stderr
             git_status_data = json.loads(git_status_json.stdout)

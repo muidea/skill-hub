@@ -304,6 +304,8 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 - `data` 仅在成功时返回业务内容
 - 业务层抛出的 `pkg/errors.AppError` 会保留原始错误码，例如 `SKILL_NOT_FOUND`、`PROJECT_NOT_FOUND`、`VALIDATION_FAILED`、`INVALID_INPUT`
 - HTTP 状态按错误类别映射：未找到类为 `404`，权限类为 `403`，网络或远端 Git 类为 `502`，未实现为 `501`，系统错误为 `500`，其余输入或校验类错误为 `400`
+- hubclient 会把 HTTP 响应里的 `code/message` 转回 CLI 错误链，确保 CLI bridge 展示 `READ_ONLY`、`UNAUTHORIZED` 等服务端错误码，而不是统一退化为 `SYSTEM_ERROR`
+- Web UI 管理端会直接展示 `message`，并对 `READ_ONLY` 和 `UNAUTHORIZED` 增加只读模式、密钥无效的前缀提示
 
 ---
 
@@ -539,6 +541,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 - CLI bridge 的 `repo list` / `list` / `status`
 - CLI bridge 的 `use -> apply -> feedback -> push --dry-run --json` 完整写操作链路
 - 未配置 `secretKey` 时修改类 API 返回只读错误，配置后修改类 API 要求 `X-Skill-Hub-Secret-Key`
+- CLI bridge 保留 `READ_ONLY` 等服务端错误码，不退化为 `SYSTEM_ERROR`
 - `serve register -> start -> status -> stop -> remove` 的服务实例管理链路
 
 ---
@@ -597,6 +600,7 @@ http://127.0.0.1:5525
 - 默认 loopback 监听会拒绝跨站写请求，并通过 service mode e2e 覆盖
 - 响应安全头通过 server handler 单测与 service mode e2e 覆盖
 - 写权限只读模式和 `secretKey` 校验通过 server handler 单测、hubclient 单测与 service mode e2e 覆盖
+- hubclient 错误码保留通过单测覆盖，CLI bridge 只读错误展示通过 service mode e2e 覆盖
 
 ---
 

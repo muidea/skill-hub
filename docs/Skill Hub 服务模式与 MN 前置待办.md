@@ -31,7 +31,7 @@
 ## 2. 服务模式收尾
 
 1. 后续如引入浏览器驱动，再补真实点击与渲染测试；当前已先覆盖无新增依赖的 Web UI 页面级结构回归
-2. 为服务模式补更稳定的错误码与错误消息约定，避免前后端和 CLI bridge 各自解释错误
+2. 继续补齐具体业务错误态展示，例如反馈冲突、仓库同步失败、apply 失败原因；当前服务端错误码、CLI bridge 和 Web UI 基础展示已统一
 3. 为本地服务增加更明确的安全边界，例如写操作密钥、session 或仅本机访问校验增强
 4. 推进 `search` 的服务桥接，使 CLI 通过本地服务实例承接远端搜索交互
 5. 收敛服务模式的配置项说明，例如 host、port、browser 行为和服务 URL 覆盖方式
@@ -49,6 +49,7 @@
 - 已完成：Web UI/API 增加基础安全响应头；默认 loopback 监听下拒绝非 loopback Origin/Referer 或 cross-site Fetch Metadata 的写请求
 - 已完成：`serve --secret-key` 写权限配置；未配置时服务只读，配置后修改类 API 校验 `X-Skill-Hub-Secret-Key`，Web UI 管理端和 CLI bridge 已同步传递
 - 已完成：Web UI 页面级 e2e 回归，覆盖技能目录页、管理端仓库表单、项目工作流入口、secretKey 写入入口和页面初始读取 API
+- 已完成：hubclient 保留服务端 `code/message`，CLI bridge 不再把 `READ_ONLY` / `UNAUTHORIZED` 退化为 `SYSTEM_ERROR`；Web UI 管理端对只读与密钥错误显示更明确文案
 - 后续暂缓：更完整的服务安全边界，例如密钥轮换、session 或登录态
 
 ## 3. CLI / Service 边界整理

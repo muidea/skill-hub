@@ -581,9 +581,17 @@
         }
       }
       if (!res.ok || data.code !== "OK") {
-        throw new Error(data.message || "request failed");
+        throw new Error(apiErrorMessage(data));
       }
       return data.data;
+    }
+
+    function apiErrorMessage(data) {
+      const code = String(data?.code || "");
+      const message = data?.message || "request failed";
+      if (code === "READ_ONLY") return `只读模式：${message}`;
+      if (code === "UNAUTHORIZED") return `密钥无效：${message}`;
+      return message;
     }
 
     function setSecretKey() {

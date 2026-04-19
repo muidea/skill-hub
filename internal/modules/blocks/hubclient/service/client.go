@@ -12,6 +12,7 @@ import (
 
 	"github.com/muidea/skill-hub/internal/config"
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
+	apperrors "github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
 )
 
@@ -361,13 +362,7 @@ func (c *Client) attachAuth(req *http.Request) {
 func decode[T any](resp *http.Response) (T, error) {
 	var zero T
 	if resp.StatusCode >= 400 {
-		var errResp map[string]any
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil {
-			if msg, ok := errResp["message"].(string); ok && msg != "" {
-				return zero, fmt.Errorf("%s", msg)
-			}
-		}
-		return zero, fmt.Errorf("request failed with status %d", resp.StatusCode)
+		return zero, decodeAPIError(resp, fmt.Sprintf("request failed with status %d", resp.StatusCode))
 	}
 
 	var payload httpapibiz.Response[T]
@@ -375,10 +370,27 @@ func decode[T any](resp *http.Response) (T, error) {
 		return zero, err
 	}
 	if payload.Code != httpapibiz.CodeOK {
-		if payload.Message != "" {
-			return zero, fmt.Errorf("%s", payload.Message)
-		}
-		return zero, fmt.Errorf("request failed")
+		return zero, apiError(payload.Code, payload.Message, "request failed")
 	}
 	return payload.Data, nil
+}
+
+func decodeAPIError(resp *http.Response, fallback string) error {
+	var errResp httpapibiz.Response[json.RawMessage]
+	if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil {
+		return apiError(errResp.Code, errResp.Message, fallback)
+	}
+	return apiError("", "", fallback)
+}
+
+func apiError(code, message, fallback string) error {
+	code = strings.TrimSpace(code)
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = fallback
+	}
+	if code == "" {
+		return fmt.Errorf("%s", message)
+	}
+	return apperrors.NewWithCode("hubclient", apperrors.ErrorCode(code), message)
 }

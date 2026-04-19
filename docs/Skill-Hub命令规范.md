@@ -130,6 +130,7 @@
 - 当服务绑定在 loopback 地址时，修改类 HTTP 方法会拒绝非 loopback `Origin` / `Referer`，并拒绝 `Sec-Fetch-Site: cross-site`；CLI bridge 不携带浏览器来源头，继续保持兼容
 - 服务响应会设置基础安全响应头，包括 `Content-Security-Policy`、`X-Frame-Options`、`X-Content-Type-Options` 与 `Referrer-Policy`
 - 修改类 API 需要写权限：未配置 `secretKey` 时返回 `READ_ONLY`；配置后请求必须携带 `X-Skill-Hub-Secret-Key`，Web UI 管理端会在写操作需要时提示输入，CLI bridge 可通过 `SKILL_HUB_SERVICE_SECRET_KEY` 传递该值
+- CLI bridge 会保留服务端返回的 `code/message`，因此只读或密钥错误会显示为 `READ_ONLY` / `UNAUTHORIZED`，不会被泛化成 `SYSTEM_ERROR`
 - 服务 API 会保留业务层 `pkg/errors` 稳定错误码；未找到类错误返回 `404`，权限类返回 `403`，网络或远端 Git 类返回 `502`，未实现返回 `501`，系统错误返回 `500`，其余输入或校验类错误返回 `400`
 
 当前 Web UI 支持：
@@ -1169,3 +1170,4 @@ skill-hub repo sync --json
 | 1.20 | 2026-04-18 | `serve` 默认 loopback 监听下增加 Host header loopback 校验，并保留非 loopback 绑定兼容性 |
 | 1.21 | 2026-04-19 | Web UI/API 增加基础安全响应头，并在默认 loopback 监听下拒绝跨站写请求 |
 | 1.22 | 2026-04-19 | `serve` 增加 `--secret-key` 写权限配置；未配置时服务只读，配置后修改类 API 校验 `X-Skill-Hub-Secret-Key` |
+| 1.23 | 2026-04-19 | CLI bridge 保留服务端错误码，Web UI 管理端增强只读与密钥错误提示 |
