@@ -185,6 +185,10 @@ func serviceBaseURL() string {
 	return defaultServiceURL
 }
 
+func serviceSecretKey() string {
+	return strings.TrimSpace(os.Getenv("SKILL_HUB_SERVICE_SECRET_KEY"))
+}
+
 func hubClientIfAvailable() (serviceBridgeClient, bool) {
 	return serviceBridgeResolver()
 }
@@ -194,7 +198,7 @@ func resolveServiceBridgeClient() (serviceBridgeClient, bool) {
 		return nil, false
 	}
 
-	client := hubclientmodule.New(serviceBaseURL())
+	client := hubclientmodule.NewWithSecret(serviceBaseURL(), serviceSecretKey())
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	bridgeClient := &hubBridgeClient{client: client}

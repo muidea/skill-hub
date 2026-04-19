@@ -11,7 +11,12 @@ import (
 	"github.com/muidea/skill-hub/pkg/spec"
 )
 
-const CodeOK = "OK"
+const (
+	CodeOK           = "OK"
+	CodeReadOnly     = "READ_ONLY"
+	CodeUnauthorized = "UNAUTHORIZED"
+	SecretKeyHeader  = "X-Skill-Hub-Secret-Key"
+)
 
 type Response[T any] struct {
 	Code    string `json:"code"`

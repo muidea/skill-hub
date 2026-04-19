@@ -62,9 +62,9 @@ class TestServiceMode:
         assert repo_skill_file.exists()
         return repo_skill_dir, repo_skill_file
 
-    def _start_service(self):
+    def _start_service(self, secret_key: str = ""):
         try:
-            return ServiceRunner(self.cmd.skill_hub_bin, self.service_env, str(self.project_dir)).start()
+            return ServiceRunner(self.cmd.skill_hub_bin, self.service_env, str(self.project_dir), secret_key=secret_key).start()
         except PermissionError:
             pytest.skip("localhost bind not permitted in current environment")
         except OSError as err:
@@ -123,6 +123,7 @@ class TestServiceMode:
             assert "/api/v1/skill-repository/push-preview" in admin_ui
             assert "expected_changed_files" in admin_ui
             assert "default-repo-push-confirm" in admin_ui
+            assert "X-Skill-Hub-Secret-Key" in admin_ui
 
             push_preview = urllib.request.urlopen(
                 f"{service.base_url}/api/v1/skill-repository/push-preview",
@@ -138,7 +139,8 @@ class TestServiceMode:
             )
             with pytest.raises(urllib.error.HTTPError) as push_err:
                 urllib.request.urlopen(push_without_confirm_req, timeout=2)
-            assert push_err.value.code == 400
+            assert push_err.value.code == 403
+            assert "READ_ONLY" in push_err.value.read().decode("utf-8")
 
             bridge_env = self.client_env.copy()
             bridge_env["SKILL_HUB_SERVICE_URL"] = service.base_url
@@ -179,6 +181,48 @@ class TestServiceMode:
         finally:
             service.stop()
 
+    def test_service_write_requires_secret_key_when_configured(self):
+        self._prepare_service_skill()
+        service = self._start_service(secret_key="write-secret")
+
+        try:
+            health = urllib.request.urlopen(f"{service.base_url}/api/v1/health", timeout=2).read().decode("utf-8")
+            assert '"status":"ok"' in health
+
+            req = urllib.request.Request(
+                f"{service.base_url}/api/v1/skill-repository/push",
+                data=b'{"message":"test"}',
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with pytest.raises(urllib.error.HTTPError) as unauthorized_err:
+                urllib.request.urlopen(req, timeout=2)
+            assert unauthorized_err.value.code == 401
+
+            authed_req = urllib.request.Request(
+                f"{service.base_url}/api/v1/skill-repository/push",
+                data=b'{"message":"test"}',
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Skill-Hub-Secret-Key": "write-secret",
+                },
+                method="POST",
+            )
+            with pytest.raises(urllib.error.HTTPError) as validation_err:
+                urllib.request.urlopen(authed_req, timeout=2)
+            assert validation_err.value.code == 400
+
+            bridge_env = self.client_env.copy()
+            bridge_env["SKILL_HUB_SERVICE_URL"] = service.base_url
+            bridge_env["SKILL_HUB_SERVICE_SECRET_KEY"] = "write-secret"
+            git_sync_json = self.cmd.run("git", ["sync", "--json"], cwd=str(self.project_dir), env=bridge_env)
+            assert not git_sync_json.success
+            git_sync_data = json.loads(git_sync_json.stdout)
+            assert git_sync_data["command"] == "sync"
+            assert git_sync_data["status"] == "failed"
+        finally:
+            service.stop()
+
     def test_named_service_instance_management(self):
         try:
             port = self._reserve_port()
@@ -191,11 +235,12 @@ class TestServiceMode:
 
         register_result = self.cmd.run(
             "serve",
-            ["register", "managed", "--host", "127.0.0.1", "--port", str(port)],
+            ["register", "managed", "--host", "127.0.0.1", "--port", str(port), "--secret-key", "write-secret"],
             cwd=str(self.project_dir),
             env=self.service_env,
         )
         assert register_result.success, register_result.stderr
+        assert "写权限: secret-key" in register_result.stdout
 
         start_result = self.cmd.run(
             "serve",
@@ -216,6 +261,7 @@ class TestServiceMode:
             assert status_result.success, status_result.stderr
             assert "managed\trunning" in status_result.stdout
             assert f"http://127.0.0.1:{port}" in status_result.stdout
+            assert "write=secret-key" in status_result.stdout
 
             health = urllib.request.urlopen(f"http://127.0.0.1:{port}/api/v1/health", timeout=2).read().decode("utf-8")
             assert '"status":"ok"' in health
@@ -259,11 +305,12 @@ class TestServiceMode:
         initial_repo_content = repo_skill_file.read_text(encoding="utf-8")
         consumer_init = self.cmd.run("init", cwd=str(self.consumer_project_dir), env=self.service_env)
         assert consumer_init.success, consumer_init.stderr
-        service = self._start_service()
+        service = self._start_service(secret_key="write-secret")
 
         try:
             bridge_env = self.client_env.copy()
             bridge_env["SKILL_HUB_SERVICE_URL"] = service.base_url
+            bridge_env["SKILL_HUB_SERVICE_SECRET_KEY"] = "write-secret"
 
             use_result = self.cmd.run("use", ["service-skill"], cwd=str(self.consumer_project_dir), env=bridge_env)
             assert use_result.success, use_result.stderr
@@ -359,10 +406,11 @@ Read [service doc](docs/service.md).
             encoding="utf-8",
         )
 
-        service = self._start_service()
+        service = self._start_service(secret_key="write-secret")
         try:
             bridge_env = self.client_env.copy()
             bridge_env["SKILL_HUB_SERVICE_URL"] = service.base_url
+            bridge_env["SKILL_HUB_SERVICE_SECRET_KEY"] = "write-secret"
 
             lint_result = self.cmd.run(
                 "lint",
@@ -451,10 +499,11 @@ canonical service body
         child_skill_file = child_skill_dir / "SKILL.md"
         child_skill_file.write_text(child_content, encoding="utf-8")
 
-        service = self._start_service()
+        service = self._start_service(secret_key="write-secret")
         try:
             bridge_env = self.client_env.copy()
             bridge_env["SKILL_HUB_SERVICE_URL"] = service.base_url
+            bridge_env["SKILL_HUB_SERVICE_SECRET_KEY"] = "write-secret"
 
             dedupe_result = self.cmd.run(
                 "dedupe",

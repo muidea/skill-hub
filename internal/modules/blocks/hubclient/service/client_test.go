@@ -280,6 +280,34 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 	}
 }
 
+func TestClientSendsSecretKeyHeader(t *testing.T) {
+	client := NewWithSecret("http://127.0.0.1:5525", "write-secret")
+	seen := map[string]bool{}
+	client.httpClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if got := req.Header.Get(httpapibiz.SecretKeyHeader); got != "write-secret" {
+				t.Fatalf("expected secret key header, got %q", got)
+			}
+			seen[req.URL.Path] = true
+			return jsonResponse(http.StatusOK, httpapibiz.Response[map[string]string]{
+				Code: httpapibiz.CodeOK,
+				Data: map[string]string{"ok": "true"},
+			}), nil
+		}),
+	}
+
+	ctx := context.Background()
+	if !client.Available(ctx) {
+		t.Fatal("expected client to report available")
+	}
+	if err := client.SyncRepo(ctx, "main"); err != nil {
+		t.Fatalf("SyncRepo returned error: %v", err)
+	}
+	if !seen["/api/v1/health"] || !seen["/api/v1/repos/main/sync"] {
+		t.Fatalf("expected health and sync requests, got %+v", seen)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {

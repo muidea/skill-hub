@@ -8,11 +8,12 @@ import random
 
 
 class ServiceRunner:
-    def __init__(self, binary_path: str, env: dict[str, str], cwd: str, host: str = "127.0.0.1"):
+    def __init__(self, binary_path: str, env: dict[str, str], cwd: str, host: str = "127.0.0.1", secret_key: str = ""):
         self.binary_path = binary_path
         self.env = env.copy()
         self.cwd = cwd
         self.host = host
+        self.secret_key = secret_key
         self.port = None
         self.process = None
         self.log_file = None
@@ -42,6 +43,8 @@ class ServiceRunner:
                 "--port",
                 str(self.port),
             ]
+            if self.secret_key:
+                cmd.extend(["--secret-key", self.secret_key])
             self.process = subprocess.Popen(
                 cmd,
                 cwd=self.cwd,

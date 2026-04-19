@@ -70,12 +70,14 @@ CLI 与服务的关系：
 
 ```bash
 skill-hub serve
+skill-hub serve --secret-key write-secret
 ```
 
 当前支持参数：
 
 - `--host 127.0.0.1`
 - `--port 5525`
+- `--secret-key <value>`
 - `--open-browser`
 
 当前未做：
@@ -439,17 +441,20 @@ SKILL_HUB_DISABLE_SERVICE_BRIDGE=1
 当前服务模式的安全约束：
 
 - 默认仅监听 `127.0.0.1`
-- 不监听 `0.0.0.0`
+- 默认不监听 `0.0.0.0`
 - 默认 loopback 监听下校验 Host header 必须为 loopback
 - 默认 loopback 监听下，修改类 HTTP 方法会拒绝非 loopback `Origin` / `Referer`，并拒绝 `Sec-Fetch-Site: cross-site`
 - 显式绑定到非 loopback 地址时保留远程访问兼容性，不强制套用本地浏览器来源校验
 - 响应统一增加基础安全响应头：`Content-Security-Policy`、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy`
+- 修改类 API 使用 `secretKey` 控制写权限：未配置 `--secret-key` 时服务按只读模式运行，读取类 `GET` 接口和 Web UI 可访问，`POST` / `DELETE` 等写操作返回 `READ_ONLY`
+- 配置 `--secret-key` 后，修改类 API 必须携带 `X-Skill-Hub-Secret-Key`；Web UI 管理端在写操作需要时提示输入并暂存于浏览器会话，CLI bridge 通过 `SKILL_HUB_SERVICE_SECRET_KEY` 传递
+- `serve status` 只显示 `write=read-only` 或 `write=secret-key`，不输出密钥明文
 - 不在 Web 页面显示 `git_token`
 - 修改类接口仅面向本地访问场景设计
 
 当前未做：
 
-- 登录认证
+- 多用户登录认证
 - RBAC
 - 远程会话管理
 - token / session 级别的本地登录态
@@ -494,6 +499,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 
 - `skill-hub serve` 可启动本地 HTTP 服务与 Web UI
 - `skill-hub serve register/start/stop/status/remove` 可管理本地命名服务实例
+- `skill-hub serve --secret-key` 可开启写操作密钥；未配置时服务只读
 - Web UI 支持仓库管理、技能查看、项目查看与项目操作
 - CLI 在服务可用时会优先通过服务桥接执行 `repo/list/status/use/apply/feedback/pull/push` 以及项目技能生命周期命令
 - 服务不可用时，上述命令仍会回退到本地逻辑
@@ -531,6 +537,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 - Web UI 首页可访问
 - CLI bridge 的 `repo list` / `list` / `status`
 - CLI bridge 的 `use -> apply -> feedback -> push --dry-run --json` 完整写操作链路
+- 未配置 `secretKey` 时修改类 API 返回只读错误，配置后修改类 API 要求 `X-Skill-Hub-Secret-Key`
 - `serve register -> start -> status -> stop -> remove` 的服务实例管理链路
 
 ---
@@ -543,7 +550,8 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 
 ```bash
 skill-hub serve
-skill-hub serve register local --host 127.0.0.1 --port 6600
+skill-hub serve --secret-key write-secret
+skill-hub serve register local --host 127.0.0.1 --port 6600 --secret-key write-secret
 skill-hub serve start local
 skill-hub serve status local
 skill-hub serve stop local
@@ -587,6 +595,7 @@ http://127.0.0.1:5525
 - 默认 loopback 监听会拒绝非 loopback Host header，并通过 service mode e2e 覆盖
 - 默认 loopback 监听会拒绝跨站写请求，并通过 service mode e2e 覆盖
 - 响应安全头通过 server handler 单测与 service mode e2e 覆盖
+- 写权限只读模式和 `secretKey` 校验通过 server handler 单测、hubclient 单测与 service mode e2e 覆盖
 
 ---
 
@@ -596,6 +605,6 @@ http://127.0.0.1:5525
 
 1. 为 Web UI 补页面级自动化测试，而不是只靠 API 与 CLI e2e
 2. 为服务模式补更细的错误态展示，例如反馈冲突、仓库同步失败、apply 失败原因
-3. 收紧本地服务安全边界，例如本地 token、CSRF 或仅本机 session 保护
+3. 继续评估更细的本地会话体验，例如密钥轮换、失败次数限制或浏览器端更友好的输入状态
 4. 继续评估 `remove` 是否需要服务化，并补齐 validate 在 Web UI 侧的入口
 5. 为后续 `skill-node` / `MN` 对接预留节点管理 API，而不是把本地管理 API 继续做重

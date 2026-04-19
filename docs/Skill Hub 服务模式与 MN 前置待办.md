@@ -32,11 +32,11 @@
 
 1. 为 Web UI 补页面级自动化测试，至少覆盖首页加载、repo 操作、project 操作入口
 2. 为服务模式补更稳定的错误码与错误消息约定，避免前后端和 CLI bridge 各自解释错误
-3. 为本地服务增加更明确的安全边界，例如本地 token、session 或仅本机访问校验增强
+3. 为本地服务增加更明确的安全边界，例如写操作密钥、session 或仅本机访问校验增强
 4. 推进 `search` 的服务桥接，使 CLI 通过本地服务实例承接远端搜索交互
 5. 收敛服务模式的配置项说明，例如 host、port、browser 行为和服务 URL 覆盖方式
 
-当前进度（2026-04-18）：
+当前进度（2026-04-19）：
 
 - 已完成：`search` 服务桥接
 - 已完成：项目技能生命周期命令 `register` / `import` / `dedupe` / `sync-copies` / `lint --paths` / `validate` / `audit` 的服务桥接
@@ -47,7 +47,8 @@
 - 已完成：HTTP API 包装错误按 `pkg/errors` 稳定错误码返回，并映射到 4xx/5xx 状态
 - 已完成：默认 loopback 监听下增加 Host header loopback 校验，降低本地服务被非本机 Host 访问的风险
 - 已完成：Web UI/API 增加基础安全响应头；默认 loopback 监听下拒绝非 loopback Origin/Referer 或 cross-site Fetch Metadata 的写请求
-- 后续暂缓：更完整的服务安全边界，例如本地 token、session 或登录态
+- 已完成：`serve --secret-key` 写权限配置；未配置时服务只读，配置后修改类 API 校验 `X-Skill-Hub-Secret-Key`，Web UI 管理端和 CLI bridge 已同步传递
+- 后续暂缓：更完整的服务安全边界，例如密钥轮换、session 或登录态
 
 ## 3. CLI / Service 边界整理
 

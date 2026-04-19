@@ -3,7 +3,10 @@ package service
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 )
 
 func TestLocalOnlyHostGuardAllowsLoopbackHost(t *testing.T) {
@@ -134,6 +137,58 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 	if rec.Header().Get("Content-Security-Policy") == "" {
 		t.Fatalf("missing content security policy header")
+	}
+}
+
+func TestWriteAccessGuardAllowsReadWithoutSecret(t *testing.T) {
+	handler := writeAccessGuard(okHandler(), "")
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/api/v1/health", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestWriteAccessGuardRejectsWriteWhenSecretNotConfigured(t *testing.T) {
+	handler := writeAccessGuard(okHandler(), "")
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/api/v1/repos/main/sync", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), httpapibiz.CodeReadOnly) {
+		t.Fatalf("expected read-only response, got %q", rec.Body.String())
+	}
+}
+
+func TestWriteAccessGuardRequiresSecretForWrite(t *testing.T) {
+	handler := writeAccessGuard(okHandler(), "write-secret")
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/api/v1/repos/main/sync", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestWriteAccessGuardAllowsWriteWithSecret(t *testing.T) {
+	handler := writeAccessGuard(okHandler(), "write-secret")
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/api/v1/repos/main/sync", nil)
+	req.Header.Set(httpapibiz.SecretKeyHeader, "write-secret")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 }
 

@@ -16,7 +16,7 @@ func TestRunServeRegisterAndRemove(t *testing.T) {
 	})
 	serveProcessRunning = func(pid int) bool { return false }
 
-	if err := runServeRegister("local-dev", "127.0.0.1", 6600); err != nil {
+	if err := runServeRegister("local-dev", "127.0.0.1", 6600, "write-secret"); err != nil {
 		t.Fatalf("runServeRegister() error = %v", err)
 	}
 
@@ -31,6 +31,9 @@ func TestRunServeRegisterAndRemove(t *testing.T) {
 	}
 	if entry.Host != "127.0.0.1" || entry.Port != 6600 {
 		t.Fatalf("unexpected entry: %+v", entry)
+	}
+	if entry.SecretKey != "write-secret" {
+		t.Fatalf("expected secret key to be stored for process startup, got %q", entry.SecretKey)
 	}
 
 	if err := runServeRemove("local-dev"); err != nil {
@@ -49,7 +52,7 @@ func TestRunServeRegisterAndRemove(t *testing.T) {
 func TestRunServeStartStopAndRemove(t *testing.T) {
 	t.Setenv("SKILL_HUB_HOME", t.TempDir())
 
-	if err := runServeRegister("local-dev", "127.0.0.1", 6600); err != nil {
+	if err := runServeRegister("local-dev", "127.0.0.1", 6600, ""); err != nil {
 		t.Fatalf("runServeRegister() error = %v", err)
 	}
 
@@ -123,10 +126,10 @@ func TestRunServeStartStopAndRemove(t *testing.T) {
 func TestRunServeStatus(t *testing.T) {
 	t.Setenv("SKILL_HUB_HOME", t.TempDir())
 
-	if err := runServeRegister("running-svc", "127.0.0.1", 6600); err != nil {
+	if err := runServeRegister("running-svc", "127.0.0.1", 6600, ""); err != nil {
 		t.Fatalf("runServeRegister() error = %v", err)
 	}
-	if err := runServeRegister("stopped-svc", "127.0.0.1", 6601); err != nil {
+	if err := runServeRegister("stopped-svc", "127.0.0.1", 6601, ""); err != nil {
 		t.Fatalf("runServeRegister() error = %v", err)
 	}
 
@@ -163,6 +166,9 @@ func TestRunServeStatus(t *testing.T) {
 
 	if !strings.Contains(output, "running-svc\trunning") {
 		t.Fatalf("expected running service in output, got %q", output)
+	}
+	if !strings.Contains(output, "write=read-only") {
+		t.Fatalf("expected read-only write access marker, got %q", output)
 	}
 	if !strings.Contains(output, "stopped-svc\tstale") {
 		t.Fatalf("expected stale service in output, got %q", output)

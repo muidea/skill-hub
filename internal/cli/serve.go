@@ -17,13 +17,15 @@ import (
 )
 
 var (
-	serveHost         string
-	servePort         int
-	serveOpenBrowser  bool
-	serveRegisterHost string
-	serveRegisterPort int
-	serveInputReader  io.Reader = os.Stdin
-	serveRunServer              = func(ctx context.Context, cfg serverservice.Config) error {
+	serveHost              string
+	servePort              int
+	serveSecretKey         string
+	serveOpenBrowser       bool
+	serveRegisterHost      string
+	serveRegisterPort      int
+	serveRegisterSecretKey string
+	serveInputReader       io.Reader = os.Stdin
+	serveRunServer                   = func(ctx context.Context, cfg serverservice.Config) error {
 		return serverservice.New().Run(ctx, cfg)
 	}
 )
@@ -43,7 +45,7 @@ var serveRegisterCmd = &cobra.Command{
 	Short:   "注册本地服务实例",
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runServeRegister(args[0], serveRegisterHost, serveRegisterPort)
+		return runServeRegister(args[0], serveRegisterHost, serveRegisterPort, serveRegisterSecretKey)
 	},
 }
 
@@ -95,9 +97,11 @@ var serveStatusCmd = &cobra.Command{
 func init() {
 	serveCmd.Flags().StringVar(&serveHost, "host", "127.0.0.1", "监听地址")
 	serveCmd.Flags().IntVar(&servePort, "port", 5525, "监听端口")
+	serveCmd.Flags().StringVar(&serveSecretKey, "secret-key", "", "写操作密钥，未配置时为只读模式")
 	serveCmd.Flags().BoolVar(&serveOpenBrowser, "open-browser", false, "启动后自动打开浏览器")
 	serveRegisterCmd.Flags().StringVar(&serveRegisterHost, "host", "127.0.0.1", "监听地址")
 	serveRegisterCmd.Flags().IntVar(&serveRegisterPort, "port", 5525, "监听端口")
+	serveRegisterCmd.Flags().StringVar(&serveRegisterSecretKey, "secret-key", "", "写操作密钥，未配置时为只读模式")
 	serveCmd.AddCommand(serveRegisterCmd)
 	serveCmd.AddCommand(serveRemoveCmd)
 	serveCmd.AddCommand(serveStartCmd)
@@ -111,6 +115,11 @@ func runServe() error {
 
 	url := fmt.Sprintf("http://%s:%d", serveHost, servePort)
 	fmt.Printf("skill-hub service listening on %s\n", url)
+	if strings.TrimSpace(serveSecretKey) == "" {
+		fmt.Println("serve write access: read-only (未配置 secretKey)")
+	} else {
+		fmt.Println("serve write access: secretKey enabled")
+	}
 	fmt.Println("输入 q 并回车可停止服务")
 
 	if serveOpenBrowser {
@@ -119,7 +128,7 @@ func runServe() error {
 
 	go waitForServeStopInput(ctx, serveInputReader, stop)
 
-	return serveRunServer(ctx, serverservice.Config{Host: serveHost, Port: servePort})
+	return serveRunServer(ctx, serverservice.Config{Host: serveHost, Port: servePort, SecretKey: serveSecretKey})
 }
 
 func waitForServeStopInput(ctx context.Context, reader io.Reader, stop context.CancelFunc) {

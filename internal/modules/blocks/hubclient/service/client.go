@@ -17,12 +17,18 @@ import (
 
 type Client struct {
 	baseURL    string
+	secretKey  string
 	httpClient *http.Client
 }
 
 func New(baseURL string) *Client {
+	return NewWithSecret(baseURL, "")
+}
+
+func NewWithSecret(baseURL, secretKey string) *Client {
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
+		baseURL:   strings.TrimRight(baseURL, "/"),
+		secretKey: strings.TrimSpace(secretKey),
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -34,6 +40,7 @@ func (c *Client) Available(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
+	c.attachAuth(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return false
@@ -295,6 +302,7 @@ func get[T any](ctx context.Context, c *Client, path string) (T, error) {
 	if err != nil {
 		return zero, err
 	}
+	c.attachAuth(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return zero, err
@@ -320,6 +328,7 @@ func post[T any](ctx context.Context, c *Client, path string, body any) (T, erro
 		return zero, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.attachAuth(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return zero, err
@@ -334,12 +343,19 @@ func del[T any](ctx context.Context, c *Client, path string) (T, error) {
 	if err != nil {
 		return zero, err
 	}
+	c.attachAuth(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return zero, err
 	}
 	defer resp.Body.Close()
 	return decode[T](resp)
+}
+
+func (c *Client) attachAuth(req *http.Request) {
+	if c.secretKey != "" {
+		req.Header.Set(httpapibiz.SecretKeyHeader, c.secretKey)
+	}
 }
 
 func decode[T any](resp *http.Response) (T, error) {

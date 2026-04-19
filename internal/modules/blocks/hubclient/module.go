@@ -12,6 +12,12 @@ func New(baseURL string) *HubClient {
 	}
 }
 
+func NewWithSecret(baseURL, secretKey string) *HubClient {
+	return &HubClient{
+		servicePtr: service.NewWithSecret(baseURL, secretKey),
+	}
+}
+
 func (h *HubClient) Service() *service.Client {
 	return h.servicePtr
 }

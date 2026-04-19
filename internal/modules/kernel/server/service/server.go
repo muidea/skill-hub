@@ -10,12 +10,14 @@ import (
 	"time"
 
 	httpapimodule "github.com/muidea/skill-hub/internal/modules/blocks/httpapi"
+	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	webuimodule "github.com/muidea/skill-hub/internal/modules/blocks/webui"
 )
 
 type Config struct {
-	Host string
-	Port int
+	Host      string
+	Port      int
+	SecretKey string
 }
 
 type Server struct {
@@ -38,7 +40,7 @@ func (s *Server) Run(ctx context.Context, cfg Config) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           secureLocalHandler(mux, cfg.Host),
+		Handler:           secureLocalHandler(mux, cfg.Host, cfg.SecretKey),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -55,8 +57,29 @@ func (s *Server) Run(ctx context.Context, cfg Config) error {
 	return nil
 }
 
-func secureLocalHandler(next http.Handler, bindHost string) http.Handler {
-	return securityHeaders(localOnlyBrowserGuard(localOnlyHostGuard(next, bindHost), bindHost))
+func secureLocalHandler(next http.Handler, bindHost, secretKey string) http.Handler {
+	return securityHeaders(localOnlyHostGuard(localOnlyBrowserGuard(writeAccessGuard(next, secretKey), bindHost), bindHost))
+}
+
+func writeAccessGuard(next http.Handler, secretKey string) http.Handler {
+	secretKey = strings.TrimSpace(secretKey)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") && isUnsafeMethod(r.Method) {
+			if secretKey == "" {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = fmt.Fprintf(w, `{"code":%q,"message":%q}`, httpapibiz.CodeReadOnly, "serve 未配置 secretKey，当前为只读模式")
+				return
+			}
+			if r.Header.Get(httpapibiz.SecretKeyHeader) != secretKey {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = fmt.Fprintf(w, `{"code":%q,"message":%q}`, httpapibiz.CodeUnauthorized, "secretKey 无效或缺失")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func localOnlyHostGuard(next http.Handler, bindHost string) http.Handler {

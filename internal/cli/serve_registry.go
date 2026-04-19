@@ -9,10 +9,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/muidea/skill-hub/internal/config"
+	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	"github.com/muidea/skill-hub/pkg/errors"
 )
 
@@ -20,6 +22,7 @@ type serveRegistration struct {
 	Name        string `json:"name"`
 	Host        string `json:"host"`
 	Port        int    `json:"port"`
+	SecretKey   string `json:"secret_key,omitempty"`
 	PID         int    `json:"pid,omitempty"`
 	LogFile     string `json:"log_file,omitempty"`
 	UpdatedAt   string `json:"updated_at,omitempty"`
@@ -38,7 +41,7 @@ var (
 	serveWaitUntilReady = defaultServeWaitUntilReady
 )
 
-func runServeRegister(name, host string, port int) error {
+func runServeRegister(name, host string, port int, secretKey string) error {
 	if !isValidRepoName(name) {
 		return errors.NewWithCode("runServeRegister", errors.ErrInvalidInput, "服务名称只能包含字母、数字、下划线和连字符")
 	}
@@ -58,6 +61,7 @@ func runServeRegister(name, host string, port int) error {
 	entry.Name = name
 	entry.Host = host
 	entry.Port = port
+	entry.SecretKey = strings.TrimSpace(secretKey)
 	entry.UpdatedAt = time.Now().Format(time.RFC3339)
 
 	if entry.PID > 0 && !serveProcessRunning(entry.PID) {
@@ -77,6 +81,7 @@ func runServeRegister(name, host string, port int) error {
 
 	fmt.Printf("✅ 服务 '%s' 已%s\n", name, action)
 	fmt.Printf("   地址: http://%s:%d\n", host, port)
+	fmt.Printf("   写权限: %s\n", serveWriteAccessLabel(entry.SecretKey))
 	return nil
 }
 
@@ -300,7 +305,7 @@ func renderServeStatus(entry serveRegistration) {
 		}
 	}
 
-	fmt.Printf("%s\t%s\t%s\tpid=%d\n", entry.Name, status, fmt.Sprintf("http://%s:%d", entry.Host, entry.Port), entry.PID)
+	fmt.Printf("%s\t%s\t%s\tpid=%d\twrite=%s\n", entry.Name, status, fmt.Sprintf("http://%s:%d", entry.Host, entry.Port), entry.PID, serveWriteAccessLabel(entry.SecretKey))
 	if entry.LogFile != "" {
 		fmt.Printf("  log: %s\n", entry.LogFile)
 	}
@@ -329,7 +334,11 @@ func defaultServeStartProcess(entry serveRegistration) (int, string, error) {
 	}
 	defer fileHandle.Close()
 
-	cmd := exec.Command(executable, "serve", "--host", entry.Host, "--port", strconv.Itoa(entry.Port))
+	args := []string{"serve", "--host", entry.Host, "--port", strconv.Itoa(entry.Port)}
+	if strings.TrimSpace(entry.SecretKey) != "" {
+		args = append(args, "--secret-key", strings.TrimSpace(entry.SecretKey))
+	}
+	cmd := exec.Command(executable, args...)
 	cmd.Stdin = nil
 	cmd.Stdout = fileHandle
 	cmd.Stderr = fileHandle
@@ -404,7 +413,16 @@ func defaultServeWaitUntilReady(entry serveRegistration, pid int) error {
 			return errors.NewWithCodef("defaultServeWaitUntilReady", errors.ErrSystem, "服务进程已退出 (PID: %d)", pid)
 		}
 
-		resp, err := client.Get(healthURL)
+		req, reqErr := http.NewRequest(http.MethodGet, healthURL, nil)
+		if reqErr != nil {
+			lastErr = reqErr
+			time.Sleep(150 * time.Millisecond)
+			continue
+		}
+		if strings.TrimSpace(entry.SecretKey) != "" {
+			req.Header.Set(httpapibiz.SecretKeyHeader, strings.TrimSpace(entry.SecretKey))
+		}
+		resp, err := client.Do(req)
 		if err == nil {
 			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
@@ -423,4 +441,11 @@ func defaultServeWaitUntilReady(entry serveRegistration, pid int) error {
 		lastErr = errors.NewWithCode("defaultServeWaitUntilReady", errors.ErrSystem, "等待服务就绪超时")
 	}
 	return lastErr
+}
+
+func serveWriteAccessLabel(secretKey string) string {
+	if strings.TrimSpace(secretKey) == "" {
+		return "read-only"
+	}
+	return "secret-key"
 }

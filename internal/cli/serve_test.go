@@ -14,22 +14,28 @@ func TestRunServeStopsOnKeyboardInput(t *testing.T) {
 	prevRunServer := serveRunServer
 	prevHost := serveHost
 	prevPort := servePort
+	prevSecretKey := serveSecretKey
 	prevOpenBrowser := serveOpenBrowser
 	t.Cleanup(func() {
 		serveInputReader = prevInput
 		serveRunServer = prevRunServer
 		serveHost = prevHost
 		servePort = prevPort
+		serveSecretKey = prevSecretKey
 		serveOpenBrowser = prevOpenBrowser
 	})
 
 	serveInputReader = strings.NewReader("q\n")
 	serveHost = "127.0.0.1"
 	servePort = 5525
+	serveSecretKey = "write-secret"
 	serveOpenBrowser = false
 
 	stopped := make(chan struct{})
 	serveRunServer = func(ctx context.Context, cfg serverservice.Config) error {
+		if cfg.SecretKey != "write-secret" {
+			t.Fatalf("expected secret key to be passed to server, got %q", cfg.SecretKey)
+		}
 		<-ctx.Done()
 		close(stopped)
 		return nil
