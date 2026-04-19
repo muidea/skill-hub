@@ -11,6 +11,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,55 @@ import pytest
 from tests.e2e.utils.command_runner import CommandRunner
 from tests.e2e.utils.network_checker import NetworkChecker
 from tests.e2e.utils.service_runner import ServiceRunner
+
+
+class WebUIHTMLParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.ids = set()
+        self.forms = set()
+        self.inputs = set()
+        self.selects = set()
+        self.buttons = []
+        self.text = []
+        self._in_button = False
+        self._button_text = []
+
+    def handle_starttag(self, tag, attrs):
+        attr_map = dict(attrs)
+        element_id = attr_map.get("id")
+        if element_id:
+            self.ids.add(element_id)
+        if tag == "form" and element_id:
+            self.forms.add(element_id)
+        if tag == "input" and element_id:
+            self.inputs.add(element_id)
+        if tag == "select" and element_id:
+            self.selects.add(element_id)
+        if tag == "button":
+            self._in_button = True
+            self._button_text = []
+
+    def handle_endtag(self, tag):
+        if tag == "button" and self._in_button:
+            label = "".join(self._button_text).strip()
+            if label:
+                self.buttons.append(label)
+            self._in_button = False
+            self._button_text = []
+
+    def handle_data(self, data):
+        value = data.strip()
+        if value:
+            self.text.append(value)
+        if self._in_button:
+            self._button_text.append(data)
+
+
+def parse_webui_html(content: str) -> WebUIHTMLParser:
+    parser = WebUIHTMLParser()
+    parser.feed(content)
+    return parser
 
 
 @pytest.mark.no_debug
@@ -220,6 +270,68 @@ class TestServiceMode:
             git_sync_data = json.loads(git_sync_json.stdout)
             assert git_sync_data["command"] == "sync"
             assert git_sync_data["status"] == "failed"
+        finally:
+            service.stop()
+
+    def test_webui_pages_expose_catalog_admin_and_write_controls(self):
+        self._prepare_service_skill()
+        service = self._start_service()
+
+        try:
+            index_resp = urllib.request.urlopen(f"{service.base_url}/", timeout=2)
+            assert index_resp.headers.get("X-Content-Type-Options") == "nosniff"
+            index_html = index_resp.read().decode("utf-8")
+            index_doc = parse_webui_html(index_html)
+
+            assert {"refresh-skills", "repo-filter", "target-filter", "skills", "skills-pagination"} <= index_doc.ids
+            assert {"repo-filter"} <= index_doc.inputs
+            assert {"target-filter"} <= index_doc.selects
+            assert "刷新技能目录" in index_doc.buttons
+            assert "进入管理端" in index_doc.buttons
+            assert "/api/v1/skills" in index_html
+
+            admin_resp = urllib.request.urlopen(f"{service.base_url}/admin.html", timeout=2)
+            assert admin_resp.headers.get("X-Frame-Options") == "DENY"
+            admin_html = admin_resp.read().decode("utf-8")
+            admin_doc = parse_webui_html(admin_html)
+
+            assert {
+                "refresh-admin",
+                "set-secret-key",
+                "repo-form",
+                "repo-name",
+                "repo-url",
+                "repos",
+                "projects",
+                "default-repo-panel",
+                "project-filter",
+                "project-target-filter",
+            } <= admin_doc.ids
+            assert {"repo-form"} <= admin_doc.forms
+            assert {"repo-name", "repo-url", "project-filter"} <= admin_doc.inputs
+            assert {"project-target-filter"} <= admin_doc.selects
+            assert "刷新管理视图" in admin_doc.buttons
+            assert "写入密钥" in admin_doc.buttons
+            assert "添加仓库" in admin_doc.buttons
+            assert "/api/v1/repos" in admin_html
+            assert "/api/v1/projects" in admin_html
+            assert "/api/v1/project-apply" in admin_html
+            assert "/api/v1/project-skills/use" in admin_html
+            assert "/api/v1/project-feedback/apply" in admin_html
+            assert "X-Skill-Hub-Secret-Key" in admin_html
+            assert 'sessionStorage.getItem("skillHubSecretKey")' in admin_html
+
+            skills_payload = json.loads(
+                urllib.request.urlopen(f"{service.base_url}/api/v1/skills", timeout=2).read().decode("utf-8")
+            )
+            assert skills_payload["code"] == "OK"
+            assert any(item["id"] == "service-skill" for item in skills_payload["data"]["items"])
+
+            projects_payload = json.loads(
+                urllib.request.urlopen(f"{service.base_url}/api/v1/projects", timeout=2).read().decode("utf-8")
+            )
+            assert projects_payload["code"] == "OK"
+            assert any(item["project_path"] == str(self.project_dir) for item in projects_payload["data"]["items"])
         finally:
             service.stop()
 

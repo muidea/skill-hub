@@ -535,6 +535,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 
 - `/api/v1/health`
 - Web UI 首页可访问
+- Web UI 页面级结构回归，覆盖技能目录页、管理端仓库表单、项目工作流入口、secretKey 写入入口和页面初始读取 API
 - CLI bridge 的 `repo list` / `list` / `status`
 - CLI bridge 的 `use -> apply -> feedback -> push --dry-run --json` 完整写操作链路
 - 未配置 `secretKey` 时修改类 API 返回只读错误，配置后修改类 API 要求 `X-Skill-Hub-Secret-Key`
