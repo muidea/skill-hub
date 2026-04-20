@@ -532,15 +532,6 @@
             <label for="project-filter">项目过滤</label>
             <input id="project-filter" placeholder="回车后按项目路径过滤">
           </div>
-          <div class="field">
-            <label for="project-target-filter">目标过滤</label>
-            <select id="project-target-filter">
-              <option value="">全部目标</option>
-              <option value="open_code">open_code</option>
-              <option value="cursor">cursor</option>
-              <option value="claude_code">claude_code</option>
-            </select>
-          </div>
         </div>
         <ul id="projects" class="list"><li class="card-item empty">加载中...</li></ul>
         <div id="projects-pagination" class="pagination"></div>
@@ -615,7 +606,6 @@
     function applyFilters() {
       const repoKeyword = document.getElementById("repo-filter").value.trim().toLowerCase();
       const projectKeyword = document.getElementById("project-filter").value.trim().toLowerCase();
-      const projectTarget = document.getElementById("project-target-filter").value.trim().toLowerCase();
 
       state.repos = state.allRepos.filter(item => {
         if (!repoKeyword) return true;
@@ -623,9 +613,7 @@
       });
 
       state.projects = state.allProjects.filter(item => {
-        const matchKeyword = !projectKeyword || String(item.project_path || "").toLowerCase().includes(projectKeyword);
-        const matchTarget = !projectTarget || String(item.preferred_target || "").toLowerCase() === projectTarget;
-        return matchKeyword && matchTarget;
+        return !projectKeyword || String(item.project_path || "").toLowerCase().includes(projectKeyword);
       });
     }
 
@@ -1166,11 +1154,6 @@ ${escapeHtml((item.changes || []).join("\n") || "无")}</pre>`;
         render();
       }
     });
-    document.getElementById("project-target-filter").addEventListener("change", () => {
-      state.pagination.projects.page = 1;
-      render();
-    });
-
     refreshAdmin().catch((err) => {
       console.error(err);
       alert(err.message);

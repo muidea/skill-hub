@@ -83,6 +83,7 @@ class TestServiceMode:
 
         self.service_env = os.environ.copy()
         self.service_env["HOME"] = self.service_home
+        self.service_env["SKILL_HUB_DISABLE_SERVICE_BRIDGE"] = "1"
         self.client_env = os.environ.copy()
         self.client_env["HOME"] = self.client_home
 
@@ -311,11 +312,12 @@ class TestServiceMode:
                 "projects",
                 "default-repo-panel",
                 "project-filter",
-                "project-target-filter",
             } <= admin_doc.ids
             assert {"repo-form"} <= admin_doc.forms
             assert {"repo-name", "repo-url", "project-filter"} <= admin_doc.inputs
-            assert {"project-target-filter"} <= admin_doc.selects
+            assert "project-target-filter" not in admin_doc.ids
+            assert "project-target-filter" not in admin_doc.selects
+            assert "目标过滤" not in admin_html
             assert "刷新管理视图" in admin_doc.buttons
             assert "添加仓库" in admin_doc.buttons
             assert "/api/v1/repos" in admin_html
