@@ -351,7 +351,6 @@
 
 - `repo *`
 - `list`
-- `set-target`
 - `status`
 - `use`
 - `register`

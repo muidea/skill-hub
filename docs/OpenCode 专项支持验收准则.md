@@ -8,7 +8,7 @@
 
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
 | :--- | :--- | :--- | :--- |
-| 1.1 | **首选目标绑定** | 执行 `skill-hub set-target open_code` 后，`state.json` 必须准确记录当前项目路径与 `open_code` 的绑定关系。 | 运行指令后检查 `~/.skill-hub/state.json` 内容。 |
+| 1.1 | **标准项目登记** | 标准业务命令不再写入首选目标；执行 `use` 后，`state.json` 必须只记录项目路径、启用 Skill、变量和来源仓库。 | 运行 `skill-hub use <id>` 后检查 `~/.skill-hub/state.json` 内容。 |
 | 1.2 | **自动特征探测** | 在包含 `.agents/skills/` 文件夹的项目中运行 `apply`（未显式绑定时），工具应能通过目录特征辅助识别目标为 `open_code`。 | 在新项目创建 `.agents/skills/` 目录并运行 `apply`，观察输出。 |
 | 1.3 | **子目录识别逻辑** | 在项目深层子目录下运行 `apply`，必须能准确继承根目录绑定的 `open_code` 设置并操作根目录下的 `.agents/skills/` 文件夹。 | 在 `[ProjectRoot]/src/test/` 下运行 `apply`。 |
 
@@ -68,15 +68,14 @@
 ## 7. 综合场景验证 (Full Workflow)
 
 **验收路径：**
-1. 在项目 A 执行 `skill-hub set-target open_code`。
-2. 执行 `skill-hub use git-expert` 并通过变量设置语言为 `中文`。
-3. 执行 `skill-hub apply`。
-4. **检查**：`.agents/skills/git-expert/SKILL.md` 是否生成且为中文。
-5. 手动将该文件中的某句指令改写。
-6. 执行 `skill-hub feedback git-expert`。
-7. **检查**：Git 仓库文件已更新。
-8. 执行 `skill-hub remove git-expert`。
-9. **检查**：`.agents/skills/git-expert/` 文件夹已消失。
+1. 在项目 A 执行 `skill-hub use git-expert` 并通过变量设置语言为 `中文`。
+2. 执行 `skill-hub apply`。
+3. **检查**：`.agents/skills/git-expert/SKILL.md` 是否生成且为中文。
+4. 手动将该文件中的某句指令改写。
+5. 执行 `skill-hub feedback git-expert`。
+6. **检查**：Git 仓库文件已更新。
+7. 执行 `skill-hub remove git-expert`。
+8. **检查**：`.agents/skills/git-expert/` 文件夹已消失。
 
 ---
 

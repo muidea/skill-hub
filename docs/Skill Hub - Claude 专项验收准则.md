@@ -5,7 +5,7 @@
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
 | :--- | :--- | :--- | :--- |
 | 9.1 | **配置自动定位** | 工具必须能自动识别并定位 `~/.claude/config.json` (Code) 和 Claude Desktop 的配置文件路径。 | 在不同 OS (Mac/Win) 下运行 `check claude`，观察输出路径是否正确。 |
-| 9.2 | **备份机制** | 在修改 Claude 的 JSON 配置文件前，必须在同目录下生成 `.bak` 备份文件。 | 执行 `skill-hub set-target claude`，然后执行 `skill-hub apply`，检查是否存在 `config.json.bak`。 |
+| 9.2 | **备份机制** | 当前标准工作区不再写入 Claude 专属配置；如后续恢复 Claude 配置写入能力，修改 JSON 配置文件前必须生成 `.bak` 备份。 | 当前阶段以 `.agents/skills` 同步测试为准；Claude 专属配置写入不作为当前验收项。 |
 | 9.3 | **权限预检** | 若配置文件由于系统权限无法写入，工具应返回 `ERR_FS_PERMISSION` 而非静默失败。 | 将 `config.json` 设为只读，执行 `apply` 观察报错。 |
 | 9.4 | **失效项目清理** | 当 Claude 项目目录被移动或删除后，执行 `skill-hub prune` 必须清理 `state.json` 中对应的失效项目路径。 | 删除或迁移项目目录后运行 `skill-hub prune`，检查 `state.json`。 |
 
@@ -41,7 +41,7 @@
 **场景：部署并调试一个 Claude 数据分析工具**
 
 1.  **部署验证**：
-    *   执行 `skill-hub set-target claude`。
+    *   执行 `skill-hub use <skill-id>`。
     *   执行 `skill-hub apply`。
     *   **预期**：`config.json` 被更新，包含了技能指令，并在 `mcpServers` 中注册了该工具的 Python 脚本绝对路径。
 2.  **可用性验证**：

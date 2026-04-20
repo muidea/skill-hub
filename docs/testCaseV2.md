@@ -37,8 +37,8 @@ tests/e2e/
    - 验证默认配置
    - 执行 `skill-hub init https://github.com/example/skills-repo.git`
    - 验证远程仓库克隆
-   - 执行 `skill-hub init https://github.com/example/skills-repo.git --target open_code`
-   - 验证target参数设置
+   - 执行 `skill-hub init https://github.com/example/skills-repo.git`
+   - 验证重复初始化与仓库配置行为
 
 2. **test_02_command_dependency_check()** - 命令依赖检查验证
    - 测试未初始化时执行 `skill-hub create my-logic`
@@ -67,15 +67,13 @@ tests/e2e/
    - 执行 `skill-hub list`
    - 验证列表包含新技能
    - 验证状态显示正确
-   - 执行 `skill-hub list --target open_code`
-   - 验证目标环境过滤
    - 执行 `skill-hub list --verbose`
    - 验证详细信息显示
    - 执行 `skill-hub list --repo <repo-name>`
    - 验证仓库过滤功能
    - 执行 `skill-hub list --repo <repo1> --repo <repo2>`
    - 验证多仓库过滤功能
-   - 执行 `skill-hub list --repo <repo-name> --target <value> --verbose`
+   - 执行 `skill-hub list --repo <repo-name> --verbose`
    - 验证组合过滤功能
 
 7. **test_07_full_workflow_integration()** - 完整工作流集成测试
@@ -93,14 +91,14 @@ tests/e2e/
 
 **测试用例设计**：
 1. **test_01_command_dependency_check()** - 命令依赖检查验证
-   - 测试未初始化时执行 `skill-hub set-target open_code`
-   - 验证提示需要先进行初始化
+   - 测试未初始化时执行 `skill-hub init`
+   - 验证初始化行为
    - 验证 `skill-hub use git-expert` 依赖检查
    - 验证 `skill-hub apply` 依赖检查
 
-2. **test_02_set_project_target()** - 项目目标设置
-   - 执行 `skill-hub set-target open_code`
-   - 验证 `state.json` 更新
+2. **test_02_standard_project_workspace_state()** - 标准项目状态设置
+   - 执行 `skill-hub create workspace-state-skill`
+   - 验证 `state.json` 更新且不写入项目目标
    - 验证项目工作区检查逻辑
 
 3. **test_03_enable_skill()** - 技能启用验证
@@ -117,17 +115,16 @@ tests/e2e/
    - 执行 `skill-hub apply --force`
    - 验证强制应用功能
 
-5. **test_05_command_line_target_override()** - 命令行目标覆盖
-   - 测试 `skill-hub use git-expert --target cursor`
-   - 验证命令行参数覆盖项目设置
-   - 验证目标优先级逻辑
+5. **test_05_use_without_target_updates_state_only()** - 无目标输入的 use 状态更新
+   - 测试 `skill-hub use git-expert`
+   - 验证 state 只记录技能启用信息
 
 6. **test_06_multiple_skills_application()** - 多技能批量应用
    - 启用多个技能
    - 执行 `skill-hub apply`
    - 验证批量应用正确性
 
-7. **test_07_target_specific_adapters()** - 目标特定适配器
+7. **test_07_standard_apply_path()** - 标准应用路径
    - 测试不同Target的适配器行为
    - 验证适配器正确性
 
@@ -235,24 +232,20 @@ tests/e2e/
    - 测试未初始化时执行 `skill-hub validate git-expert`
    - 验证提示需要先进行初始化
 
-2. **test_02_global_default_target()** - 全局默认target验证
+2. **test_02_standard_workflows_do_not_write_preferred_target()** - 标准流程不写项目目标
    - 执行 `skill-hub init`
-   - 验证默认target为 `open_code`
-   - 验证 `skill-hub list` 使用默认target
+   - 验证 `create` / `use` / `apply` 不写入 `preferred_target`
 
-3. **test_03_project_target_override()** - 项目target覆盖验证
-   - 执行 `skill-hub set-target cursor`
-   - 验证 `state.json` 更新
-   - 验证 `skill-hub list --target cursor` 过滤正确
+3. **test_03_compatibility_metadata_does_not_filter_list()** - 兼容性说明不参与过滤
+   - 创建带不同 `compatibility` 说明的技能
+   - 验证 `skill-hub list` 不按该字段过滤
 
-4. **test_04_command_line_target_override()** - 命令行target覆盖验证
-   - 执行 `skill-hub create my-skill --target claude`
-   - 验证命令行参数覆盖项目设置
-   - 验证 `skill-hub use my-skill --target claude` 优先级
+4. **已移除目标覆盖场景**
+   - 目标命令和目标参数入口不再作为当前业务场景
 
-5. **test_05_target_inheritance_logic()** - target继承逻辑验证
+5. **test_05_standard_workspace_inheritance_logic()** - 标准工作区继承逻辑验证
    - 测试 `skill-hub create my-skill`（无target参数）
-   - 验证使用项目target
+   - 验证使用标准项目工作区
    - 测试项目无target时使用全局默认
 
 6. **test_06_validate_command_target_handling()** - validate命令target处理
@@ -359,9 +352,9 @@ tests/e2e/
    - 执行 `skill-hub search git`
    - 验证关键词搜索
 
-3. **test_03_target_parameter_search()** - 目标参数兼容搜索 ⚠️网络依赖
-   - 执行 `skill-hub search database --target open_code`
-   - 验证 target 参数被接受但不限制搜索结果
+3. **test_03_search_ignores_compatibility_metadata()** - 搜索不按兼容性说明过滤 ⚠️网络依赖
+   - 执行 `skill-hub search database`
+   - 验证搜索只按关键词返回结果
 
 4. **test_04_search_result_limit()** - 搜索结果限制 ⚠️网络依赖
    - 执行 `skill-hub search python --limit 10`
@@ -472,7 +465,6 @@ tests/e2e/
 | 命令 | 测试状态 | 测试场景 | 依赖检查 | state.json更新 |
 |------|----------|----------|----------|----------------|
 | init | ✅ 100% | 场景1 | - | ✓ |
-| set-target | ✅ 100% | 场景2、5 | ✓ | ✓ |
 | list | ✅ 100% | 场景1、2 | ✓ | - |
 | search | ⚠️ 部分 | 场景8（网络依赖） | ✓ | - |
 | create | ✅ 100% | 场景1 | ✓ | ✓ |
@@ -491,9 +483,8 @@ tests/e2e/
 | 命令 | 更新state.json | 检查项目工作区 | 依赖init检查 | 测试验证点 |
 |------|---------------|---------------|-------------|------------|
 | init | ✓ | - | - | 目录结构、默认配置 |
-| set-target | ✓ | ✓ | ✓ | state.json更新、项目初始化 |
 | list | - | - | ✓ | 过滤显示、verbose选项 |
-| search | - | - | ✓ | 关键词搜索、target 参数兼容 |
+| search | - | - | ✓ | 关键词搜索、结果数量限制 |
 | create | ✓ | ✓ | ✓ | 本地文件生成、state记录 |
 | remove | ✓ | ✓ | ✓ | 物理删除、状态移除、仓库安全 |
 | validate | - | ✓ | ✓ | 合规性检查、非法技能提示 |

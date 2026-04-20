@@ -67,7 +67,7 @@ internal/
 
 | 指令 | 针对 OpenCode 的行为 |
 | :--- | :--- |
-| `skill-hub set-target open_code` | 将当前项目绑定为 OpenCode 环境。 |
+| `skill-hub init` | 初始化标准项目工作区与全局管理目录。 |
 | `skill-hub apply [--dry-run] [--force]` | 自动在项目根目录生成或更新 `.agents/skills/` 文件夹。 |
 | `skill-hub remove <id>` | 删除对应的技能文件夹并更新状态。 |
 | `skill-hub feedback <id> [--dry-run] [--force]` | 从 `.agents/skills/[id]/SKILL.md` 同步改动。 |

@@ -7,7 +7,7 @@
 
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
 | :--- | :--- | :--- | :--- |
-| 1.1 | **工作区创建** | 首次运行 `init` 后，用户家目录下必须生成 `.skill-hub` 文件夹，权限为 755。 | 执行 `skill-hub init [git_url] [--target <value>]`，检查 `~/.skill-hub`。 |
+| 1.1 | **工作区创建** | 首次运行 `init` 后，用户家目录下必须生成 `.skill-hub` 文件夹，权限为 755。 | 执行 `skill-hub init [git_url]`，检查 `~/.skill-hub`。 |
 | 1.2 | **Git 仓库同步** | `~/.skill-hub/repositories/<repo-name>/` 目录下应包含远程仓库的所有文件，且 `.git` 目录完整。 | 执行 `ls -a ~/.skill-hub/repositories/main` 查看内容。 |
 | 1.3 | **配置文件格式** | `config.yaml` 必须包含 `multi_repo` 配置节来管理多个仓库。 | 查看 `config.yaml` 内容，确认为合法的 YAML。 |
 | 1.4 | **二进制自包含** | 工具编译后为单二进制文件，不依赖系统安装 Python、Git 或其他运行库。 | 在纯净系统环境下直接运行 `skill-hub` 二进制。 |
@@ -16,7 +16,7 @@
 
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
 | :--- | :--- | :--- | :--- |
-| 2.1 | **目录结构校验** | 每个 Skill 必须包含 `SKILL.md` 文件，否则 `list` 指令应报错或跳过并提示。 | 删除某个 Skill 的 `SKILL.md`，运行 `skill-hub list [--target <value>] [--verbose]`。 |
+| 2.1 | **目录结构校验** | 每个 Skill 必须包含 `SKILL.md` 文件，否则 `list` 指令应报错或跳过并提示。 | 删除某个 Skill 的 `SKILL.md`，运行 `skill-hub list [--verbose]`。 |
 | 2.2 | **YAML 解析** | 能够正确读取 `SKILL.md` 里的可选 `compatibility` 说明，但不按该字段跳过技能。 | 在 `SKILL.md` 中设置任意 `compatibility`，确认 `list` / `apply` 不因该字段排除技能。 |
 | 2.3 | **模板变量支持** | `SKILL.md` 中的 `{{.VAR}}` 在应用时能被正确替换为具体值。 | 编写带变量的 Skill，执行 `use --var K=V` 后查看导出结果。 |
 
@@ -33,7 +33,7 @@
 
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
 | :--- | :--- | :--- | :--- |
-| 4.1 | **项目绑定记录** | `state.json` 必须实时记录当前项目路径与启用的 Skill 列表、变量值，以及 skill 的来源仓库信息。 | 运行 `skill-hub use <id> [--target <value>]` 后，查看 `~/.skill-hub/state.json`。 |
+| 4.1 | **项目绑定记录** | `state.json` 必须实时记录当前项目路径与启用的 Skill 列表、变量值，以及 skill 的来源仓库信息。 | 运行 `skill-hub use <id>` 后，查看 `~/.skill-hub/state.json`。 |
 | 4.2 | **路径一致性** | 工具需处理软链接路径、相对路径转绝对路径，确保在不同目录下运行状态识别一致。 | 在项目子目录下运行 `skill-hub status [id] [--verbose]`，应能识别根目录状态。 |
 | 4.3 | **失效状态清理** | 当项目目录被移动或删除后，执行 `skill-hub prune` 必须清理 `state.json` 中对应的失效项目记录，且不能误删仍存在的项目。 | 先登记项目状态，再移动或删除项目目录，执行 `skill-hub prune` 后检查 `~/.skill-hub/state.json`。 |
 
@@ -50,7 +50,7 @@
 
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
 | :--- | :--- | :--- | :--- |
-| 6.1 | **关键词检索** | `search` 指令在本地 `serve` 可用时应通过服务承接远端搜索交互；服务不可用时也应能回退到本地执行，并返回与关键词相关的候选技能。 | 分别在服务可用与不可用场景下运行 `skill-hub search <keyword> [--target <value>] [--limit <number>]`。 |
+| 6.1 | **关键词检索** | `search` 指令在本地 `serve` 可用时应通过服务承接远端搜索交互；服务不可用时也应能回退到本地执行，并返回与关键词相关的候选技能。 | 分别在服务可用与不可用场景下运行 `skill-hub search <keyword> [--limit <number>]`。 |
 | 6.2 | **多仓库同步入口** | `repo sync` 应负责同步指定仓库或所有启用仓库；`pull` 不承担全多仓库同步职责。 | 运行 `skill-hub repo sync` 与 `skill-hub pull`，检查两者输出和影响范围。 |
 
 ## 7. 工程鲁棒性与性能 (Engineering)

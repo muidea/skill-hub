@@ -306,7 +306,7 @@ skill-hub use <skill-id> --choose
 #### 3.2.2 `skill-hub list` 命令
 ```bash
 # 列出所有技能（显示来源）
-skill-hub list [--repo <repo-name>...] [--target <value>] [--verbose]
+skill-hub list [--repo <repo-name>...] [--verbose]
 
 # 输出格式
 # ID           Name                    Repository    Version
@@ -317,7 +317,6 @@ skill-hub list [--repo <repo-name>...] [--target <value>] [--verbose]
 skill-hub list                          # 列出所有技能
 skill-hub list --repo skills-repo       # 仅列出指定仓库的技能
 skill-hub list --repo skills-repo --repo openclaw  # 列出多个仓库的技能
-skill-hub list --target cursor          # 列出兼容指定目标的技能
 skill-hub list --verbose                # 显示详细信息
 ```
 
@@ -1280,8 +1279,6 @@ skill-hub init https://github.com/username/skills-repo.git
 # 初始化本地空仓库
 skill-hub init
 
-# 指定目标环境
-skill-hub init https://github.com/username/skills-repo.git --target open_code
 ```
 
 #### 11.2.2 完整工作流示例
