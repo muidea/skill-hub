@@ -321,28 +321,37 @@ main() {
     ls -la
     
     # 安装信息
+    local install_dir="$HOME/.local/bin"
+    local install_name="skill-hub"
+    if [ "$OS" = "windows" ]; then
+        install_name="skill-hub.exe"
+    fi
+    local install_path="$install_dir/$install_name"
+    local install_tmp="$install_dir/.${install_name}.new.$$"
+
     echo ""
     echo "安装信息:"
     echo "• 可执行文件: ./$ACTUAL_BINARY"
-    echo "• 将自动安装到: ~/.local/bin/"
+    echo "• 将自动安装到: $install_path"
     
     # 自动安装到 ~/.local/bin/
     echo ""
     echo "自动安装到 ~/.local/bin/..."
     
     # 创建目录（如果不存在）
-    mkdir -p ~/.local/bin
+    mkdir -p "$install_dir"
     
-    # 复制文件
-    if cp "$ACTUAL_BINARY" ~/.local/bin/; then
+    # 先复制到同目录临时文件，再通过 rename 覆盖目标文件，避免正在运行的旧二进制导致 Text file busy。
+    rm -f "$install_tmp"
+    if cp "$ACTUAL_BINARY" "$install_tmp" && chmod 755 "$install_tmp" && mv -f "$install_tmp" "$install_path"; then
         echo "✓ 安装成功！"
         
         # 安装完成信息提示
         echo ""
         echo "📦 安装内容:"
-        echo "• 程序名称: skill-hub"
+        echo "• 程序名称: $install_name"
         echo "• 可执行文件: $ACTUAL_BINARY"
-        echo "• 安装位置: ~/.local/bin/$ACTUAL_BINARY"
+        echo "• 安装位置: $install_path"
         echo "• 版本: $VERSION"
         echo "• 文件大小: $(du -h "$ACTUAL_BINARY" | cut -f1)"
         
@@ -427,7 +436,7 @@ main() {
         fi
 
         # 安装多 Shell 补全（Bash / Zsh / Fish），避免重复追加 rc
-        SKILL_HUB_BIN="$HOME/.local/bin/$ACTUAL_BINARY"
+        SKILL_HUB_BIN="$install_path"
         echo ""
         echo "🔧 安装 Shell 补全（Bash / Zsh / Fish）..."
         if [[ ! -x "$SKILL_HUB_BIN" ]]; then
@@ -496,9 +505,14 @@ main() {
         fi
         
     else
+        rm -f "$install_tmp"
         echo "✗ 安装失败"
         echo "文件保存在: $TEMP_DIR"
-        echo "您可以手动复制: cp $TEMP_DIR/$ACTUAL_BINARY ~/.local/bin/"
+        echo "目标位置: $install_path"
+        echo "如果旧版 skill-hub 或 serve 进程正在运行，请先停止后重试。"
+        echo "您也可以手动执行以下命令完成覆盖安装:"
+        echo "  cp \"$TEMP_DIR/$ACTUAL_BINARY\" \"$install_tmp\" && chmod 755 \"$install_tmp\" && mv -f \"$install_tmp\" \"$install_path\""
+        exit 1
     fi
     
     # 验证安装和使用说明
@@ -522,76 +536,76 @@ main() {
         fi
     done
     
-    if command -v "$ACTUAL_BINARY" >/dev/null 2>&1; then
-        echo "✅ 安装验证成功！"
-        echo ""
-        
-        # 显示PATH配置状态
-        if $in_current_path; then
-            echo "📋 PATH状态: ✅ 当前shell已包含 ~/.local/bin"
-        else
-            echo "📋 PATH状态: ⚠️  当前shell未包含 ~/.local/bin"
-        fi
-        
-        if $in_config_file; then
-            echo "📋 配置文件: ✅ 已添加到shell配置文件"
-        else
-            echo "📋 配置文件: ⚠️  未添加到shell配置文件"
-        fi
-        
-        echo ""
-        echo "版本信息:"
-        local version_output
-        version_output=$("$ACTUAL_BINARY" --version 2>&1)
-        echo "$version_output"
-        
-        # 检查版本信息是否为空
-        if [[ "$version_output" == *"version  (commit: , built: )"* ]]; then
-            echo ""
-            echo "⚠️  版本信息说明:"
-            echo "当前版本的二进制文件编译时未嵌入版本信息。"
-            echo "这不会影响功能使用，只是显示信息不完整。"
-            echo "实际版本: $VERSION (从GitHub Releases获取)"
-        fi
-        
-        echo ""
-        echo "📖 基本使用:"
-        echo "  1. 查看帮助: $ACTUAL_BINARY --help"
-        echo "  2. 初始化项目: $ACTUAL_BINARY init"
-        echo "  3. 列出可用技能: $ACTUAL_BINARY list"
-        echo "  4. 使用技能: $ACTUAL_BINARY use <skill-name>"
-        echo "  5. 技能应用: $ACTUAL_BINARY apply"
-    else
-        echo "⚠️  安装验证: 命令未在PATH中找到"
-        echo ""
-        
-        # 显示PATH配置状态
-        if $in_current_path; then
-            echo "📋 PATH状态: ✅ 当前shell已包含 ~/.local/bin"
-            echo "   但命令未找到，可能需要重新打开终端"
-        else
-            echo "📋 PATH状态: ⚠️  当前shell未包含 ~/.local/bin"
-        fi
-        
-        if $in_config_file; then
-            echo "📋 配置文件: ✅ 已添加到shell配置文件"
-            echo "   请重新打开终端或运行: source ~/.bashrc (或对应配置文件)"
-        else
-            echo "📋 配置文件: ⚠️  未添加到shell配置文件"
-        fi
-        
-        echo ""
-        echo "💡 立即使用:"
-        echo "  直接运行: ~/.local/bin/$ACTUAL_BINARY --version"
+    if [[ ! -x "$install_path" ]]; then
+        echo "✗ 安装验证失败: $install_path 不存在或不可执行"
+        exit 1
     fi
+
+    echo ""
+    # 显示PATH配置状态
+    if $in_current_path; then
+        echo "📋 PATH状态: ✅ 当前shell已包含 ~/.local/bin"
+    else
+        echo "📋 PATH状态: ⚠️  当前shell未包含 ~/.local/bin"
+    fi
+
+    if $in_config_file; then
+        echo "📋 配置文件: ✅ 已添加到shell配置文件"
+    else
+        echo "📋 配置文件: ⚠️  未添加到shell配置文件"
+    fi
+
+    echo ""
+    echo "版本信息:"
+    local version_output
+    if ! version_output=$("$install_path" --version 2>&1); then
+        echo "$version_output"
+        echo "✗ 安装验证失败: 无法执行 $install_path --version"
+        exit 1
+    fi
+    echo "$version_output"
+
+    local expected_version="${VERSION#v}"
+    local installed_version
+    installed_version=$(printf '%s\n' "$version_output" | sed -n 's/^skill-hub version \([^ ]*\).*/\1/p' | head -n 1)
+
+    # 检查版本信息是否为空
+    if [[ "$version_output" == *"version  (commit: , built: )"* ]]; then
+        echo ""
+        echo "⚠️  版本信息说明:"
+        echo "当前版本的二进制文件编译时未嵌入版本信息。"
+        echo "这不会影响功能使用，只是显示信息不完整。"
+        echo "实际版本: $VERSION (从GitHub Releases获取)"
+    elif [[ "$installed_version" != "$expected_version" ]]; then
+        echo ""
+        echo "✗ 安装验证失败: 版本不匹配"
+        echo "期望版本: $expected_version"
+        echo "实际版本: ${installed_version:-无法识别}"
+        echo "验证路径: $install_path"
+        exit 1
+    fi
+
+    echo ""
+    echo "✅ 安装验证成功！"
+    echo ""
+    echo "📖 基本使用:"
+    echo "  1. 查看帮助: $install_name --help"
+    echo "  2. 初始化项目: $install_name init"
+    echo "  3. 列出可用技能: $install_name list"
+    echo "  4. 使用技能: $install_name use <skill-name>"
+    echo "  5. 技能应用: $install_name apply"
     
     # 清理提示和总结
     echo ""
     echo "📝 安装总结:"
-    echo "• ✅ 下载完成: skill-hub-linux-amd64.tar.gz"
-    echo "• ✅ 验证通过: SHA256 校验成功"
+    echo "• ✅ 下载完成: $ARCHIVE_NAME"
+    if [ "$CHECKSUM_DOWNLOADED" = "true" ]; then
+        echo "• ✅ 验证通过: SHA256 校验成功"
+    else
+        echo "• ⚠️  验证跳过: SHA256 校验文件缺失"
+    fi
     echo "• ✅ 文件解压: 找到可执行文件 $ACTUAL_BINARY"
-    echo "• ✅ 安装完成: 已复制到 ~/.local/bin/"
+    echo "• ✅ 安装完成: 已安装到 $install_path"
     echo ""
     echo "🗑️  清理提示:"
     echo "临时文件保存在: $TEMP_DIR"
