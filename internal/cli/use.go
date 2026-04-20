@@ -107,8 +107,7 @@ func runUse(skillID string, target string) error {
 
 	fmt.Printf("\n✅ 技能 '%s' 已成功标记为使用！\n", skillID)
 
-	// 显示目标信息
-	fmt.Printf("技能兼容目标: %s\n", target)
+	fmt.Printf("项目目标: %s\n", target)
 	fmt.Println("使用 'skill-hub apply' 将技能物理分发到当前项目")
 
 	return nil
@@ -171,7 +170,7 @@ func runUseViaService(client serviceUseClient, skillID string, target string) er
 	}
 
 	fmt.Printf("\n✅ 技能 '%s' 已成功标记为使用！\n", skillID)
-	fmt.Printf("技能兼容目标: %s\n", resp.Item.Target)
+	fmt.Printf("项目目标: %s\n", resp.Item.Target)
 	fmt.Println("使用 'skill-hub apply' 将技能物理分发到当前项目")
 	return nil
 }

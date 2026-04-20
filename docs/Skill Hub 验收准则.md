@@ -17,7 +17,7 @@
 | 编号 | 验收项 | 验收指标 (Expectation) | 验证操作 (How to Verify) |
 | :--- | :--- | :--- | :--- |
 | 2.1 | **目录结构校验** | 每个 Skill 必须包含 `SKILL.md` 文件，否则 `list` 指令应报错或跳过并提示。 | 删除某个 Skill 的 `SKILL.md`，运行 `skill-hub list [--target <value>] [--verbose]`。 |
-| 2.2 | **YAML 解析** | 能够正确读取 `SKILL.md` 里的 `compatibility` 字符串，过滤不支持当前工具的技能。 | 在 `SKILL.md` 中设置不支持 `cursor`，检查 `apply` 是否跳过。 |
+| 2.2 | **YAML 解析** | 能够正确读取 `SKILL.md` 里的可选 `compatibility` 说明，但不按该字段跳过技能。 | 在 `SKILL.md` 中设置任意 `compatibility`，确认 `list` / `apply` 不因该字段排除技能。 |
 | 2.3 | **模板变量支持** | `SKILL.md` 中的 `{{.VAR}}` 在应用时能被正确替换为具体值。 | 编写带变量的 Skill，执行 `use --var K=V` 后查看导出结果。 |
 
 ## 模块 3：分发与部署逻辑 (Distribution & Apply)

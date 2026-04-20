@@ -16,8 +16,8 @@ import (
 
 var setTargetCmd = &cobra.Command{
 	Use:   "set-target <value>",
-	Short: "设置项目兼容目标",
-	Long: `设置当前项目的首选兼容目标，该设置会持久化到 state.json 中，影响后续 apply、status、feedback 等命令的行为。
+	Short: "设置项目目标",
+	Long: `设置当前项目的首选目标，该设置会持久化到 state.json 中，影响后续 apply、status、feedback 等命令的行为。
 
 支持的取值:
   cursor
@@ -53,7 +53,7 @@ func runSetTarget(target string) error {
 			return errors.Wrap(err, "通过服务设置首选目标失败")
 		}
 
-		fmt.Printf("✅ 已将项目 '%s' 的首选兼容目标设置为: %s\n", filepath.Base(cwd), resp.Target)
+		fmt.Printf("✅ 已将项目 '%s' 的首选目标设置为: %s\n", filepath.Base(cwd), resp.Target)
 		fmt.Println("下次执行 'skill-hub apply' 时将自动使用此目标")
 		return nil
 	}
@@ -67,7 +67,7 @@ func runSetTarget(target string) error {
 		return errors.Wrap(err, "设置首选目标失败")
 	}
 
-	fmt.Printf("✅ 已将项目 '%s' 的首选兼容目标设置为: %s\n", filepath.Base(ctx.Cwd), normalizedTarget)
+	fmt.Printf("✅ 已将项目 '%s' 的首选目标设置为: %s\n", filepath.Base(ctx.Cwd), normalizedTarget)
 	fmt.Println("下次执行 'skill-hub apply' 时将自动使用此目标")
 
 	return nil

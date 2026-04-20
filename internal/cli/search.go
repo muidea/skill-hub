@@ -15,7 +15,7 @@ import (
 var searchCmd = &cobra.Command{
 	Use:   "search <keyword>",
 	Short: "搜索远程技能",
-	Long:  "通过 GitHub API 搜索带有 agent-skills 标签的远程技能仓库，可按兼容目标过滤结果。",
+	Long:  "通过 GitHub API 搜索带有 agent-skills 标签的远程技能仓库。--target 参数保留用于兼容旧脚本，不再限制搜索结果。",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
@@ -32,7 +32,7 @@ func init() {
 func runSearch(keyword, target string, limit int) error {
 	fmt.Printf("搜索远程技能: %s\n", keyword)
 	if target != "" {
-		fmt.Printf("兼容目标过滤: %s\n", target)
+		fmt.Printf("目标参数: %s (保留兼容，不限制搜索结果)\n", target)
 	}
 	fmt.Printf("结果数量限制: %d\n", limit)
 
@@ -98,7 +98,7 @@ func displaySearchResults(results []spec.RemoteSearchResult, keyword, target str
 	if len(results) == 0 {
 		fmt.Println("\nℹ️  未找到相关技能")
 		if target != "" {
-			fmt.Printf("搜索关键词: %s (兼容目标: %s)\n", keyword, target)
+			fmt.Printf("搜索关键词: %s (目标参数: %s)\n", keyword, target)
 		} else {
 			fmt.Printf("搜索关键词: %s\n", keyword)
 		}
@@ -139,7 +139,7 @@ func displaySearchResults(results []spec.RemoteSearchResult, keyword, target str
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Printf("找到 %d 个相关技能", len(results))
 	if target != "" {
-		fmt.Printf(" (已过滤兼容目标: %s)", target)
+		fmt.Printf(" (目标参数: %s)", target)
 	}
 	fmt.Println()
 

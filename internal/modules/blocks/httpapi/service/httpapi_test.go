@@ -85,7 +85,7 @@ func TestHTTPAPI_ListProjects(t *testing.T) {
 	}
 }
 
-func TestHTTPAPI_ListSkillsIncludesTotal(t *testing.T) {
+func TestHTTPAPI_ListSkillsIncludesTotalAndKeepsTargetNoop(t *testing.T) {
 	config.ResetForTest()
 	defer config.ResetForTest()
 
@@ -140,14 +140,18 @@ compatibility: ` + target + `
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
-	if resp.Data.Total != 1 {
-		t.Fatalf("expected total 1, got %d", resp.Data.Total)
+	if resp.Data.Total != 2 {
+		t.Fatalf("expected total 2, got %d", resp.Data.Total)
 	}
-	if len(resp.Data.Items) != 1 {
-		t.Fatalf("expected 1 item, got %d", len(resp.Data.Items))
+	if len(resp.Data.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(resp.Data.Items))
 	}
-	if resp.Data.Items[0].ID != "open-code-skill" {
-		t.Fatalf("expected open-code-skill, got %q", resp.Data.Items[0].ID)
+	ids := map[string]bool{}
+	for _, item := range resp.Data.Items {
+		ids[item.ID] = true
+	}
+	if !ids["open-code-skill"] || !ids["cursor-skill"] {
+		t.Fatalf("expected target query to keep both skills, got %#v", ids)
 	}
 }
 

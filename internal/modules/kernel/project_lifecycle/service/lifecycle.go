@@ -87,7 +87,7 @@ func (p *ProjectLifecycle) Register(projectPath, skillID, target string, skipVal
 	}
 	target = normalizeTargetOrDefault(target)
 	if !isValidTarget(target) {
-		return nil, errors.NewWithCodef("Register", errors.ErrInvalidInput, "无效的兼容目标: %s。可用选项: cursor, claude, claude_code, open_code", target)
+		return nil, errors.NewWithCodef("Register", errors.ErrInvalidInput, "无效的项目目标: %s。可用选项: cursor, claude, claude_code, open_code", target)
 	}
 
 	absProjectPath, err := filepath.Abs(projectPath)
@@ -155,7 +155,7 @@ func (p *ProjectLifecycle) Import(projectPath, skillsDir string, opts ImportOpti
 	}
 	opts.Target = normalizeTargetOrDefault(opts.Target)
 	if !isValidTarget(opts.Target) {
-		return nil, errors.NewWithCodef("Import", errors.ErrInvalidInput, "无效的兼容目标: %s。可用选项: cursor, claude, claude_code, open_code", opts.Target)
+		return nil, errors.NewWithCodef("Import", errors.ErrInvalidInput, "无效的项目目标: %s。可用选项: cursor, claude, claude_code, open_code", opts.Target)
 	}
 
 	absProjectPath, err := filepath.Abs(projectPath)
@@ -427,11 +427,6 @@ func buildRepairedSkillContent(skillID string, content []byte, target string) ([
 		frontmatter["description"] = inferSkillDescription(body, skillID)
 		changed = true
 	}
-	if str, ok := frontmatter["compatibility"].(string); !ok || strings.TrimSpace(str) == "" {
-		frontmatter["compatibility"] = generateCompatibilityDescription(target)
-		changed = true
-	}
-
 	metadata, ok := frontmatter["metadata"].(map[string]interface{})
 	if !ok || metadata == nil {
 		metadata = map[string]interface{}{}
@@ -535,19 +530,6 @@ func normalizeTargetOrDefault(target string) string {
 		return spec.TargetOpenCode
 	}
 	return spec.NormalizeTarget(strings.TrimSpace(target))
-}
-
-func generateCompatibilityDescription(target string) string {
-	switch normalizeTargetOrDefault(strings.ToLower(target)) {
-	case spec.TargetCursor:
-		return "Compatible with cursor"
-	case spec.TargetClaudeCode:
-		return "Compatible with claude_code"
-	case spec.TargetOpenCode:
-		return "Compatible with open_code"
-	default:
-		return "Compatible with common .agents/skills workflows"
-	}
 }
 
 func isValidTarget(target string) bool {

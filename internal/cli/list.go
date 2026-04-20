@@ -15,7 +15,7 @@ import (
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "列出可用技能",
-	Long:  "显示本地技能仓库中的所有技能，支持按兼容目标和仓库过滤。",
+	Long:  "显示本地技能仓库中的所有技能，支持按仓库过滤。--target 参数保留用于兼容旧脚本，不再限制技能列表。",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
 		verbose, _ := cmd.Flags().GetBool("verbose")
@@ -26,7 +26,7 @@ var listCmd = &cobra.Command{
 
 func init() {
 	listCmd.Flags().String("target", "", targetFilterFlagUsage)
-	listCmd.Flags().Bool("verbose", false, "显示详细信息，包括技能描述、版本、兼容性等")
+	listCmd.Flags().Bool("verbose", false, "显示详细信息，包括技能描述、版本、适用说明等")
 	listCmd.Flags().StringSlice("repo", []string{}, "按仓库名称过滤技能列表（可多次使用指定多个仓库）")
 }
 
@@ -79,48 +79,15 @@ func runList(target string, verbose bool, repoFilters []string) error {
 			}
 		}
 
-		skillsMetadata = filterSkillsByTarget(skillsMetadata, target)
 	}
 
 	renderSkillList(skillsMetadata, target, repoFilters, verbose)
 	return nil
 }
 
-func filterSkillsByTarget(skillsMetadata []spec.SkillMetadata, target string) []spec.SkillMetadata {
-	targetLower := strings.ToLower(target)
-	if targetLower == "" {
-		return skillsMetadata
-	}
-
-	var filteredSkills []spec.SkillMetadata
-	for _, skill := range skillsMetadata {
-		compatLower := strings.ToLower(skill.Compatibility)
-
-		isCompatible := false
-		if targetLower == "cursor" && strings.Contains(compatLower, "cursor") {
-			isCompatible = true
-		} else if (targetLower == "claude" || targetLower == "claude_code") &&
-			(strings.Contains(compatLower, "claude") || strings.Contains(compatLower, "claude_code")) {
-			isCompatible = true
-		} else if (targetLower == "open_code" || targetLower == "opencode") &&
-			(strings.Contains(compatLower, "open_code") || strings.Contains(compatLower, "opencode")) {
-			isCompatible = true
-		}
-
-		if isCompatible {
-			filteredSkills = append(filteredSkills, skill)
-		}
-	}
-	return filteredSkills
-}
-
 func renderSkillList(skillsMetadata []spec.SkillMetadata, target string, repoFilters []string, verbose bool) {
 	if len(skillsMetadata) == 0 {
-		if target != "" {
-			fmt.Printf("ℹ️  未找到兼容 %s 目标的技能\n", target)
-		} else {
-			fmt.Println("ℹ️  未找到任何技能")
-		}
+		fmt.Println("ℹ️  未找到任何技能")
 		return
 	}
 
@@ -137,7 +104,7 @@ func renderSkillList(skillsMetadata []spec.SkillMetadata, target string, repoFil
 				fmt.Printf("   描述: %s\n", skill.Description)
 			}
 			if skill.Compatibility != "" {
-				fmt.Printf("   兼容性: %s\n", skill.Compatibility)
+				fmt.Printf("   适用说明: %s\n", skill.Compatibility)
 			}
 			if len(skill.Tags) > 0 {
 				fmt.Printf("   标签: %s\n", strings.Join(skill.Tags, ", "))
@@ -188,7 +155,7 @@ func renderSkillList(skillsMetadata []spec.SkillMetadata, target string, repoFil
 		fmt.Println(separator)
 
 		for _, skill := range skillsMetadata {
-			toolsStr := getToolsString(skill.Compatibility)
+			toolsStr := getCompatibilitySummary(skill.Compatibility)
 			repoName := formatRepoName(skill.Repository, widths.repoMin)
 			displaySkillID := formatSkillID(skill.ID, widths.idMin)
 
@@ -224,7 +191,7 @@ func renderSkillList(skillsMetadata []spec.SkillMetadata, target string, repoFil
 	}
 
 	if target != "" {
-		fmt.Printf("\n已过滤显示兼容 %s 目标的技能\n", target)
+		fmt.Printf("\n目标参数 %s 已保留兼容；当前列表不再按技能 compatibility 过滤\n", target)
 	}
 	if len(repoFilters) > 0 {
 		fmt.Printf("\n已过滤显示仓库: %s\n", strings.Join(repoFilters, ", "))
@@ -299,14 +266,13 @@ func calculateColumnWidths(skills []spec.SkillMetadata) columnWidths {
 		versionMax: 10, // 版本最大宽度
 		repoMin:    4,  // "仓库" 最小宽度
 		repoMax:    20, // 仓库最大宽度
-		toolsMin:   6,  // "兼容目标" 最小宽度
+		toolsMin:   6,  // "适用范围" 最小宽度
 		toolsMax:   30, // 工具最大宽度
 	}
 
 	// 计算每列的实际最大数据长度
 	for _, skill := range skills {
-		// 获取工具字符串
-		toolsStr := getToolsString(skill.Compatibility)
+		toolsStr := getCompatibilitySummary(skill.Compatibility)
 
 		// 更新ID列宽度（使用显示宽度）
 		updateWidth(&widths.idMin, displayWidth(skill.ID), widths.idMax)
@@ -334,8 +300,7 @@ func calculateColumnWidths(skills []spec.SkillMetadata) columnWidths {
 	// 基于显示宽度设置列宽
 	// 计算每列的最大显示宽度
 	for _, skill := range skills {
-		// 获取工具字符串
-		toolsStr := getToolsString(skill.Compatibility)
+		toolsStr := getCompatibilitySummary(skill.Compatibility)
 
 		// 更新ID列显示宽度
 		updateWidth(&widths.idMin, displayWidth(skill.ID), widths.idMax)
@@ -383,7 +348,7 @@ func calculateColumnWidths(skills []spec.SkillMetadata) columnWidths {
 	// 经验值：每个中文字符需要额外1显示宽度补偿
 	widths.versionMin += 2 // "版本"有2个中文字符
 	widths.repoMin += 2    // "仓库"有2个中文字符
-	widths.toolsMin += 4   // "兼容目标"有4个中文字符
+	widths.toolsMin += 4   // "适用范围"有4个中文字符
 
 	// 确保不超过最大宽度限制
 	if widths.idMin > widths.idMax {
@@ -411,47 +376,18 @@ func calculateColumnWidths(skills []spec.SkillMetadata) columnWidths {
 	if widths.repoMin < len("仓库")+4 { // "仓库"需要额外空间
 		widths.repoMin = len("仓库") + 4
 	}
-	if widths.toolsMin < len(targetColumnTitle)+8 { // "兼容目标"需要更多额外空间
+	if widths.toolsMin < len(targetColumnTitle)+8 { // "适用范围"需要更多额外空间
 		widths.toolsMin = len(targetColumnTitle) + 8
 	}
 
 	return widths
 }
 
-// getToolsString 从兼容性字符串提取工具列表
-func getToolsString(compatibility string) string {
-	if compatibility == "" {
-		return "all"
+func getCompatibilitySummary(compatibility string) string {
+	if strings.TrimSpace(compatibility) == "" {
+		return "通用"
 	}
-
-	compatLower := strings.ToLower(compatibility)
-	tools := []string{}
-
-	// 检查各种兼容性格式
-	if strings.Contains(compatLower, "cursor") {
-		tools = append(tools, "cursor")
-	}
-	if strings.Contains(compatLower, "claude") {
-		tools = append(tools, "claude_code")
-	}
-	if strings.Contains(compatLower, "shell") {
-		tools = append(tools, "shell")
-	}
-	if strings.Contains(compatLower, "opencode") || strings.Contains(compatLower, "open_code") {
-		tools = append(tools, "open_code")
-	}
-
-	if len(tools) == 0 {
-		// 如果没有找到特定工具，但兼容性字段不为空，显示"all"
-		return "all"
-	}
-
-	// 限制最多显示3个工具，避免过长
-	if len(tools) > 3 {
-		return tools[0] + "," + tools[1] + ",..."
-	}
-
-	return strings.Join(tools, ",")
+	return "已声明"
 }
 
 // formatSkillID 格式化技能ID显示，考虑显示宽度

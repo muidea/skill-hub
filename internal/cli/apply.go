@@ -17,7 +17,7 @@ import (
 var applyCmd = &cobra.Command{
 	Use:   "apply",
 	Short: "应用技能到项目",
-	Long: `根据 state.json 中的启用记录和项目兼容目标，将技能物理分发到当前项目。
+	Long: `根据 state.json 中的启用记录和项目目标，将技能物理分发到当前项目。
 
 默认项目本地技能目录为 .agents/skills；其他写入位置由目标适配器决定。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -47,11 +47,11 @@ func runApply(dryRun bool, force bool) error {
 	projectState := ctx.ProjectState
 	if projectState == nil || projectState.PreferredTarget == "" {
 		return errors.NewWithCode("runApply", errors.ErrProjectInvalid,
-			"项目未设置兼容目标，请先使用 'skill-hub set-target <value>' 设置兼容目标")
+			"项目未设置目标，请先使用 'skill-hub set-target <value>' 设置项目目标")
 	}
 
 	target := spec.NormalizeTarget(projectState.PreferredTarget)
-	fmt.Printf("项目兼容目标: %s\n", target)
+	fmt.Printf("项目目标: %s\n", target)
 	fmt.Printf("项目路径: %s\n", ctx.Cwd)
 
 	skills, err := ctx.StateManager.GetProjectSkills(ctx.Cwd)
@@ -156,7 +156,7 @@ func renderApplyResult(result *projectapplyservice.ApplyResult) {
 		return
 	}
 
-	fmt.Printf("项目兼容目标: %s\n", result.Target)
+	fmt.Printf("项目目标: %s\n", result.Target)
 	fmt.Printf("项目路径: %s\n", result.ProjectPath)
 
 	if len(result.Items) == 0 {

@@ -658,7 +658,7 @@ func TestRunSetTargetViaServiceWithoutLocalConfig(t *testing.T) {
 			}
 		})
 	})
-	if !strings.Contains(output, "首选兼容目标设置为") {
+	if !strings.Contains(output, "首选目标设置为") {
 		t.Fatalf("unexpected set-target output: %q", output)
 	}
 }

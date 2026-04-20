@@ -79,7 +79,7 @@ Use this skill in tests.
         assert repaired.startswith("---\n")
         assert "name: legacy-skill" in repaired
         assert "description: This legacy body should stay exactly the same." in repaired
-        assert "compatibility:" in repaired
+        assert "compatibility:" not in repaired
         assert "version: 1.0.0" in repaired
         assert repaired.split("---\n", 2)[2] == body
         assert list(skill_md.parent.glob("SKILL.md.bak.*")), "backup file was not created"

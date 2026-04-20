@@ -373,11 +373,6 @@ func (h *HTTPAPI) handleSkills(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("target")))
-	if target != "" {
-		skills = filterSkillsByTarget(skills, target)
-	}
-
 	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.SkillListData]{
 		Code: httpapibiz.CodeOK,
 		Data: httpapibiz.SkillListData{
@@ -862,30 +857,6 @@ func (h *HTTPAPI) handleApplyFeedback(w http.ResponseWriter, r *http.Request) {
 		Code: httpapibiz.CodeOK,
 		Data: httpapibiz.FeedbackPreviewData{Item: result},
 	})
-}
-
-func filterSkillsByTarget(skills []spec.SkillMetadata, target string) []spec.SkillMetadata {
-	var filtered []spec.SkillMetadata
-	for _, item := range skills {
-		compat := strings.ToLower(item.Compatibility)
-		switch target {
-		case spec.TargetCursor:
-			if strings.Contains(compat, "cursor") {
-				filtered = append(filtered, item)
-			}
-		case spec.TargetClaude, spec.TargetClaudeCode:
-			if strings.Contains(compat, "claude") || strings.Contains(compat, "claude_code") {
-				filtered = append(filtered, item)
-			}
-		case spec.TargetOpenCode, "opencode":
-			if strings.Contains(compat, "open_code") || strings.Contains(compat, "opencode") {
-				filtered = append(filtered, item)
-			}
-		default:
-			filtered = append(filtered, item)
-		}
-	}
-	return filtered
 }
 
 func skillRepositoryChangedFiles(status string) []string {

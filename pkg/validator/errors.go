@@ -64,7 +64,7 @@ const (
 	WarnDescTooShort   = "DESC_TOO_SHORT_WARNING"
 	WarnDescNoSentence = "DESC_NO_SENTENCE"
 
-	// compatibility格式警告
+	// legacy compatibility格式警告
 	WarnCompatObjectFormat = "COMPAT_OBJECT_FORMAT"
 	WarnCompatUnknownType  = "COMPAT_UNKNOWN_TYPE"
 
@@ -112,8 +112,8 @@ var errorMessages = map[string]string{
 var warningMessages = map[string]string{
 	WarnDescTooShort:          "description可能太短，建议提供更详细的描述",
 	WarnDescNoSentence:        "description应该包含完整的句子",
-	WarnCompatObjectFormat:    "compatibility应该是字符串格式，而不是对象（当前实现可能不符合规范）",
-	WarnCompatUnknownType:     "compatibility字段类型未知",
+	WarnCompatObjectFormat:    "compatibility对象格式保留为历史兼容",
+	WarnCompatUnknownType:     "compatibility字段类型为非标准说明",
 	WarnMetadataWrongType:     "metadata字段类型可能不符合规范",
 	WarnMetadataValueType:     "metadata值类型可能不符合规范",
 	WarnLicenseWrongType:      "license字段类型可能不符合规范",

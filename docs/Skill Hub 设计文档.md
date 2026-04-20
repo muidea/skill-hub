@@ -113,10 +113,10 @@ fix: 修复登录页面样式错位问题
 ```
 
 **注意**：
-- `compatibility`字段应为字符串格式，描述技能适用的AI工具
-- 支持的目标工具：`cursor`, `claude_code`, `open_code`
-- 示例：`Designed for Cursor and Claude Code (or similar AI coding assistants)`
-- 旧的对象格式（如 `compatibility: { cursor: true, claude_code: false }`）会被视为警告
+- `compatibility` 字段为可选适用说明，不再作为技能是否可用于某个工具的硬门禁
+- `target` 继续用于项目工作区和适配器选择，例如 `cursor`, `claude_code`, `open_code`
+- 新建和修复 legacy 技能时不再主动补写 `compatibility`
+- 旧的对象格式仍可被读取，但不再要求转换为目标工具字符串
 
 ---
 

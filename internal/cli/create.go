@@ -21,8 +21,7 @@ var createCmd = &cobra.Command{
 	Short: "创建新技能模板",
 	Long: `在当前项目的本地技能工作区创建一个新技能，默认写入 .agents/skills/<id>/。
 
-如果指定了 --target 选项，则会为该技能记录兼容目标。
-否则将使用项目当前的默认兼容目标。
+--target 用于选择项目工作区目标，不再写入技能兼容性声明。
 
 创建的技能仅存在于项目本地，需要通过 feedback 命令同步到仓库。
 create命令将会刷新state.json，标记当前项目工作区在使用该技能。`,
@@ -123,7 +122,7 @@ func runCreate(skillID string, target string) error {
 
 	// 验证目标选项
 	if !isValidTarget(target) {
-		return errors.NewWithCodef("runCreate", errors.ErrInvalidInput, "无效的兼容目标: %s。可用选项: cursor, claude, open_code", target)
+		return errors.NewWithCodef("runCreate", errors.ErrInvalidInput, "无效的项目目标: %s。可用选项: cursor, claude, open_code", target)
 	}
 
 	content, err := generateSkillContent(skillID, description, target)
@@ -164,16 +163,12 @@ func generateSkillContent(name, description, target string) (string, error) {
 		author = user
 	}
 
-	// 生成兼容性描述
-	compatDesc := generateCompatibilityDescription(target)
-
 	// 使用字符串构建器创建模板
 	var template strings.Builder
 
 	template.WriteString(fmt.Sprintf(`---
 name: %s
 description: %s
-compatibility: %s
 metadata:
   version: "1.0.0"
   author: "%s"
@@ -251,7 +246,6 @@ metadata:
 `,
 		name,
 		description,
-		compatDesc,
 		author,
 		timestamp,
 		name,
@@ -259,23 +253,6 @@ metadata:
 		time.Now().Format("2006-01-02")))
 
 	return template.String(), nil
-}
-
-// generateCompatibilityDescription 生成兼容性描述
-func generateCompatibilityDescription(target string) string {
-	// 规范化目标值
-	normalized := spec.NormalizeTarget(strings.ToLower(target))
-
-	switch normalized {
-	case spec.TargetCursor:
-		return "Compatible with cursor"
-	case spec.TargetClaudeCode:
-		return "Compatible with claude_code"
-	case spec.TargetOpenCode:
-		return "Compatible with open_code"
-	default:
-		return "Compatible with common .agents/skills workflows"
-	}
 }
 
 // isValidSkillName 验证技能名称格式

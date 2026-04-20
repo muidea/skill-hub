@@ -115,7 +115,7 @@ skill-hub serve --secret-key write-secret
 
 - 查看技能列表
 - 按 repo 过滤
-- 按 target 过滤
+- `target` 查询参数保留兼容，但不再按 Skill `compatibility` 过滤
 - 查看技能基础元数据
 
 这部分对应当前 `list` 命令。
@@ -251,7 +251,7 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 ### 7.3 技能列表与详情
 
 - `GET /api/v1/skills`
-  - 响应 `data.items` 为当前过滤后的技能列表，`data.total` 为同一过滤条件下的真实技能总数，Web UI 目录页使用该字段展示技能总数
+  - 响应 `data.items` 为当前仓库过滤后的技能列表，`data.total` 为同一过滤条件下的真实技能总数，Web UI 目录页使用该字段展示技能总数
 - `GET /api/v1/search?keyword=<keyword>[&target=<value>][&limit=<n>]`
 - `GET /api/v1/skills/{id}/candidates`
 - `GET /api/v1/skills/{id}?repo=<repo-name>`
@@ -259,7 +259,7 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 支持查询参数：
 
 - `repo`
-- `target`
+- `target`：保留兼容，不再按 Skill `compatibility` 过滤
 
 ### 7.4 项目与工作区技能
 
@@ -331,8 +331,7 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 
 - 当前 `list` 结果
 - repo 过滤
-- target 过滤
-- `name/version/repository/compatibility/description`
+- `name/version/repository/compatibility/description`，其中 `compatibility` 仅作为可选适用说明展示
 
 ### 9.3 项目页
 

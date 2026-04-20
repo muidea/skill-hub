@@ -336,7 +336,7 @@
     <section class="hero">
       <div class="eyebrow">Skill Catalog</div>
       <h1>Skill Hub 技能目录</h1>
-      <p>面向普通用户的只读技能视图。你可以按仓库和目标筛选当前可用技能，并通过分页快速浏览目录。</p>
+      <p>面向普通用户的只读技能视图。你可以按仓库筛选当前可用技能，并通过分页快速浏览目录。</p>
       <div class="hero-actions">
         <button class="primary" id="refresh-skills" type="button">刷新技能目录</button>
         <button class="secondary" type="button" onclick="window.location.href='/admin.html'">进入管理端</button>
@@ -356,7 +356,7 @@
         <div class="metric">
           <span>技能总数</span>
           <strong id="summary-skills">0</strong>
-          <small id="summary-target">目标过滤: 全部</small>
+          <small>当前仓库过滤结果</small>
         </div>
         <div class="metric">
           <span>仓库数量</span>
@@ -369,15 +369,6 @@
         <div class="field">
           <label for="repo-filter">仓库过滤</label>
           <input id="repo-filter" placeholder="例如: main 或 community">
-        </div>
-        <div class="field">
-          <label for="target-filter">目标过滤</label>
-          <select id="target-filter">
-            <option value="">全部目标</option>
-            <option value="open_code">open_code</option>
-            <option value="cursor">cursor</option>
-            <option value="claude_code">claude_code</option>
-          </select>
         </div>
       </div>
 
@@ -422,10 +413,8 @@
 
     function setOverview(pageData) {
       const repoSet = new Set(state.skills.map(item => item.repository).filter(Boolean));
-      const target = document.getElementById("target-filter").value.trim() || "全部";
       document.getElementById("summary-skills").textContent = String(state.totalSkills);
       document.getElementById("summary-repos").textContent = String(repoSet.size);
-      document.getElementById("summary-target").textContent = `目标过滤: ${target}`;
     }
 
     function renderSkills() {
@@ -448,7 +437,7 @@
           <div class="desc">${escapeHtml(item.description || "无描述")}</div>
           <div class="meta-line">
             <span class="chip chip-neutral">version ${escapeHtml(item.version || "-")}</span>
-            <span class="chip chip-neutral">${escapeHtml(item.compatibility || "未声明目标")}</span>
+            <span class="chip chip-neutral">${escapeHtml(item.compatibility || "通用")}</span>
           </div>
         </li>`).join("");
 
@@ -496,10 +485,8 @@
 
     async function refreshSkills() {
       const repo = document.getElementById("repo-filter").value.trim();
-      const target = document.getElementById("target-filter").value.trim();
       const query = new URLSearchParams();
       if (repo) query.set("repo", repo);
-      if (target) query.set("target", target);
 
       const data = await api(`/api/v1/skills?${query.toString()}`);
       state.skills = Array.isArray(data.items) ? data.items : [];
@@ -525,10 +512,6 @@
         refreshSkills();
       }
     });
-    document.getElementById("target-filter").addEventListener("change", () => {
-      refreshSkills();
-    });
-
     refreshSkills().catch((err) => {
       console.error(err);
       alert(err.message);

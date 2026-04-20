@@ -130,7 +130,7 @@ curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/instal
 
 安装完成后，按照以下工作流程开始使用：
 
-项目本地 Skill 目录默认使用 `.agents/skills/`，`target` 主要用于记录和过滤兼容目标，不再要求每个命令都绑定某个具体工具的目录说明。
+项目本地 Skill 目录默认使用 `.agents/skills/`。`target` 主要用于记录项目工作区目标和选择适配器，不再用于按 Skill `compatibility` 硬过滤技能。
 
 #### 多仓库初始化流程
 ```bash
@@ -144,7 +144,7 @@ skill-hub repo add personal https://github.com/yourname/skills.git
 # 3. 设置默认归档仓库
 skill-hub repo default main
 
-# 4. 设置项目兼容目标
+# 4. 设置项目目标
 skill-hub set-target open_code
 
 # 5. 启用技能
@@ -285,7 +285,7 @@ skill-hub prune
 | 命令 | 参数 | 功能说明 |
 |------|------|----------|
 | `init` | `[git_url] [--target <value>]` | 初始化多仓库工作区 |
-| `set-target` | `<value>` | 设置项目兼容目标 |
+| `set-target` | `<value>` | 设置项目目标 |
 | `list` | `[--target <value>] [--verbose]` | 列出可用技能 |
 | `search` | `<keyword> [--target <value>] [--limit <number>]` | 搜索远程技能 |
 | `create` | `<id> [--target <value>]` | 创建新技能模板 |
@@ -333,7 +333,7 @@ skill-hub prune
   - 4种安装方法详解（一键脚本、预编译二进制、源码编译、本地开发）
   - 完整命令参考和常用工作流程
   - 技能规范、目录结构和变量系统
-  - 支持的AI工具和兼容性说明
+  - 项目目标、技能元数据和适用说明
   - 常见问题故障排除
 
 ### 开发文档

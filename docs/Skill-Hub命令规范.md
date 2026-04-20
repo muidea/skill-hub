@@ -8,7 +8,7 @@
 
 * **项目**：需要启用和管理 Skill 的代码工作区。
 
-* **工作区**：项目所属的工作目录。项目本地 Skill 默认使用 `.agents/skills/` 目录；部分兼容目标可能会额外使用各自的配置文件或目录，但不再作为各命令的默认前提。
+* **工作区**：项目所属的工作目录。项目本地 Skill 默认使用 `.agents/skills/` 目录；项目目标可能会额外使用各自的配置文件或目录，但不再作为各命令的默认前提。
 
 * **本地仓库**：skill-hub使用的本地配置目录，采用多仓库架构，支持管理多个Git仓库。默认仓库为归档仓库，所有通过`feedback`命令修改的技能都会归档到默认仓库。
 
@@ -29,7 +29,7 @@
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `init` | 初始化本地仓库 | `skill-hub init [git_url] [--target <value>]` |
-| `set-target` | 设置项目兼容目标 | `skill-hub set-target <value>` |
+| `set-target` | 设置项目目标 | `skill-hub set-target <value>` |
 | `serve` | 以本地服务模式运行 | `skill-hub serve [--host <value>] [--port <value>] [--secret-key <value>] [--open-browser]` |
 
 ### 3.2. 技能发现
@@ -159,7 +159,7 @@ skill-hub serve remove local
 
 **参数**:
 - `git_url` (可选): Git 仓库 URL，用于初始化技能仓库。如未提供，表示不使用远端仓库，只进行本地管理
-- `--target <value>` (可选): 技能兼容目标，默认为 `open_code`。
+- `--target <value>` (可选): 初始项目目标，默认为 `open_code`。
 
 **功能描述**:
 
@@ -187,16 +187,16 @@ skill-hub init https://github.com/example/skills-repo.git
 skill-hub init https://github.com/example/skills-repo.git --target open_code
 ```
 
-### 4.2 set-target - 设置项目工作区兼容目标
+### 4.2 set-target - 设置项目工作区目标
 
 **语法**: `skill-hub set-target <value>`
 
 **参数**:
-- `value` (必需): 兼容目标值，支持 `cursor`、`claude`、`open_code`。
+- `value` (必需): 项目目标值，支持 `cursor`、`claude`、`open_code`。
 
 **功能描述**:
 
-设置当前项目的首选兼容目标，该设置会持久化到 `state.json` 中，影响后续 `create`, `use`, `apply`、`status`、`feedback` 等命令的行为。
+设置当前项目的首选目标，该设置会持久化到 `state.json` 中，影响后续 `create`, `use`, `apply`、`status`、`feedback` 等命令的行为。该目标用于项目工作区适配，不再用于按 Skill `compatibility` 硬过滤技能。
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
@@ -217,13 +217,13 @@ skill-hub set-target cursor
 **语法**: `skill-hub list [--target <value>] [--verbose] [--repo <repo-name>...]`
 
 **选项**:
-- `--target <value>`: 按兼容目标过滤技能列表。
-- `--verbose`: 显示详细信息，包括技能描述、版本、兼容性等。
+- `--target <value>`: 保留兼容的目标参数，不再限制技能列表。
+- `--verbose`: 显示详细信息，包括技能描述、版本、适用说明等。
 - `--repo <repo-name>`: 按仓库名称过滤技能列表（可多次使用指定多个仓库）。
 
 **功能描述**:
 
-显示所有已启用仓库中的技能，支持按兼容目标和仓库过滤。默认显示简要列表，包含技能 ID、状态、版本和所属仓库信息。
+显示所有已启用仓库中的技能，支持按仓库过滤。默认显示简要列表，包含技能 ID、状态、版本、所属仓库和适用范围信息。
 
 当前实现补充：
 
@@ -263,7 +263,7 @@ skill-hub list --repo skills-repo --target cursor --verbose
 - `keyword` (必需): 搜索关键词。
 
 **选项**:
-- `--target <value>`: 按兼容目标过滤搜索结果。
+- `--target <value>`: 保留兼容的目标参数，不再限制搜索结果。
 - `--limit <number>`: 限制返回结果数量，默认 20。
 
 **功能描述**:
@@ -282,7 +282,7 @@ skill-hub list --repo skills-repo --target cursor --verbose
 # 搜索 git 相关技能
 skill-hub search git
 
-# 搜索兼容 OpenCode 的database相关技能，限制 10 个结果
+# 搜索 database 相关技能，保留 target 参数兼容旧脚本，限制 10 个结果
 skill-hub search database --target open_code --limit 10
 ```
 
@@ -292,11 +292,11 @@ skill-hub search database --target open_code --limit 10
 
 **参数**:
 - `id` (必需): 新技能的标识符。
-- `--target <value>` (可选): 技能兼容目标。
+- `--target <value>` (可选): 项目目标。
 
 **功能描述**:
 
-在项目工作区创建一个新技能。如果指定了 `--target` 选项，则会为该技能记录兼容目标。否则将使用项目当前默认的兼容目标。
+在项目工作区创建一个新技能。`--target` 用于选择项目工作区目标和刷新项目状态，不再写入技能 `compatibility` 声明。
 
 生成的技能目录结构包含：`SKILL.md`（核心定义）、`scripts/`（可执行脚本）、`references/`（参考资料）、`assets/`（静态资源）。若该技能已存在（同名目录下已有 `SKILL.md`），则主动进行验证。验证通过时：若该技能已在本地仓库 state 中登记且与仓库内容一致，则不执行任何操作；否则刷新项目状态（state.json），便于技能登记与归档。验证不通过时提示是否重新创建。
 
@@ -324,7 +324,7 @@ skill-hub create my-logic --target open_code
 
 **参数**:
 - `id` (必需): 已存在于 `.agents/skills/<id>/SKILL.md` 的技能标识符。
-- `--target <value>` (可选): 技能兼容目标，默认 `open_code`。
+- `--target <value>` (可选): 项目目标，默认 `open_code`。
 - `--skip-validate` (可选): 跳过 `SKILL.md` 验证，直接登记项目状态。
 
 **功能描述**:
@@ -347,7 +347,7 @@ skill-hub register legacy-skill --skip-validate
 
 **参数**:
 - `skills-dir` (必需): 包含 `<id>/SKILL.md` 子目录的技能目录，典型值为 `.agents/skills`。
-- `--target <value>` (可选): 批量登记时写入的兼容目标，默认 `open_code`。
+- `--target <value>` (可选): 批量登记时使用的项目目标，默认 `open_code`。
 - `--fix-frontmatter` (可选): 导入前修复缺失或不完整的 frontmatter，修改前创建 `SKILL.md.bak.<timestamp>`。
 - `--archive` (可选): 验证通过后归档到默认仓库。
 - `--force` (可选): 批量流程不进行交互确认；不会自动删除源技能。
@@ -521,7 +521,7 @@ skill-hub remove git-expert
 
 验证指定技能在项目工作区中的本地文件是否合规，包括检查 `SKILL.md` 的 YAML 语法、必需字段和基本文件结构。
 
-`--fix` 会为 legacy `SKILL.md` 补齐最小 frontmatter：`name`、`description`、`compatibility`、`metadata.version`、`metadata.author`。`name` 使用技能目录名，`description` 优先从正文首个有效段落推断，版本默认 `1.0.0`。修复只重写 frontmatter，不改写正文内容。
+`--fix` 会为 legacy `SKILL.md` 补齐最小 frontmatter：`name`、`description`、`metadata.version`、`metadata.author`。`compatibility` 已降级为可选说明字段，不再由修复流程主动补写。`name` 使用技能目录名，`description` 优先从正文首个有效段落推断，版本默认 `1.0.0`。修复只重写 frontmatter，不改写正文内容。
 
 `--links` 会解析技能目录内 Markdown 文件中的本地链接。外部 HTTP/HTTPS 链接默认跳过；本地链接会按源文件目录、技能目录、项目根目录依次解析，任一目标存在即视为通过。缺失目标会以 `source_file`、`line`、`link`、`resolved_path` 输出，JSON 报告中汇总为 `link_issues`。
 
@@ -554,7 +554,7 @@ skill-hub validate --all --links --json
 
 **参数**:
 - `id` (必需): 要启用的技能标识符。
-- `--target <value>` (可选): 技能兼容目标，默认为 `open_code`。
+- `--target <value>` (可选): 项目目标，默认为 `open_code`。
 
 **功能描述**:
 
@@ -632,7 +632,7 @@ skill-hub status --json
 
 **功能描述**:
 
-根据 `state.json` 中的启用记录和兼容目标设置，将技能物理分发到项目工作区。默认项目本地技能目录为 `.agents/skills/<id>/`；其他写入位置由对应适配器处理。
+根据 `state.json` 中的启用记录和项目目标设置，将技能物理分发到项目工作区。默认项目本地技能目录为 `.agents/skills/<id>/`；其他写入位置由对应适配器处理。
 
 当前实现补充：
 
@@ -645,7 +645,7 @@ skill-hub status --json
 
 **示例**:
 ```bash
-# 应用启用技能，使用项目工作区设置的兼容目标
+# 应用启用技能，使用项目工作区设置的项目目标
 skill-hub apply
 
 # 演习模式查看将要进行的变更
@@ -1173,3 +1173,4 @@ skill-hub repo sync --json
 | 1.22 | 2026-04-19 | `serve` 增加 `--secret-key` 写权限配置；未配置时服务只读，配置后修改类 API 校验 `X-Skill-Hub-Secret-Key` |
 | 1.23 | 2026-04-19 | CLI bridge 保留服务端错误码，Web UI 管理端增强只读与密钥错误提示 |
 | 1.24 | 2026-04-20 | Web UI 目录页技能总数改用服务端 `total`，管理端移除写入密钥入口 |
+| 1.25 | 2026-04-20 | 弱化 Skill `compatibility` 处理，列表/搜索/Web UI 不再按兼容性硬过滤 |

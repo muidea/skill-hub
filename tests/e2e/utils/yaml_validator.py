@@ -111,13 +111,11 @@ class YAMLValidator:
                     var_errors = self._validate_variable(var, i)
                     errors.extend(var_errors)
         
-        # 兼容性检查
+        # compatibility is optional metadata and is no longer target-gating.
         if "compatibility" in content:
             compat = content["compatibility"]
-            valid_targets = ["cursor", "claude_code", "open_code", "all"]
-            if isinstance(compat, str):
-                if compat.lower() not in valid_targets and "designed for" not in compat.lower():
-                    warnings.append(f"兼容性声明可能无效: {compat}")
+            if not isinstance(compat, (str, dict)):
+                warnings.append("compatibility字段建议使用字符串或对象")
         
         # 元数据检查
         if "metadata" in content:

@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/muidea/skill-hub/internal/engine"
@@ -36,11 +35,8 @@ func (s *Skill) SkillsDir() (string, error) {
 }
 
 func (s *Skill) SearchRemote(keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
-	results, err := searchGitHubRepositories(keyword, limit)
-	if err != nil {
-		return nil, err
-	}
-	return filterRemoteSearchResults(results, target), nil
+	_ = target
+	return searchGitHubRepositories(keyword, limit)
 }
 
 func searchGitHubRepositories(keyword string, limit int) ([]spec.RemoteSearchResult, error) {
@@ -70,42 +66,4 @@ func searchGitHubRepositories(keyword string, limit int) ([]spec.RemoteSearchRes
 	}
 
 	return payload.Items, nil
-}
-
-func filterRemoteSearchResults(results []spec.RemoteSearchResult, target string) []spec.RemoteSearchResult {
-	if target == "" {
-		return results
-	}
-
-	var filtered []spec.RemoteSearchResult
-	targetLower := strings.ToLower(target)
-
-	for _, result := range results {
-		searchText := strings.ToLower(result.Description + " " + strings.Join(result.Topics, " ") + " " + result.FullName)
-
-		isMatch := false
-		switch targetLower {
-		case "cursor":
-			isMatch = strings.Contains(searchText, "cursor") ||
-				strings.Contains(searchText, "cursorrules") ||
-				strings.Contains(result.FullName, "cursor")
-		case "claude", "claude_code":
-			isMatch = strings.Contains(searchText, "claude") ||
-				strings.Contains(searchText, "claude code") ||
-				strings.Contains(result.FullName, "claude")
-		case "open_code", "opencode":
-			notCursor := !strings.Contains(searchText, "cursor") && !strings.Contains(result.FullName, "cursor")
-			notClaude := !strings.Contains(searchText, "claude") && !strings.Contains(result.FullName, "claude")
-			isMatch = (notCursor && notClaude) ||
-				strings.Contains(searchText, "opencode") ||
-				strings.Contains(searchText, "open code") ||
-				strings.Contains(searchText, "skill-hub")
-		}
-
-		if isMatch {
-			filtered = append(filtered, result)
-		}
-	}
-
-	return filtered
 }

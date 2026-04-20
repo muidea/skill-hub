@@ -289,9 +289,10 @@ class TestServiceMode:
             index_html = index_resp.read().decode("utf-8")
             index_doc = parse_webui_html(index_html)
 
-            assert {"refresh-skills", "repo-filter", "target-filter", "skills", "skills-pagination"} <= index_doc.ids
+            assert {"refresh-skills", "repo-filter", "skills", "skills-pagination"} <= index_doc.ids
             assert {"repo-filter"} <= index_doc.inputs
-            assert {"target-filter"} <= index_doc.selects
+            assert "target-filter" not in index_doc.ids
+            assert "target-filter" not in index_doc.selects
             assert "刷新技能目录" in index_doc.buttons
             assert "进入管理端" in index_doc.buttons
             assert "/api/v1/skills" in index_html

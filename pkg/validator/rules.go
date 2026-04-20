@@ -153,20 +153,11 @@ func NewCompatibilityRule() *CompatibilityRule {
 func (r *CompatibilityRule) Validate(result *ValidationResult) bool {
 	compatValue, ok := result.Frontmatter["compatibility"]
 	if !ok {
-		// compatibility是可选的，没有也没关系
 		return true
 	}
 
-	switch v := compatValue.(type) {
-	case string:
-		if len(v) > 500 {
-			result.AddError(NewError(ErrCompatTooLong, "compatibility", true))
-		}
-	case map[string]interface{}:
-		// 当前实现使用对象格式，但规范要求字符串
-		result.AddWarning(NewWarning(WarnCompatObjectFormat, "compatibility", true))
-	default:
-		result.AddWarning(NewWarning(WarnCompatUnknownType, "compatibility", false))
+	if v, ok := compatValue.(string); ok && len(v) > 500 {
+		result.AddError(NewError(ErrCompatTooLong, "compatibility", true))
 	}
 
 	return true

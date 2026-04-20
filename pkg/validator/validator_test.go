@@ -40,7 +40,7 @@ func TestValidator_ValidateFile(t *testing.T) {
 			name:         "object compatibility format",
 			skillPath:    "testdata/object-compatibility/SKILL.md",
 			wantErrors:   0,
-			wantWarnings: 1, // COMPAT_OBJECT_FORMAT
+			wantWarnings: 0,
 			wantValid:    true,
 		},
 	}
@@ -127,7 +127,7 @@ func TestValidator_ValidateSkill(t *testing.T) {
 				},
 			},
 			wantErrors:   0,
-			wantWarnings: 2, // DIRECTORY_MISMATCH_WARNING + COMPAT_OBJECT_FORMAT
+			wantWarnings: 1, // DIRECTORY_MISMATCH_WARNING
 			wantValid:    true,
 		},
 	}
@@ -209,7 +209,7 @@ func TestValidator_ValidateWithOptions(t *testing.T) {
 	// 获取测试文件的绝对路径
 	_, filename, _, _ := runtime.Caller(0)
 	testDir := filepath.Dir(filename)
-	skillPath := filepath.Join(testDir, "testdata", "object-compatibility", "SKILL.md")
+	skillPath := filepath.Join(testDir, "testdata", "short-description", "SKILL.md")
 
 	v := NewValidator()
 

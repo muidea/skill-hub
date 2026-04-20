@@ -359,9 +359,9 @@ tests/e2e/
    - 执行 `skill-hub search git`
    - 验证关键词搜索
 
-3. **test_03_target_filtered_search()** - 目标过滤搜索 ⚠️网络依赖
+3. **test_03_target_parameter_search()** - 目标参数兼容搜索 ⚠️网络依赖
    - 执行 `skill-hub search database --target open_code`
-   - 验证目标过滤
+   - 验证 target 参数被接受但不限制搜索结果
 
 4. **test_04_search_result_limit()** - 搜索结果限制 ⚠️网络依赖
    - 执行 `skill-hub search python --limit 10`
@@ -493,7 +493,7 @@ tests/e2e/
 | init | ✓ | - | - | 目录结构、默认配置 |
 | set-target | ✓ | ✓ | ✓ | state.json更新、项目初始化 |
 | list | - | - | ✓ | 过滤显示、verbose选项 |
-| search | - | - | ✓ | 关键词搜索、目标过滤 |
+| search | - | - | ✓ | 关键词搜索、target 参数兼容 |
 | create | ✓ | ✓ | ✓ | 本地文件生成、state记录 |
 | remove | ✓ | ✓ | ✓ | 物理删除、状态移除、仓库安全 |
 | validate | - | ✓ | ✓ | 合规性检查、非法技能提示 |
