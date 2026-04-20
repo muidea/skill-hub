@@ -12,14 +12,18 @@ DRY_RUN=0
 NOTES_ONLY=0
 VERSION=""
 OUTPUT_FILE=""
+FROM_REF=""
+TO_REF="HEAD"
 
 usage() {
     cat <<'EOF'
 用法:
-  ./scripts/create-release.sh [--version <x.y.z>] [--yes] [--dry-run] [--notes-only] [--output <path>]
+  ./scripts/create-release.sh [--version <x.y.z>] [--from <tag/ref>] [--to <tag/ref>] [--yes] [--dry-run] [--notes-only] [--output <path>]
 
 选项:
   --version, -v   指定发布版本号，跳过交互输入
+  --from          指定发布清单起点 tag/ref；默认使用 --to 之前的最近 v* tag
+  --to            指定发布清单终点 tag/ref；默认 HEAD
   --yes, -y       自动确认非危险交互
   --dry-run       仅预览版本建议与发布清单，不创建 tag、不推送
   --notes-only    仅生成并输出发布清单，不执行测试、构建、打 tag
@@ -228,10 +232,56 @@ validate_version() {
     [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?$ ]]
 }
 
+ensure_ref_exists() {
+    local ref="$1"
+    if ! git rev-parse --verify --quiet "$ref^{commit}" >/dev/null; then
+        echo -e "${RED}错误: 找不到 ref/tag: $ref${NC}"
+        exit 1
+    fi
+}
+
+is_version_tag() {
+    local ref="$1"
+    [[ "$ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?$ ]]
+}
+
+version_from_ref() {
+    local ref="$1"
+    if is_version_tag "$ref"; then
+        printf "%s" "${ref#v}"
+        return 0
+    fi
+    return 1
+}
+
+previous_release_tag_for_ref() {
+    local ref="$1"
+
+    if [ "$ref" = "HEAD" ]; then
+        git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true
+        return
+    fi
+
+    if is_version_tag "$ref"; then
+        git describe --tags --abbrev=0 --match 'v[0-9]*' "$ref^" 2>/dev/null || true
+        return
+    fi
+
+    git describe --tags --abbrev=0 --match 'v[0-9]*' "$ref" 2>/dev/null || true
+}
+
 while [ $# -gt 0 ]; do
     case "$1" in
         --version|-v)
             VERSION="${2:-}"
+            shift 2
+            ;;
+        --from)
+            FROM_REF="${2:-}"
+            shift 2
+            ;;
+        --to)
+            TO_REF="${2:-}"
             shift 2
             ;;
         --yes|-y)
@@ -291,16 +341,24 @@ if [ "$NOTES_ONLY" -eq 0 ]; then
     run_step "拉取最新代码..." git pull origin "$CURRENT_BRANCH"
 fi
 
-LAST_TAG="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
-if [ -n "$LAST_TAG" ]; then
-    COMMIT_RANGE="${LAST_TAG}..HEAD"
+TO_REF="${TO_REF:-HEAD}"
+ensure_ref_exists "$TO_REF"
+if [ -n "$FROM_REF" ]; then
+    ensure_ref_exists "$FROM_REF"
+    LAST_TAG="$FROM_REF"
 else
-    COMMIT_RANGE="HEAD"
+    LAST_TAG="$(previous_release_tag_for_ref "$TO_REF")"
+fi
+
+if [ -n "$LAST_TAG" ]; then
+    COMMIT_RANGE="${LAST_TAG}..${TO_REF}"
+else
+    COMMIT_RANGE="$TO_REF"
 fi
 
 COMMIT_COUNT="$(git rev-list --count "$COMMIT_RANGE")"
 if [ "${COMMIT_COUNT}" -eq 0 ]; then
-    echo -e "${YELLOW}没有检测到 ${LAST_TAG:-仓库初始化以来} 的新提交，无需发布${NC}"
+    echo -e "${YELLOW}没有检测到 ${LAST_TAG:-仓库初始化以来} 到 ${TO_REF} 的新提交，无需发布${NC}"
     exit 0
 fi
 
@@ -324,7 +382,10 @@ else
 fi
 
 if [ -z "$VERSION" ]; then
-    if [ "$YES_MODE" -eq 1 ] || [ ! -t 0 ]; then
+    if resolved_version="$(version_from_ref "$TO_REF")"; then
+        VERSION="$resolved_version"
+        echo "自动采用目标 release 版本号: $VERSION"
+    elif [ "$YES_MODE" -eq 1 ] || [ ! -t 0 ]; then
         VERSION="$SUGGESTED_VERSION"
         echo "自动采用建议版本号: $VERSION"
     else
@@ -339,7 +400,7 @@ if ! validate_version "$VERSION"; then
     exit 1
 fi
 
-if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+if [ "$NOTES_ONLY" -eq 0 ] && git rev-parse "v$VERSION" >/dev/null 2>&1; then
     echo -e "${RED}错误: 标签 v$VERSION 已存在${NC}"
     exit 1
 fi
@@ -351,7 +412,7 @@ generate_release_notes "$VERSION" "$LAST_TAG" "$COMMIT_RANGE" "$NOTES_FILE"
 echo -e "\n${GREEN}发布摘要:${NC}"
 echo "版本号: v$VERSION"
 echo "分支: $CURRENT_BRANCH"
-echo "提交范围: ${LAST_TAG:-仓库初始化} -> $(git rev-parse --short HEAD)"
+echo "提交范围: ${LAST_TAG:-仓库初始化} -> $(git rev-parse --short "$TO_REF")"
 echo "提交数量: $COMMIT_COUNT"
 echo "建议版本策略: $SUGGESTED_BUMP"
 

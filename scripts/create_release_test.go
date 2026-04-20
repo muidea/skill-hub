@@ -73,6 +73,76 @@ func TestCreateReleaseNotesUseCommitMessagesOnly(t *testing.T) {
 	}
 }
 
+func TestCreateReleaseNotesBetweenTwoReleaseTags(t *testing.T) {
+	repoDir := t.TempDir()
+	scriptPath := copyReleaseScript(t, repoDir)
+
+	runCmd(t, repoDir, "git", "init")
+	runCmd(t, repoDir, "git", "config", "user.name", "Test User")
+	runCmd(t, repoDir, "git", "config", "user.email", "test@example.com")
+
+	writeFile(t, filepath.Join(repoDir, "README.md"), "initial\n")
+	runCmd(t, repoDir, "git", "add", "README.md")
+	runCmd(t, repoDir, "git", "commit", "-m", "chore: initial release baseline")
+	runCmd(t, repoDir, "git", "tag", "v0.1.0")
+
+	writeFile(t, filepath.Join(repoDir, "feature.txt"), "feature\n")
+	runCmd(t, repoDir, "git", "add", "feature.txt")
+	runCmd(t, repoDir, "git", "commit", "-m", "feat(webui): show real skill totals")
+
+	writeFile(t, filepath.Join(repoDir, "fix.txt"), "fix\n")
+	runCmd(t, repoDir, "git", "add", "fix.txt")
+	runCmd(t, repoDir, "git", "commit", "-m", "fix(api): remove project target endpoint")
+	runCmd(t, repoDir, "git", "tag", "v0.2.0")
+
+	writeFile(t, filepath.Join(repoDir, "after.txt"), "after\n")
+	runCmd(t, repoDir, "git", "add", "after.txt")
+	runCmd(t, repoDir, "git", "commit", "-m", "docs: update unreleased draft")
+
+	outputPath := filepath.Join(repoDir, "release-notes.md")
+	runCmd(t, repoDir, "bash", scriptPath, "--notes-only", "--yes", "--from", "v0.1.0", "--to", "v0.2.0", "--output", outputPath)
+
+	notesContent, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read notes: %v", err)
+	}
+
+	notes := string(notesContent)
+	if !strings.Contains(notes, "**webui**: show real skill totals") {
+		t.Fatalf("expected feature between tags in notes: %s", notes)
+	}
+	if !strings.Contains(notes, "**api**: remove project target endpoint") {
+		t.Fatalf("expected fix between tags in notes: %s", notes)
+	}
+	if strings.Contains(notes, "initial release baseline") {
+		t.Fatalf("notes should exclude commits before --from: %s", notes)
+	}
+	if strings.Contains(notes, "update unreleased draft") {
+		t.Fatalf("notes should exclude commits after --to: %s", notes)
+	}
+}
+
+func copyReleaseScript(t *testing.T, repoDir string) string {
+	t.Helper()
+
+	scriptSource := filepath.Join("create-release.sh")
+	scriptContent, err := os.ReadFile(scriptSource)
+	if err != nil {
+		t.Fatalf("read script: %v", err)
+	}
+
+	scriptsDir := filepath.Join(repoDir, "scripts")
+	if err := os.MkdirAll(scriptsDir, 0755); err != nil {
+		t.Fatalf("mkdir scripts: %v", err)
+	}
+
+	scriptPath := filepath.Join(scriptsDir, "create-release.sh")
+	if err := os.WriteFile(scriptPath, scriptContent, 0755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	return scriptPath
+}
+
 func runCmd(t *testing.T, dir string, name string, args ...string) {
 	t.Helper()
 
