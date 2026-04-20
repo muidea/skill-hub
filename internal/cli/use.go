@@ -30,14 +30,13 @@ var useCmd = &cobra.Command{
 func init() {
 	useCmd.Flags().String("target", "open_code", targetFlagUsage)
 	useCmd.ValidArgsFunction = completeSkillIDs
-	_ = useCmd.RegisterFlagCompletionFunc("target", completeTargetValues)
 }
 
 func runUse(skillID string, target string) error {
-	target = spec.NormalizeTarget(target)
+	_ = target
 
 	if client, ok := hubClientIfAvailable(); ok {
-		return runUseViaService(client, skillID, target)
+		return runUseViaService(client, skillID, "")
 	}
 
 	if err := CheckInitDependency(); err != nil {
@@ -79,7 +78,7 @@ func runUse(skillID string, target string) error {
 		fmt.Printf("标签: %s\n", strings.Join(fullSkill.Tags, ", "))
 	}
 
-	ctx, err := RequireInitAndWorkspace("", target)
+	ctx, err := RequireInitAndWorkspace("", "")
 	if err != nil {
 		return err
 	}
@@ -101,20 +100,19 @@ func runUse(skillID string, target string) error {
 		return err
 	}
 
-	if err := ctx.StateManager.AddSkillToProjectWithTarget(ctx.Cwd, skillID, fullSkill.Version, selectedSkill.Repository, variables, target); err != nil {
+	if err := ctx.StateManager.AddSkillToProjectWithTarget(ctx.Cwd, skillID, fullSkill.Version, selectedSkill.Repository, variables, ""); err != nil {
 		return errors.Wrap(err, "保存项目状态失败")
 	}
 
 	fmt.Printf("\n✅ 技能 '%s' 已成功标记为使用！\n", skillID)
 
-	fmt.Printf("项目目标: %s\n", target)
 	fmt.Println("使用 'skill-hub apply' 将技能物理分发到当前项目")
 
 	return nil
 }
 
 func runUseViaService(client serviceUseClient, skillID string, target string) error {
-	target = spec.NormalizeTarget(target)
+	_ = target
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -158,11 +156,10 @@ func runUseViaService(client serviceUseClient, skillID string, target string) er
 		return err
 	}
 
-	resp, err := client.UseSkill(context.Background(), httpapibiz.UseSkillRequest{
+	_, err = client.UseSkill(context.Background(), httpapibiz.UseSkillRequest{
 		ProjectPath: cwd,
 		SkillID:     skillID,
 		Repository:  selectedSkill.Repository,
-		Target:      target,
 		Variables:   variables,
 	})
 	if err != nil {
@@ -170,7 +167,6 @@ func runUseViaService(client serviceUseClient, skillID string, target string) er
 	}
 
 	fmt.Printf("\n✅ 技能 '%s' 已成功标记为使用！\n", skillID)
-	fmt.Printf("项目目标: %s\n", resp.Item.Target)
 	fmt.Println("使用 'skill-hub apply' 将技能物理分发到当前项目")
 	return nil
 }

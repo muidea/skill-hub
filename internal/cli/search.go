@@ -30,15 +30,14 @@ func init() {
 }
 
 func runSearch(keyword, target string, limit int) error {
+	_ = target
+
 	fmt.Printf("搜索远程技能: %s\n", keyword)
-	if target != "" {
-		fmt.Printf("目标参数: %s (保留兼容，不限制搜索结果)\n", target)
-	}
 	fmt.Printf("结果数量限制: %d\n", limit)
 
 	if client, ok := hubClientIfAvailable(); ok {
 		fmt.Println("\n正在通过本地服务搜索远端技能...")
-		results, err := client.SearchRemoteSkills(context.Background(), keyword, target, limit)
+		results, err := client.SearchRemoteSkills(context.Background(), keyword, "", limit)
 		if err != nil {
 			fmt.Printf("⚠️  本地服务搜索失败: %v\n", err)
 			fmt.Println("\n备用搜索方法:")
@@ -47,7 +46,7 @@ func runSearch(keyword, target string, limit int) error {
 			fmt.Println("3. 使用 'skill-hub list' 查看本地已有技能")
 			return nil
 		}
-		displaySearchResults(results, keyword, target, limit)
+		displaySearchResults(results, keyword, "", limit)
 		return nil
 	}
 
@@ -56,7 +55,7 @@ func runSearch(keyword, target string, limit int) error {
 		return err
 	}
 
-	results, err := skillservice.New().SearchRemote(keyword, target, limit)
+	results, err := skillservice.New().SearchRemote(keyword, "", limit)
 	if err != nil {
 		fmt.Printf("⚠️  远端搜索失败: %v\n", err)
 		fmt.Println("\n备用搜索方法:")
@@ -66,7 +65,7 @@ func runSearch(keyword, target string, limit int) error {
 		return nil
 	}
 
-	displaySearchResults(results, keyword, target, limit)
+	displaySearchResults(results, keyword, "", limit)
 	return nil
 }
 

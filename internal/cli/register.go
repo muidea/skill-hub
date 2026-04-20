@@ -34,6 +34,8 @@ func init() {
 }
 
 func runRegister(skillID, target string, skipValidate bool) error {
+	_ = target
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return utils.GetCwdErr(err)
@@ -44,7 +46,6 @@ func runRegister(skillID, target string, skipValidate bool) error {
 		data, err := client.RegisterSkill(context.Background(), httpapibiz.RegisterSkillRequest{
 			ProjectPath:  cwd,
 			SkillID:      skillID,
-			Target:       target,
 			SkipValidate: skipValidate,
 		})
 		if err != nil {
@@ -55,12 +56,12 @@ func runRegister(skillID, target string, skipValidate bool) error {
 		if err := CheckInitDependency(); err != nil {
 			return err
 		}
-		ctx, err := RequireInitAndWorkspace(cwd, target)
+		ctx, err := RequireInitAndWorkspace(cwd, "")
 		if err != nil {
 			return err
 		}
 		lifecycleSvc := projectlifecycleservice.New()
-		result, err = lifecycleSvc.Register(ctx.Cwd, skillID, target, skipValidate)
+		result, err = lifecycleSvc.Register(ctx.Cwd, skillID, "", skipValidate)
 		if err != nil {
 			return err
 		}

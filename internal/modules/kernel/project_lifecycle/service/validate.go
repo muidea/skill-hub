@@ -184,12 +184,8 @@ func (p *ProjectLifecycle) validateOneProjectSkill(projectPath string, projectSt
 		return item
 	}
 
-	target := projectState.PreferredTarget
-	if vars, ok := projectState.Skills[skillID]; ok && vars.Variables != nil && vars.Variables["target"] != "" {
-		target = vars.Variables["target"]
-	}
 	if opts.Fix {
-		result, err := RepairSkillFrontmatter(skillID, skillMd, target)
+		result, err := RepairSkillFrontmatter(skillID, skillMd, "")
 		if err != nil {
 			item.Valid = false
 			item.Errors = append(item.Errors, err.Error())

@@ -437,7 +437,7 @@
           <div class="desc">${escapeHtml(item.description || "无描述")}</div>
           <div class="meta-line">
             <span class="chip chip-neutral">version ${escapeHtml(item.version || "-")}</span>
-            <span class="chip chip-neutral">${escapeHtml(item.compatibility || "通用")}</span>
+            ${item.compatibility ? `<span class="chip chip-neutral">${escapeHtml(item.compatibility)}</span>` : ""}
           </div>
         </li>`).join("");
 

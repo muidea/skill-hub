@@ -88,7 +88,7 @@ func TestRunRemoveOpenCodeRemovesStateAndWorkspace(t *testing.T) {
 	}
 }
 
-func TestRunRemoveCursorUsesAdapterAndRemovesWorkspace(t *testing.T) {
+func TestRunRemoveIgnoresLegacyCursorTargetAndRemovesWorkspace(t *testing.T) {
 	config.ResetForTest()
 	defer config.ResetForTest()
 
@@ -165,8 +165,8 @@ func TestRunRemoveCursorUsesAdapterAndRemovesWorkspace(t *testing.T) {
 	if err != nil && !os.IsNotExist(err) {
 		t.Fatalf("read cursor config: %v", err)
 	}
-	if strings.Contains(string(updatedCursorConfig), "demo-skill") {
-		t.Fatalf("expected cursor config marker removed, got %q", string(updatedCursorConfig))
+	if !strings.Contains(string(updatedCursorConfig), "demo-skill") {
+		t.Fatalf("expected legacy cursor config untouched, got %q", string(updatedCursorConfig))
 	}
 	if _, err := os.Stat(localSkillDir); !os.IsNotExist(err) {
 		t.Fatalf("expected local skill dir removed, stat err=%v", err)

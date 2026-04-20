@@ -414,74 +414,48 @@ func TestInitializeTargetFiles(t *testing.T) {
 			},
 		},
 		{
-			name:    "claude_code目标",
+			name:    "claude_code参数保留兼容但初始化标准目录",
 			target:  spec.TargetClaudeCode,
 			wantErr: false,
 			checkFiles: func(t *testing.T, cwd string) bool {
-				claudeDir := filepath.Join(cwd, ".claude")
-				configPath := filepath.Join(claudeDir, "config.json")
-
-				if _, err := os.Stat(claudeDir); os.IsNotExist(err) {
-					t.Errorf(".claude目录未创建: %v", err)
+				if _, err := os.Stat(filepath.Join(cwd, ".agents", "skills")); os.IsNotExist(err) {
+					t.Errorf("标准skills目录未创建: %v", err)
 					return false
 				}
-				if _, err := os.Stat(configPath); os.IsNotExist(err) {
-					t.Errorf("config.json文件未创建: %v", err)
-					return false
-				}
-
-				// 检查config.json内容
-				content, err := os.ReadFile(configPath)
-				if err != nil {
-					t.Errorf("读取config.json失败: %v", err)
-					return false
-				}
-
-				expectedContent := `{
-  "skills": {}
-}`
-				if string(content) != expectedContent {
-					t.Errorf("config.json内容不正确:\n得到: %s\n期望: %s", content, expectedContent)
+				if _, err := os.Stat(filepath.Join(cwd, ".claude")); err == nil {
+					t.Errorf("不应根据target创建.claude目录")
 					return false
 				}
 				return true
 			},
 		},
 		{
-			name:    "cursor目标",
+			name:    "cursor参数保留兼容但初始化标准目录",
 			target:  spec.TargetCursor,
 			wantErr: false,
 			checkFiles: func(t *testing.T, cwd string) bool {
-				cursorRulesPath := filepath.Join(cwd, ".cursorrules")
-
-				if _, err := os.Stat(cursorRulesPath); os.IsNotExist(err) {
-					t.Errorf(".cursorrules文件未创建: %v", err)
+				if _, err := os.Stat(filepath.Join(cwd, ".agents", "skills")); os.IsNotExist(err) {
+					t.Errorf("标准skills目录未创建: %v", err)
 					return false
 				}
-
-				// 检查.cursorrules内容
-				content, err := os.ReadFile(cursorRulesPath)
-				if err != nil {
-					t.Errorf("读取.cursorrules失败: %v", err)
-					return false
-				}
-
-				expectedContent := `# Cursor Rules
-# This file is managed by skill-hub
-
-# Available skills will be injected here`
-				if string(content) != expectedContent {
-					t.Errorf(".cursorrules内容不正确:\n得到: %s\n期望: %s", content, expectedContent)
+				if _, err := os.Stat(filepath.Join(cwd, ".cursorrules")); err == nil {
+					t.Errorf("不应根据target创建.cursorrules")
 					return false
 				}
 				return true
 			},
 		},
 		{
-			name:        "无效目标",
-			target:      "invalid_target",
-			wantErr:     true,
-			errContains: "不支持的目标环境",
+			name:    "无效目标参数也仅按兼容参数忽略",
+			target:  "invalid_target",
+			wantErr: false,
+			checkFiles: func(t *testing.T, cwd string) bool {
+				if _, err := os.Stat(filepath.Join(cwd, ".agents", "skills")); os.IsNotExist(err) {
+					t.Errorf("标准skills目录未创建: %v", err)
+					return false
+				}
+				return true
+			},
 		},
 	}
 

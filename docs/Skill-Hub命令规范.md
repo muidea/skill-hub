@@ -8,7 +8,7 @@
 
 * **项目**：需要启用和管理 Skill 的代码工作区。
 
-* **工作区**：项目所属的工作目录。项目本地 Skill 默认使用 `.agents/skills/` 目录；项目目标可能会额外使用各自的配置文件或目录，但不再作为各命令的默认前提。
+* **工作区**：项目所属的工作目录。项目本地 Skill 统一使用 `.agents/skills/` 目录；历史 target 参数不再决定工作区结构。
 
 * **本地仓库**：skill-hub使用的本地配置目录，采用多仓库架构，支持管理多个Git仓库。默认仓库为归档仓库，所有通过`feedback`命令修改的技能都会归档到默认仓库。
 
@@ -29,7 +29,7 @@
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `init` | 初始化本地仓库 | `skill-hub init [git_url] [--target <value>]` |
-| `set-target` | 设置项目目标 | `skill-hub set-target <value>` |
+| `set-target` | 兼容旧脚本的目标命令 | `skill-hub set-target <value>` |
 | `serve` | 以本地服务模式运行 | `skill-hub serve [--host <value>] [--port <value>] [--secret-key <value>] [--open-browser]` |
 
 ### 3.2. 技能发现
@@ -159,13 +159,13 @@ skill-hub serve remove local
 
 **参数**:
 - `git_url` (可选): Git 仓库 URL，用于初始化技能仓库。如未提供，表示不使用远端仓库，只进行本地管理
-- `--target <value>` (可选): 初始项目目标，默认为 `open_code`。
+- `--target <value>` (可选): 保留兼容旧脚本，不写入项目状态、不影响初始化行为。
 
 **功能描述**:
 
 创建 `~/.skill-hub` 目录结构，初始化全局配置。采用多仓库架构，默认创建名为"main"的本地仓库。
 
-如提供了`git_url` 参数，则克隆远程技能仓库到默认仓库；否则创建空的本地仓库。初始化后默认 target 为 `open_code`。
+如提供了`git_url` 参数，则克隆远程技能仓库到默认仓库；否则创建空的本地仓库。`target` 不再作为项目默认值写入。
 
 完成本地仓库初始化后，会刷新技能索引。当前实现中：
 
@@ -183,29 +183,25 @@ skill-hub init
 # 使用自定义仓库初始化
 skill-hub init https://github.com/example/skills-repo.git
 
-# 初始化并设置项目为 OpenCode 环境
+# 兼容旧脚本传入 --target，实际不影响初始化
 skill-hub init https://github.com/example/skills-repo.git --target open_code
 ```
 
-### 4.2 set-target - 设置项目工作区目标
+### 4.2 set-target - 兼容旧脚本的目标命令
 
 **语法**: `skill-hub set-target <value>`
 
 **参数**:
-- `value` (必需): 项目目标值，支持 `cursor`、`claude`、`open_code`。
+- `value` (必需): 兼容参数，内容不参与业务逻辑。
 
 **功能描述**:
 
-设置当前项目的首选目标，该设置会持久化到 `state.json` 中，影响后续 `create`, `use`, `apply`、`status`、`feedback` 等命令的行为。该目标用于项目工作区适配，不再用于按 Skill `compatibility` 硬过滤技能。
-
-该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
-
-该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区，如果需要新建项目工作区，则需要同时根据`target`初始化对应的文件和目录，并刷新`state.json`
+该命令仅为兼容旧脚本保留，执行后不写入 `state.json`，不创建 target 专属文件，不影响后续 `create`、`use`、`apply`、`status`、`feedback` 等命令。项目工作区统一使用 `.agents/skills`。
 
 
 **示例**:
 ```bash
-# 设置项目为 OpenCode 环境
+# 兼容旧脚本调用
 skill-hub set-target open_code
 
 # 设置项目为 Cursor 环境
@@ -239,7 +235,7 @@ skill-hub set-target cursor
 # 显示所有技能
 skill-hub list
 
-# 仅显示兼容 Cursor 的技能
+# 兼容旧脚本传入 --target，结果不按 target 过滤
 skill-hub list --target cursor
 
 # 显示详细信息
@@ -292,11 +288,11 @@ skill-hub search database --target open_code --limit 10
 
 **参数**:
 - `id` (必需): 新技能的标识符。
-- `--target <value>` (可选): 项目目标。
+- `--target <value>` (可选): 保留兼容旧脚本，不影响模板内容、项目状态或工作区初始化。
 
 **功能描述**:
 
-在项目工作区创建一个新技能。`--target` 用于选择项目工作区目标和刷新项目状态，不再写入技能 `compatibility` 声明。
+在项目工作区创建一个新技能。`--target` 仅作为兼容参数接受，不写入项目状态、不选择工作区目标，也不写入技能 `compatibility` 声明。
 
 生成的技能目录结构包含：`SKILL.md`（核心定义）、`scripts/`（可执行脚本）、`references/`（参考资料）、`assets/`（静态资源）。若该技能已存在（同名目录下已有 `SKILL.md`），则主动进行验证。验证通过时：若该技能已在本地仓库 state 中登记且与仓库内容一致，则不执行任何操作；否则刷新项目状态（state.json），便于技能登记与归档。验证不通过时提示是否重新创建。
 
@@ -306,7 +302,7 @@ skill-hub search database --target open_code --limit 10
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
-该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区，如果需要新建项目工作区，则需要同时根据`target`初始化对应的文件和目录，并刷新`state.json`
+该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区；新建项目工作区统一初始化 `.agents/skills`，不会根据 target 创建专属文件。
 
 
 **示例**:
@@ -324,7 +320,7 @@ skill-hub create my-logic --target open_code
 
 **参数**:
 - `id` (必需): 已存在于 `.agents/skills/<id>/SKILL.md` 的技能标识符。
-- `--target <value>` (可选): 项目目标，默认 `open_code`。
+- `--target <value>` (可选): 保留兼容旧脚本，不写入项目状态。
 - `--skip-validate` (可选): 跳过 `SKILL.md` 验证，直接登记项目状态。
 
 **功能描述**:
@@ -347,7 +343,7 @@ skill-hub register legacy-skill --skip-validate
 
 **参数**:
 - `skills-dir` (必需): 包含 `<id>/SKILL.md` 子目录的技能目录，典型值为 `.agents/skills`。
-- `--target <value>` (可选): 批量登记时使用的项目目标，默认 `open_code`。
+- `--target <value>` (可选): 保留兼容旧脚本，不写入项目状态、不影响修复或归档。
 - `--fix-frontmatter` (可选): 导入前修复缺失或不完整的 frontmatter，修改前创建 `SKILL.md.bak.<timestamp>`。
 - `--archive` (可选): 验证通过后归档到默认仓库。
 - `--force` (可选): 批量流程不进行交互确认；不会自动删除源技能。
@@ -492,7 +488,7 @@ skill-hub audit . --canonical .agents/skills --project-root "$PWD"
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
-该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区，如果需要新建项目工作区，则需要同时根据`target`初始化对应的文件和目录，并刷新`state.json`
+该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区；新建项目工作区统一初始化 `.agents/skills`，不会根据 target 创建专属文件。
 
 **安全机制**: 如果检测到本地有未反馈的修改，会弹出警告并要求确认。
 
@@ -531,7 +527,7 @@ skill-hub remove git-expert
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
-该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区，如果需要新建项目工作区，则需要同时根据`target`初始化对应的文件和目录，并刷新`state.json`
+该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区；新建项目工作区统一初始化 `.agents/skills`，不会根据 target 创建专属文件。
 
 **示例**:
 ```bash
@@ -554,11 +550,11 @@ skill-hub validate --all --links --json
 
 **参数**:
 - `id` (必需): 要启用的技能标识符。
-- `--target <value>` (可选): 项目目标，默认为 `open_code`。
+- `--target <value>` (可选): 保留兼容旧脚本，不写入项目状态。
 
 **功能描述**:
 
-将技能标记为在当前项目中使用。此命令仅更新 `state.json` 中的状态记录，不直接修改项目文件。需要通过 `apply` 命令进行物理分发。
+将技能标记为在当前项目中使用。此命令仅更新 `state.json` 中的技能记录，不直接修改项目文件，不写入 target。需要通过 `apply` 命令进行物理分发。
 
 当前实现补充：
 
@@ -569,14 +565,14 @@ skill-hub validate --all --links --json
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
-该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区，如果需要新建项目工作区，则需要同时根据`target`初始化对应的文件和目录，并刷新`state.json`
+该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区；新建项目工作区统一初始化 `.agents/skills`，不会根据 target 创建专属文件。
 
 **示例**:
 ```bash
 # 启用 git-expert 技能
 skill-hub use git-expert
 
-# 启用兼容 OpenCode 的 git-expert 技能
+# 兼容旧脚本传入 --target，实际不写入状态
 skill-hub use git-expert --target open_code
 ```
 
@@ -605,7 +601,7 @@ skill-hub use git-expert --target open_code
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
-该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区，如果需要新建项目工作区，则需要同时根据`target`初始化对应的文件和目录，并刷新`state.json`
+该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区；新建项目工作区统一初始化 `.agents/skills`，不会根据 target 创建专属文件。
 
 **示例**:
 ```bash
@@ -632,7 +628,7 @@ skill-hub status --json
 
 **功能描述**:
 
-根据 `state.json` 中的启用记录和项目目标设置，将技能物理分发到项目工作区。默认项目本地技能目录为 `.agents/skills/<id>/`；其他写入位置由对应适配器处理。
+根据 `state.json` 中的启用记录，将技能物理分发到标准项目工作区 `.agents/skills/<id>/`。历史 target 不参与分发路径选择。
 
 当前实现补充：
 
@@ -641,11 +637,11 @@ skill-hub status --json
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
-该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区，如果需要新建项目工作区，则需要同时根据`target`初始化对应的文件和目录，并刷新`state.json`
+该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区；新建项目工作区统一初始化 `.agents/skills`，不会根据 target 创建专属文件。
 
 **示例**:
 ```bash
-# 应用启用技能，使用项目工作区设置的项目目标
+# 应用启用技能到标准项目工作区
 skill-hub apply
 
 # 演习模式查看将要进行的变更
@@ -684,7 +680,7 @@ skill-hub apply --dry-run
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
-该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区，如果需要新建项目工作区，则需要同时根据`target`初始化对应的文件和目录，并刷新`state.json`
+该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区；新建项目工作区统一初始化 `.agents/skills`，不会根据 target 创建专属文件。
 
 
 **示例**:
@@ -901,22 +897,19 @@ skill-hub git remote https://github.com/your-username/skills-repo.git
 # 1. 初始化环境
 skill-hub init
 
-# 2. 设置项目目标
-skill-hub set-target open_code
-
-# 3. 拉取远端技能仓库，以刷新本地仓库
+# 2. 拉取远端技能仓库，以刷新本地仓库
 skill-hub pull
 
-# 4. 查看可用技能
-skill-hub list --target open_code
+# 3. 查看可用技能
+skill-hub list
 
-# 5. 启用技能
+# 4. 启用技能
 skill-hub use git-expert
 
-# 6. 应用技能到项目
+# 5. 应用技能到项目
 skill-hub apply
 
-# 7. 本地修改后检查状态
+# 6. 本地修改后检查状态
 skill-hub status
 
 # 8. 反馈修改到仓库
@@ -1174,3 +1167,4 @@ skill-hub repo sync --json
 | 1.23 | 2026-04-19 | CLI bridge 保留服务端错误码，Web UI 管理端增强只读与密钥错误提示 |
 | 1.24 | 2026-04-20 | Web UI 目录页技能总数改用服务端 `total`，管理端移除写入密钥入口 |
 | 1.25 | 2026-04-20 | 弱化 Skill `compatibility` 处理，列表/搜索/Web UI 不再按兼容性硬过滤 |
+| 1.26 | 2026-04-20 | `target` 降级为兼容输入，Web UI 不再展示目标选择，项目业务统一使用 `.agents/skills` |

@@ -115,7 +115,7 @@ skill-hub serve --secret-key write-secret
 
 - 查看技能列表
 - 按 repo 过滤
-- `target` 查询参数保留兼容，但不再按 Skill `compatibility` 过滤
+- `target` 查询参数保留兼容，但不参与过滤、校验或其他业务逻辑
 - 查看技能基础元数据
 
 这部分对应当前 `list` 命令。
@@ -259,7 +259,7 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 支持查询参数：
 
 - `repo`
-- `target`：保留兼容，不再按 Skill `compatibility` 过滤
+- `target`：保留兼容，不参与过滤、校验或业务逻辑
 
 ### 7.4 项目与工作区技能
 
@@ -331,7 +331,7 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 
 - 当前 `list` 结果
 - repo 过滤
-- `name/version/repository/compatibility/description`，其中 `compatibility` 仅作为可选适用说明展示
+- `name/version/repository/compatibility/description`，其中 `compatibility` 仅在技能显式提供说明时展示
 
 ### 9.3 项目页
 
@@ -339,7 +339,7 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 
 - 当前机器已登记项目
 - 项目下启用的 skill
-- version/status/target
+- version/status/source repository
 - 项目 `status`
 - 项目 `use`
 - 项目 `apply`
@@ -474,7 +474,6 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
   {
     "project_id": "hash-or-path-key",
     "project_path": "/path/to/project",
-    "preferred_target": "open_code",
     "skill_count": 3
   }
 ]
@@ -488,7 +487,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
     "skill_id": "xxx",
     "version": "1.0.0",
     "status": "Synced",
-    "target": "open_code"
+    "source_repository": "main"
   }
 ]
 ```

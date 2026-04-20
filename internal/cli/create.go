@@ -21,7 +21,7 @@ var createCmd = &cobra.Command{
 	Short: "创建新技能模板",
 	Long: `在当前项目的本地技能工作区创建一个新技能，默认写入 .agents/skills/<id>/。
 
---target 用于选择项目工作区目标，不再写入技能兼容性声明。
+--target 仅保留兼容旧脚本，不影响工作区结构、项目状态或技能兼容性声明。
 
 创建的技能仅存在于项目本地，需要通过 feedback 命令同步到仓库。
 create命令将会刷新state.json，标记当前项目工作区在使用该技能。`,
@@ -37,32 +37,27 @@ func init() {
 }
 
 func runCreate(skillID string, target string) error {
+	_ = target
+
 	if err := CheckInitDependency(); err != nil {
 		return err
 	}
-
-	target = spec.NormalizeTarget(target)
 
 	if !isValidSkillName(skillID) {
 		return errors.NewWithCodef("runCreate", errors.ErrValidation, "技能ID '%s' 格式无效。应使用小写字母、数字和连字符，例如：my-logic-skill", skillID)
 	}
 
-	ctx, err := RequireInitAndWorkspace("", target)
+	ctx, err := RequireInitAndWorkspace("", "")
 	if err != nil {
 		return err
 	}
 
 	agentsDir := filepath.Join(ctx.Cwd, ".agents")
 	if _, err := os.Stat(agentsDir); os.IsNotExist(err) {
-		// 当target为open_code时，允许直接创建.agents目录
-		if target == spec.TargetOpenCode {
-			if err := os.MkdirAll(agentsDir, 0755); err != nil {
-				return errors.WrapWithCode(err, "runCreate", errors.ErrFileOperation, "创建.agents目录失败")
-			}
-			fmt.Printf("✓ 创建.agents目录: %s\n", agentsDir)
-		} else {
-			return errors.NewWithCode("runCreate", errors.ErrConfigNotFound, "项目未初始化，请先运行 'skill-hub init' 命令")
+		if err := os.MkdirAll(agentsDir, 0755); err != nil {
+			return errors.WrapWithCode(err, "runCreate", errors.ErrFileOperation, "创建.agents目录失败")
 		}
+		fmt.Printf("✓ 创建.agents目录: %s\n", agentsDir)
 	}
 
 	skillDir := filepath.Join(agentsDir, "skills", skillID)
@@ -88,7 +83,7 @@ func runCreate(skillID string, target string) error {
 				return nil
 			}
 			fmt.Println("正在刷新项目状态...")
-			if err := refreshProjectState(ctx.Cwd, skillID, target); err != nil {
+			if err := refreshProjectState(ctx.Cwd, skillID, ""); err != nil {
 				return errors.Wrap(err, "刷新项目状态失败")
 			}
 			fmt.Printf("✅ 技能 '%s' 已成功登记到项目状态\n", skillID)
@@ -120,12 +115,7 @@ func runCreate(skillID string, target string) error {
 		description = fmt.Sprintf("为项目定制的 %s 技能", skillID)
 	}
 
-	// 验证目标选项
-	if !isValidTarget(target) {
-		return errors.NewWithCodef("runCreate", errors.ErrInvalidInput, "无效的项目目标: %s。可用选项: cursor, claude, open_code", target)
-	}
-
-	content, err := generateSkillContent(skillID, description, target)
+	content, err := generateSkillContent(skillID, description, "")
 	if err != nil {
 		return errors.Wrap(err, "生成技能内容失败")
 	}
@@ -138,7 +128,7 @@ func runCreate(skillID string, target string) error {
 	fmt.Printf("✅ 技能模板创建成功: %s\n", skillFilePath)
 
 	fmt.Println("正在刷新项目状态...")
-	if err := refreshProjectState(ctx.Cwd, skillID, target); err != nil {
+	if err := refreshProjectState(ctx.Cwd, skillID, ""); err != nil {
 		return errors.Wrap(err, "刷新项目状态失败")
 	}
 
@@ -152,6 +142,8 @@ func runCreate(skillID string, target string) error {
 
 // generateSkillContent 生成技能内容
 func generateSkillContent(name, description, target string) (string, error) {
+	_ = target
+
 	// 获取当前时间
 	timestamp := time.Now().Format(time.RFC3339)
 
@@ -281,19 +273,6 @@ func isValidSkillName(name string) bool {
 	return true
 }
 
-// isValidTarget 验证目标选项
-func isValidTarget(target string) bool {
-	validOptions := map[string]bool{
-		"cursor":      true,
-		"claude":      true,
-		"claude_code": true,
-		"open_code":   true,
-		"opencode":    true,
-	}
-
-	return validOptions[target]
-}
-
 func validateSkillFile(filePath string) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -323,6 +302,8 @@ func alreadyRegisteredAndSynced(projectPath, skillID, skillDir string) bool {
 }
 
 func refreshProjectState(projectPath, skillID, target string) error {
+	_ = target
+
 	stateManager, err := newStateManager()
 	if err != nil {
 		return errors.WrapWithCode(err, "refreshProjectState", errors.ErrSystem, "创建状态管理器失败")
@@ -340,10 +321,8 @@ func refreshProjectState(projectPath, skillID, target string) error {
 
 	// 设置技能变量（如果有的话）
 	projectState.Skills[skillID] = spec.SkillVars{
-		SkillID: skillID,
-		Variables: map[string]string{
-			"target": target,
-		},
+		SkillID:   skillID,
+		Variables: map[string]string{},
 	}
 
 	if err := stateManager.SaveProjectState(projectState); err != nil {

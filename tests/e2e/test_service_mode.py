@@ -294,6 +294,8 @@ class TestServiceMode:
             assert {"repo-filter"} <= index_doc.inputs
             assert "target-filter" not in index_doc.ids
             assert "target-filter" not in index_doc.selects
+            assert 'name="target"' not in index_html
+            assert 'compatibility || "通用"' not in index_html
             assert "刷新技能目录" in index_doc.buttons
             assert "进入管理端" in index_doc.buttons
             assert "/api/v1/skills" in index_html
@@ -318,6 +320,9 @@ class TestServiceMode:
             assert "project-target-filter" not in admin_doc.ids
             assert "project-target-filter" not in admin_doc.selects
             assert "目标过滤" not in admin_html
+            assert 'name="target"' not in admin_html
+            assert "preferred_target" not in admin_html
+            assert "item.target" not in admin_html
             assert "刷新管理视图" in admin_doc.buttons
             assert "添加仓库" in admin_doc.buttons
             assert "/api/v1/repos" in admin_html

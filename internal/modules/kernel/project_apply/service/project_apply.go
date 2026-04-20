@@ -16,7 +16,6 @@ var projectApplyCwdMu sync.Mutex
 
 type ApplyResult struct {
 	ProjectPath string            `json:"project_path"`
-	Target      string            `json:"target"`
 	DryRun      bool              `json:"dry_run"`
 	Items       []ApplyResultItem `json:"items"`
 }
@@ -57,22 +56,16 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 	if projectState == nil {
 		return nil, errors.NewWithCode("Apply", errors.ErrProjectInvalid, "当前目录未在 skill-hub 中注册")
 	}
-	if projectState.PreferredTarget == "" {
-		return nil, errors.NewWithCode("Apply", errors.ErrProjectInvalid, "项目未设置目标环境，请先使用 'skill-hub set-target <value>' 设置目标环境")
-	}
-
-	target := spec.NormalizeTarget(projectState.PreferredTarget)
 	skills := projectState.Skills
 	if len(skills) == 0 {
 		return &ApplyResult{
 			ProjectPath: projectState.ProjectPath,
-			Target:      target,
 			DryRun:      dryRun,
 			Items:       []ApplyResultItem{},
 		}, nil
 	}
 
-	adapter, err := p.adapterSvc.Service().ForTarget(target)
+	adapter, err := p.adapterSvc.Service().ForTarget(spec.TargetOpenCode)
 	if err != nil {
 		return nil, errors.WrapWithCode(err, "Apply", errors.ErrSystem, "获取适配器失败")
 	}
@@ -86,7 +79,6 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 
 	result := &ApplyResult{
 		ProjectPath: projectState.ProjectPath,
-		Target:      target,
 		DryRun:      dryRun,
 		Items:       make([]ApplyResultItem, 0, len(skillIDs)),
 	}

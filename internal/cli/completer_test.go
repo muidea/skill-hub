@@ -15,24 +15,8 @@ func TestCompleteTargetValues(t *testing.T) {
 	if dir != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("directive = %v, want NoFileComp", dir)
 	}
-	want := []string{"cursor", "claude_code", "open_code", "all"}
-	if len(got) != len(want) {
-		t.Fatalf("len(got) = %d, want %d; got %v", len(got), len(want), got)
-	}
-	for i, v := range want {
-		if got[i] != v {
-			t.Errorf("got[%d] = %q, want %q", i, got[i], v)
-		}
-	}
-
-	got2, _ := completeTargetValues(nil, nil, "cur")
-	if len(got2) != 1 || got2[0] != "cursor" {
-		t.Errorf("prefix 'cur': got %v, want [cursor]", got2)
-	}
-
-	got3, _ := completeTargetValues(nil, nil, "open_")
-	if len(got3) != 1 || got3[0] != "open_code" {
-		t.Errorf("prefix 'open_': got %v, want [open_code]", got3)
+	if len(got) != 0 {
+		t.Fatalf("len(got) = %d, want 0; got %v", len(got), got)
 	}
 }
 

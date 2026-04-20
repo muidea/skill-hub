@@ -7,7 +7,6 @@ import (
 
 	projectstatemodule "github.com/muidea/skill-hub/internal/modules/kernel/project_state"
 	"github.com/muidea/skill-hub/pkg/errors"
-	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 type ProjectSummary struct {
@@ -28,7 +27,6 @@ type ProjectSkill struct {
 	SkillID          string `json:"skill_id"`
 	Version          string `json:"version,omitempty"`
 	Status           string `json:"status,omitempty"`
-	Target           string `json:"target,omitempty"`
 	SourceRepository string `json:"source_repository,omitempty"`
 }
 
@@ -56,10 +54,9 @@ func (p *ProjectInventory) ListProjects() ([]ProjectSummary, error) {
 	projects := make([]ProjectSummary, 0, len(allStates))
 	for projectPath, state := range allStates {
 		projects = append(projects, ProjectSummary{
-			ID:              projectID(projectPath),
-			ProjectPath:     projectPath,
-			PreferredTarget: spec.NormalizeTarget(state.PreferredTarget),
-			SkillCount:      len(state.Skills),
+			ID:          projectID(projectPath),
+			ProjectPath: projectPath,
+			SkillCount:  len(state.Skills),
 		})
 	}
 
@@ -85,10 +82,9 @@ func (p *ProjectInventory) GetProject(id string) (*ProjectDetail, error) {
 			continue
 		}
 		return &ProjectDetail{
-			ID:              id,
-			ProjectPath:     projectPath,
-			PreferredTarget: spec.NormalizeTarget(state.PreferredTarget),
-			SkillCount:      len(state.Skills),
+			ID:          id,
+			ProjectPath: projectPath,
+			SkillCount:  len(state.Skills),
 		}, nil
 	}
 
@@ -113,15 +109,10 @@ func (p *ProjectInventory) ListProjectSkills(id string) ([]ProjectSkill, error) 
 
 		skills := make([]ProjectSkill, 0, len(state.Skills))
 		for skillID, skillVars := range state.Skills {
-			target := spec.NormalizeTarget(state.PreferredTarget)
-			if skillVars.Variables != nil && skillVars.Variables["target"] != "" {
-				target = spec.NormalizeTarget(skillVars.Variables["target"])
-			}
 			skills = append(skills, ProjectSkill{
 				SkillID:          skillID,
 				Version:          skillVars.Version,
 				Status:           skillVars.Status,
-				Target:           target,
 				SourceRepository: skillVars.SourceRepository,
 			})
 		}

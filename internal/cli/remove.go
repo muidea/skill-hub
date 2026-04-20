@@ -51,20 +51,7 @@ func runRemove(skillID string) error {
 		return errors.Wrap(err, "执行删除前安全检查失败")
 	}
 
-	projectState := ctx.ProjectState
-	if projectState == nil {
-		projectState, err = ctx.StateManager.FindProjectByPath(ctx.Cwd)
-		if err != nil {
-			return errors.Wrap(err, "加载项目状态失败")
-		}
-	}
-
-	target := spec.TargetOpenCode
-	if projectState != nil && projectState.PreferredTarget != "" {
-		target = spec.NormalizeTarget(projectState.PreferredTarget)
-	}
-
-	renderRemovalWarning(statusItem, target)
+	renderRemovalWarning(statusItem)
 
 	// 确认移除
 	if !confirmRemoval(skillID, statusItem) {
@@ -74,7 +61,7 @@ func runRemove(skillID string) error {
 
 	// 物理删除项目本地工作区对应的文件/配置
 	fmt.Println("\n=== 物理清理 ===")
-	if err := removeProjectSkillArtifacts(ctx.Cwd, target, skillID); err != nil {
+	if err := removeProjectSkillArtifacts(ctx.Cwd, skillID); err != nil {
 		return errors.Wrap(err, "清理项目技能文件失败")
 	}
 
@@ -102,14 +89,13 @@ func inspectRemovalStatus(projectPath, skillID string) (*projectstatusservice.Sk
 	return &summary.Items[0], nil
 }
 
-func renderRemovalWarning(item *projectstatusservice.SkillStatusItem, target string) {
+func renderRemovalWarning(item *projectstatusservice.SkillStatusItem) {
 	fmt.Println("⚠️  删除前安全检查:")
 	if item == nil {
 		fmt.Println("未获取到技能状态，将按常规删除处理")
 		return
 	}
 
-	fmt.Printf("  当前目标: %s\n", target)
 	fmt.Printf("  当前状态: %s\n", item.Status)
 	if item.SourceRepository != "" {
 		fmt.Printf("  来源仓库: %s\n", item.SourceRepository)
@@ -121,14 +107,14 @@ func renderRemovalWarning(item *projectstatusservice.SkillStatusItem, target str
 	case spec.SkillStatusOutdated:
 		fmt.Println("  提示: 本地与来源仓库不一致，删除后将放弃当前项目中的本地副本。")
 	case spec.SkillStatusMissing:
-		fmt.Println("  提示: 项目本地工作区文件已经缺失，将仅清理目标环境配置和状态。")
+		fmt.Println("  提示: 项目本地工作区文件已经缺失，将仅清理项目状态。")
 	default:
 		fmt.Println("  本地工作区与来源仓库一致，可安全移除。")
 	}
 }
 
-func removeProjectSkillArtifacts(projectPath, target, skillID string) error {
-	adapter, err := getTargetAdapter(target)
+func removeProjectSkillArtifacts(projectPath, skillID string) error {
+	adapter, err := getTargetAdapter(spec.TargetOpenCode)
 	if err != nil {
 		return errors.Wrap(err, "removeProjectSkillArtifacts: 获取适配器失败")
 	}
@@ -137,17 +123,10 @@ func removeProjectSkillArtifacts(projectPath, target, skillID string) error {
 	if err := applyInProjectDir(projectPath, func() error {
 		return adapter.Remove(skillID)
 	}); err != nil {
-		return errors.Wrap(err, "removeProjectSkillArtifacts: 清理目标环境配置失败")
+		return errors.Wrap(err, "removeProjectSkillArtifacts: 清理项目技能目录失败")
 	}
 
-	switch target {
-	case spec.TargetCursor:
-		fmt.Println("✓ 已清理 Cursor 项目配置")
-	case spec.TargetClaudeCode:
-		fmt.Println("✓ 已清理 Claude Code 项目配置")
-	default:
-		fmt.Println("✓ 已清理项目本地技能目录")
-	}
+	fmt.Println("✓ 已清理项目本地技能目录")
 
 	agentsSkillDir := filepath.Join(projectPath, ".agents", "skills", skillID)
 	if _, err := os.Stat(agentsSkillDir); err == nil {

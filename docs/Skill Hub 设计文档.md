@@ -114,7 +114,7 @@ fix: 修复登录页面样式错位问题
 
 **注意**：
 - `compatibility` 字段为可选适用说明，不再作为技能是否可用于某个工具的硬门禁
-- `target` 继续用于项目工作区和适配器选择，例如 `cursor`, `claude_code`, `open_code`
+- `target` 仅保留为兼容旧脚本的输入参数，不写入项目状态、不参与适配器选择、不参与列表/搜索过滤，也不作为业务校验依据
 - 新建和修复 legacy 技能时不再主动补写 `compatibility`
 - 旧的对象格式仍可被读取，但不再要求转换为目标工具字符串
 
@@ -176,16 +176,16 @@ skill-hub/
 
 | 命令 | 示例 | 详细行为 |
 | :--- | :--- | :--- |
-| `init` | `skill-hub init [git_url] [--target <value>]` | 创建 `~/.skill-hub`，初始化全局配置。如提供了git_url参数，则克隆远程仓库；否则仅进行本地管理。 |
-| `set-target` | `skill-hub set-target <value>` | 设置当前项目的首选目标环境，持久化到 `state.json` 中。 |
-| `list` | `skill-hub list [--target <value>] [--verbose]` | 展示本地库中所有 Skill 状态、版本和适用工具，支持按目标环境过滤。 |
-| `search` | `skill-hub search <keyword> [--target <value>] [--limit <number>]` | 搜索远程技能，支持按目标环境过滤和结果数量限制。CLI 在本地 `serve` 可用时优先通过服务承接远端交互，不可用时回退到本地执行。 |
+| `init` | `skill-hub init [git_url] [--target <value>]` | 创建 `~/.skill-hub`，初始化全局配置。如提供了git_url参数，则克隆远程仓库；否则仅进行本地管理。`--target` 仅兼容旧脚本。 |
+| `set-target` | `skill-hub set-target <value>` | 兼容旧脚本的空操作，不写入项目状态。 |
+| `list` | `skill-hub list [--target <value>] [--verbose]` | 展示本地库中所有 Skill 状态、版本和适用说明；`--target` 不过滤结果。 |
+| `search` | `skill-hub search <keyword> [--target <value>] [--limit <number>]` | 搜索远程技能，支持结果数量限制；`--target` 不过滤结果。CLI 在本地 `serve` 可用时优先通过服务承接远端交互，不可用时回退到本地执行。 |
 | `create` | `skill-hub create <id> [--target <value>]` | 在项目工作区创建一个新技能模板，仅存在于项目本地。 |
 | `remove` | `skill-hub remove <id>` | 从当前项目工作区中移除指定的技能，物理删除项目工作区对应的文件/配置。 |
 | `validate` | `skill-hub validate <id>` | 验证指定技能的项目工作区的文件是否合规。 |
-| `use` | `skill-hub use <id> [--target <value>]` | 将技能标记为在当前项目中使用，仅更新 `state.json` 中的状态记录。 |
+| `use` | `skill-hub use <id> [--target <value>]` | 将技能标记为在当前项目中使用，仅更新 `state.json` 中的技能记录；`--target` 不写入状态。 |
 | `status` | `skill-hub status [id] [--verbose]` | **监测**：对比项目本地工作区文件与技能仓库源文件的差异，显示技能状态。 |
-| `apply` | `skill-hub apply [--dry-run] [--force]` | **分发**：根据 `state.json` 中的启用记录和目标环境设置，将技能物理分发到项目工作区。 |
+| `apply` | `skill-hub apply [--dry-run] [--force]` | **分发**：根据 `state.json` 中的启用记录，将技能物理分发到标准 `.agents/skills` 项目工作区。 |
 | `feedback`| `skill-hub feedback <id> [--dry-run] [--force]` | **回收**：将项目工作区的指定技能修改归档到默认仓库。 |
 | `prune` | `skill-hub prune` | **维护**：清理 `state.json` 中因项目目录移动、删除而残留的失效项目记录。 |
 | `pull` | `skill-hub pull [--force] [--check] [--json]` | 拉取默认仓库的远程更新到本地仓库，并刷新索引，可输出 JSON 摘要。 |

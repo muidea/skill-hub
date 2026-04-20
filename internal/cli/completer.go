@@ -8,14 +8,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 const shellCompNoFile = cobra.ShellCompDirectiveNoFileComp
 const completionCacheTTL = 5 * time.Second
-
-var targetValues = []string{spec.TargetCursor, spec.TargetClaudeCode, spec.TargetOpenCode, spec.TargetAll}
 
 type completionCacheEntry struct {
 	items     []string
@@ -121,7 +117,7 @@ func completeLocalSkillIDsForCwd(cmd *cobra.Command, args []string, toComplete s
 }
 
 func completeTargetValues(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return filterPrefix(targetValues, toComplete), shellCompNoFile
+	return nil, shellCompNoFile
 }
 
 func completeRepoNames(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

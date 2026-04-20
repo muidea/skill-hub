@@ -12,7 +12,6 @@ import (
 
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/logging"
-	"github.com/muidea/skill-hub/pkg/spec"
 	"github.com/muidea/skill-hub/pkg/utils"
 )
 
@@ -37,6 +36,8 @@ func init() {
 }
 
 func runInit(args []string, target string) error {
+	_ = target
+
 	// 获取日志记录器
 	logger := logging.GetGlobalLogger().WithOperation("runInit")
 
@@ -44,7 +45,6 @@ func runInit(args []string, target string) error {
 	startTime := time.Now()
 	logger.Info("开始初始化skill-hub",
 		"args", args,
-		"target", target,
 		"timestamp", startTime.Format(time.RFC3339))
 
 	// 支持通过环境变量指定skill-hub目录
@@ -298,11 +298,6 @@ multi_repo:
 
 	fmt.Println("\n使用 'skill-hub list' 查看可用技能")
 
-	// 检查当前目录的项目状态，如果为空则设置目标
-	if err := setDefaultTargetIfEmpty(target); err != nil {
-		fmt.Printf("⚠️  设置默认目标失败: %v\n", err)
-	}
-
 	// 清理可能创建的备份目录
 	if gitURL != "" {
 		if err := cleanupTimestampedBackupDirs(repoPath); err != nil {
@@ -435,36 +430,6 @@ func checkAlreadyInitialized(skillHubDir, gitURL string) (bool, error) {
 	// 在多仓库模式下，我们只检查配置文件是否存在
 	// 如果用户想要更改仓库配置，他们需要手动编辑配置文件或重新运行init
 	return true, nil
-}
-
-// setDefaultTargetIfEmpty 在init时检查当前目录的项目状态，如果状态文件不存在则设置目标
-func setDefaultTargetIfEmpty(target string) error {
-	// 获取当前目录
-	cwd, err := os.Getwd()
-	if err != nil {
-		return utils.GetCwdErr(err)
-	}
-
-	// 创建状态管理器
-	stateManager, err := newStateManager()
-	if err != nil {
-		return err
-	}
-
-	// 检查状态文件是否存在
-	if _, err := os.Stat(stateManager.GetStatePath()); os.IsNotExist(err) {
-		// 状态文件不存在，这是一个新项目，设置目标
-		// 如果target为空，使用默认值open_code
-		if target == "" {
-			target = spec.TargetOpenCode
-		}
-		if err := stateManager.SetPreferredTarget(cwd, target); err != nil {
-			return errors.Wrap(err, "设置默认目标失败")
-		}
-		fmt.Printf("✅ 已为当前项目设置默认目标: %s\n", target)
-	}
-
-	return nil
 }
 
 // getRemoteURLFromGit 从现有Git仓库读取远程URL

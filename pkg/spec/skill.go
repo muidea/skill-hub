@@ -63,7 +63,7 @@ type Registry struct {
 
 // ProjectConfig 表示项目的配置信息（符合文档设计）
 type ProjectConfig struct {
-	PreferredTarget string            `json:"preferred_target,omitempty"` // cursor, claude_code, 或空
+	PreferredTarget string            `json:"preferred_target,omitempty"` // 历史兼容字段，不参与业务逻辑
 	EnabledSkills   []string          `json:"enabled_skills,omitempty"`   // 技能ID数组
 	Vars            map[string]string `json:"vars,omitempty"`             // 项目级变量
 	LastSync        string            `json:"last_sync,omitempty"`
@@ -93,7 +93,7 @@ func NormalizeTarget(target string) string {
 // ProjectState 表示项目与技能的关联状态（向后兼容）
 type ProjectState struct {
 	ProjectPath     string               `json:"project_path"`
-	PreferredTarget string               `json:"preferred_target,omitempty"` // cursor, claude_code, 或空
+	PreferredTarget string               `json:"preferred_target,omitempty"` // 历史兼容字段，不参与业务逻辑
 	Skills          map[string]SkillVars `json:"skills"`
 	LastSync        string               `json:"last_sync,omitempty"`
 }

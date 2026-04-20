@@ -736,7 +736,6 @@
             <strong class="mono">${escapeHtml(item.project_path)}</strong>
           </div>
           <div class="meta-line">
-            <span class="chip chip-neutral">target ${escapeHtml(item.preferred_target || "-")}</span>
             <span class="chip chip-primary">skills ${escapeHtml(item.skill_count)}</span>
             <span class="chip chip-neutral">id ${escapeHtml(item.id)}</span>
           </div>
@@ -761,14 +760,6 @@
                     <div class="field">
                       <label>仓库</label>
                       <input name="repository" placeholder="可选，留空自动选择">
-                    </div>
-                    <div class="field">
-                      <label>目标</label>
-                      <select name="target">
-                        <option value="open_code">open_code</option>
-                        <option value="cursor">cursor</option>
-                        <option value="claude_code">claude_code</option>
-                      </select>
                     </div>
                     <button type="submit">启用技能</button>
                   </div>
@@ -982,7 +973,6 @@
               </div>
               <div class="meta-line">
                 <span class="chip chip-neutral">version ${escapeHtml(item.version || "-")}</span>
-                <span class="chip chip-neutral">${escapeHtml(item.target || "-")}</span>
               </div>
             </li>`).join("")}
           </ul>`;
@@ -1038,7 +1028,6 @@
       const formData = new FormData(form);
       const skillId = String(formData.get("skill_id") || "").trim();
       const repository = String(formData.get("repository") || "").trim();
-      const target = String(formData.get("target") || "").trim();
       if (!skillId) return;
 
       let variables = {};
@@ -1068,13 +1057,11 @@
             project_path: projectPath,
             skill_id: skillId,
             repository: repo,
-            target,
             variables
           })
         });
         root.innerHTML = `<div class="detail-title"><span class="bullet"></span>启用结果</div><pre class="log">已启用 ${escapeHtml(data.item.skill_id)}
-repo: ${escapeHtml(data.item.repository)}
-target: ${escapeHtml(data.item.target)}</pre>`;
+repo: ${escapeHtml(data.item.repository)}</pre>`;
         root.classList.remove("empty");
         form.reset();
         await refreshAdmin();

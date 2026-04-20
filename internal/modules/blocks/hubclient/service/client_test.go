@@ -42,8 +42,8 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 				if got := req.URL.Query().Get("repo"); got != "main" {
 					t.Fatalf("expected repo filter main, got %q", got)
 				}
-				if got := req.URL.Query().Get("target"); got != spec.TargetOpenCode {
-					t.Fatalf("expected target filter %q, got %q", spec.TargetOpenCode, got)
+				if got := req.URL.Query().Get("target"); got != "" {
+					t.Fatalf("expected no target filter, got %q", got)
 				}
 				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.SkillListData]{
 					Code: httpapibiz.CodeOK,
@@ -58,8 +58,8 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 				if got := req.URL.Query().Get("keyword"); got != "demo" {
 					t.Fatalf("expected keyword demo, got %q", got)
 				}
-				if got := req.URL.Query().Get("target"); got != spec.TargetOpenCode {
-					t.Fatalf("expected target %q, got %q", spec.TargetOpenCode, got)
+				if got := req.URL.Query().Get("target"); got != "" {
+					t.Fatalf("expected no target query, got %q", got)
 				}
 				if got := req.URL.Query().Get("limit"); got != "5" {
 					t.Fatalf("expected limit 5, got %q", got)
@@ -102,7 +102,7 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 				}
 				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.SetProjectTargetData]{
 					Code: httpapibiz.CodeOK,
-					Data: httpapibiz.SetProjectTargetData(payload),
+					Data: httpapibiz.SetProjectTargetData{ProjectPath: payload.ProjectPath},
 				}), nil
 			case "/api/v1/skills/demo/candidates":
 				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.SkillCandidateListData]{
@@ -131,7 +131,6 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 							ProjectPath: "/tmp/project",
 							SkillID:     "demo",
 							Repository:  "main",
-							Target:      spec.TargetOpenCode,
 						},
 					},
 				}), nil
@@ -141,7 +140,6 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 					Data: httpapibiz.ApplyProjectData{
 						Item: &projectapplyservice.ApplyResult{
 							ProjectPath: "/tmp/project",
-							Target:      spec.TargetOpenCode,
 							DryRun:      true,
 							Items: []projectapplyservice.ApplyResultItem{
 								{SkillID: "demo", Status: "planned", Variables: 1},
@@ -215,7 +213,7 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetProjectTarget returned error: %v", err)
 	}
-	if projectTarget.Target != spec.TargetOpenCode {
+	if projectTarget.ProjectPath != "/tmp/project" {
 		t.Fatalf("unexpected project target response: %+v", projectTarget)
 	}
 

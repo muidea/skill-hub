@@ -130,7 +130,7 @@ curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/instal
 
 安装完成后，按照以下工作流程开始使用：
 
-项目本地 Skill 目录默认使用 `.agents/skills/`。`target` 主要用于记录项目工作区目标和选择适配器，不再用于按 Skill `compatibility` 硬过滤技能。
+项目本地 Skill 目录统一使用 `.agents/skills/`。`target` 参数仅保留用于兼容旧脚本，不再写入项目状态、不参与适配器选择、不参与列表/搜索过滤，也不作为任何业务校验依据。Skill `compatibility` 仅在存在说明时作为基础信息展示。
 
 #### 多仓库初始化流程
 ```bash
@@ -144,13 +144,10 @@ skill-hub repo add personal https://github.com/yourname/skills.git
 # 3. 设置默认归档仓库
 skill-hub repo default main
 
-# 4. 设置项目目标
-skill-hub set-target open_code
-
-# 5. 启用技能
+# 4. 启用技能
 skill-hub use git-expert
 
-# 6. 应用技能到项目
+# 5. 应用技能到项目
 skill-hub apply
 ```
 
@@ -284,20 +281,20 @@ skill-hub prune
 
 | 命令 | 参数 | 功能说明 |
 |------|------|----------|
-| `init` | `[git_url] [--target <value>]` | 初始化多仓库工作区 |
-| `set-target` | `<value>` | 设置项目目标 |
-| `list` | `[--target <value>] [--verbose]` | 列出可用技能 |
-| `search` | `<keyword> [--target <value>] [--limit <number>]` | 搜索远程技能 |
-| `create` | `<id> [--target <value>]` | 创建新技能模板 |
-| `register` | `<id> [--target <value>] [--skip-validate]` | 登记已有项目本地技能，不覆盖内容 |
-| `import` | `<skills-dir> [--target <value>] [--fix-frontmatter] [--archive] [--force] [--dry-run] [--fail-fast]` | 批量登记、验证并可选归档已有技能 |
+| `init` | `[git_url] [--target <value>]` | 初始化多仓库工作区；`--target` 仅兼容旧脚本 |
+| `set-target` | `<value>` | 兼容旧脚本的空操作，不写入项目状态 |
+| `list` | `[--target <value>] [--verbose]` | 列出可用技能；`--target` 不过滤结果 |
+| `search` | `<keyword> [--target <value>] [--limit <number>]` | 搜索远程技能；`--target` 不过滤结果 |
+| `create` | `<id> [--target <value>]` | 创建新技能模板；`--target` 不影响内容或状态 |
+| `register` | `<id> [--target <value>] [--skip-validate]` | 登记已有项目本地技能，不覆盖内容；`--target` 不写入状态 |
+| `import` | `<skills-dir> [--target <value>] [--fix-frontmatter] [--archive] [--force] [--dry-run] [--fail-fast]` | 批量登记、验证并可选归档已有技能；`--target` 不写入状态 |
 | `dedupe` | `<scope> [--canonical <dir>] [--strategy newest\|canonical\|fail-on-conflict] [--json]` | 检测嵌套项目中的重复技能副本 |
 | `sync-copies` | `--canonical <dir> [--scope <dir>] [--dry-run] [--no-backup] [--json]` | 从 canonical 目录同步同 ID 技能副本 |
 | `lint` | `[scope] --paths [--project-root <dir>] [--fix] [--dry-run] [--no-backup] [--json]` | 审计并可修复技能内容中的本机路径 |
 | `audit` | `[scope] [--output <file>] [--format markdown\|json] [--canonical <dir>] [--project-root <dir>]` | 生成技能刷新审计报告 |
 | `remove` | `<id>` | 移除项目技能 |
 | `validate` | `<id> [--fix] [--links] [--json]` 或 `--all [--fix] [--links] [--json]` | 验证项目工作区 skill 的合规性，可修复 legacy frontmatter 并检查本地 Markdown 链接 |
-| `use` | `<id> [--target <value>]` | 使用指定技能 |
+| `use` | `<id> [--target <value>]` | 使用指定技能；`--target` 不写入状态 |
 | `status` | `[id] [--verbose] [--json]` | 检查技能状态；`--json` 便于CI和脚本处理 |
 | `apply` | `[--dry-run] [--force]` | 应用技能到项目 |
 | `feedback` | `<id> [--dry-run] [--force] [--json]` 或 `--all [--dry-run] [--force] [--json]` | 反馈单个或全部已登记技能修改到默认仓库 |
@@ -333,7 +330,7 @@ skill-hub prune
   - 4种安装方法详解（一键脚本、预编译二进制、源码编译、本地开发）
   - 完整命令参考和常用工作流程
   - 技能规范、目录结构和变量系统
-  - 项目目标、技能元数据和适用说明
+  - 项目工作区、技能元数据和适用说明
   - 常见问题故障排除
 
 ### 开发文档

@@ -17,9 +17,7 @@ import (
 var applyCmd = &cobra.Command{
 	Use:   "apply",
 	Short: "应用技能到项目",
-	Long: `根据 state.json 中的启用记录和项目目标，将技能物理分发到当前项目。
-
-默认项目本地技能目录为 .agents/skills；其他写入位置由目标适配器决定。`,
+	Long:  `根据 state.json 中的启用记录，将技能物理分发到当前项目的标准 .agents/skills 目录。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		force, _ := cmd.Flags().GetBool("force")
@@ -45,13 +43,10 @@ func runApply(dryRun bool, force bool) error {
 	fmt.Println("正在应用技能到项目...")
 
 	projectState := ctx.ProjectState
-	if projectState == nil || projectState.PreferredTarget == "" {
-		return errors.NewWithCode("runApply", errors.ErrProjectInvalid,
-			"项目未设置目标，请先使用 'skill-hub set-target <value>' 设置项目目标")
+	if projectState == nil {
+		return errors.NewWithCode("runApply", errors.ErrProjectInvalid, "项目状态无效")
 	}
 
-	target := spec.NormalizeTarget(projectState.PreferredTarget)
-	fmt.Printf("项目目标: %s\n", target)
 	fmt.Printf("项目路径: %s\n", ctx.Cwd)
 
 	skills, err := ctx.StateManager.GetProjectSkills(ctx.Cwd)
@@ -72,8 +67,7 @@ func runApply(dryRun bool, force bool) error {
 		fmt.Println("将显示将要执行的变更，不实际修改文件")
 	}
 
-	// 根据目标环境应用技能
-	adapter, err := getTargetAdapter(target)
+	adapter, err := getTargetAdapter(spec.TargetOpenCode)
 	if err != nil {
 		return errors.WrapWithCode(err, "runApply", errors.ErrSystem, "获取适配器失败")
 	}
@@ -105,7 +99,7 @@ func runApply(dryRun bool, force bool) error {
 		}
 
 		if dryRun {
-			fmt.Printf("  [演习] 将应用技能到: %s\n", target)
+			fmt.Println("  [演习] 将应用技能到标准项目技能目录")
 			fmt.Printf("  变量: %v\n", skillVars.Variables)
 		} else {
 			// 实际应用技能
@@ -156,7 +150,6 @@ func renderApplyResult(result *projectapplyservice.ApplyResult) {
 		return
 	}
 
-	fmt.Printf("项目目标: %s\n", result.Target)
 	fmt.Printf("项目路径: %s\n", result.ProjectPath)
 
 	if len(result.Items) == 0 {
@@ -175,7 +168,7 @@ func renderApplyResult(result *projectapplyservice.ApplyResult) {
 		fmt.Printf("应用技能: %s\n", item.SkillID)
 		switch item.Status {
 		case "planned":
-			fmt.Printf("  [演习] 将应用技能到: %s\n", result.Target)
+			fmt.Println("  [演习] 将应用技能到标准项目技能目录")
 			fmt.Printf("  变量数量: %d\n", item.Variables)
 		case "applied":
 			fmt.Printf("✓ 成功应用技能: %s\n", item.SkillID)

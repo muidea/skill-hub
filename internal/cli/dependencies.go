@@ -269,32 +269,20 @@ func EnsureProjectWorkspace(cwd, target string) (*spec.ProjectState, error) {
 	return projectState, nil
 }
 
-// createNewProjectWorkspace 创建新的项目工作区
+// createNewProjectWorkspace 创建新的项目工作区。target 参数仅保留旧调用兼容。
 func createNewProjectWorkspace(cwd, target string, stateManager *state.StateManager) (*spec.ProjectState, error) {
+	_ = target
+
 	fmt.Println("正在创建新的项目工作区...")
 
-	// 如果target为空，使用默认值open_code
-	if target == "" {
-		target = spec.TargetOpenCode
-	}
-
-	// 验证目标值
-	normalizedTarget := spec.NormalizeTarget(target)
-	if normalizedTarget != spec.TargetCursor && normalizedTarget != spec.TargetClaudeCode && normalizedTarget != spec.TargetOpenCode {
-		return nil, errors.NewWithCode("createNewProjectWorkspace", errors.ErrInvalidInput,
-			fmt.Sprintf("无效的项目目标: %s，可用选项: cursor, claude, open_code", target))
-	}
-
-	// 根据target初始化对应的工作区文件和目录
-	if err := initializeTargetFiles(cwd, normalizedTarget); err != nil {
+	if err := initializeTargetFiles(cwd, ""); err != nil {
 		return nil, errors.WrapWithCode(err, "createNewProjectWorkspace", errors.ErrFileOperation, "初始化工作区文件失败")
 	}
 
 	// 创建项目状态
 	projectState := &spec.ProjectState{
-		ProjectPath:     cwd,
-		PreferredTarget: normalizedTarget,
-		Skills:          make(map[string]spec.SkillVars),
+		ProjectPath: cwd,
+		Skills:      make(map[string]spec.SkillVars),
 	}
 
 	// 保存项目状态
@@ -302,61 +290,25 @@ func createNewProjectWorkspace(cwd, target string, stateManager *state.StateMana
 		return nil, errors.WrapWithCode(err, "createNewProjectWorkspace", errors.ErrSystem, "保存项目状态失败")
 	}
 
-	fmt.Printf("✅ 已创建项目工作区，项目目标: %s\n", normalizedTarget)
+	fmt.Println("✅ 已创建项目工作区")
 	return projectState, nil
 }
 
-// initializeTargetFiles 根据项目目标初始化对应的工作区文件和目录
+// initializeTargetFiles 初始化标准 .agents/skills 工作区。target 参数仅保留旧测试和调用兼容。
 func initializeTargetFiles(cwd, target string) error {
-	switch target {
-	case spec.TargetOpenCode:
-		// 创建.agents目录结构
-		agentsDir := filepath.Join(cwd, ".agents")
-		if err := os.MkdirAll(agentsDir, 0755); err != nil {
-			return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建.agents目录失败")
-		}
-		fmt.Printf("✓ 创建目录: %s\n", agentsDir)
+	_ = target
 
-		skillsDir := filepath.Join(agentsDir, "skills")
-		if err := os.MkdirAll(skillsDir, 0755); err != nil {
-			return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建skills目录失败")
-		}
-		fmt.Printf("✓ 创建目录: %s\n", skillsDir)
-
-	case spec.TargetClaudeCode:
-		// 创建.claude目录
-		claudeDir := filepath.Join(cwd, ".claude")
-		if err := os.MkdirAll(claudeDir, 0755); err != nil {
-			return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建.claude目录失败")
-		}
-		fmt.Printf("✓ 创建目录: %s\n", claudeDir)
-
-		// 创建空的config.json
-		configPath := filepath.Join(claudeDir, "config.json")
-		configContent := `{
-  "skills": {}
-}`
-		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-			return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建config.json失败")
-		}
-		fmt.Printf("✓ 创建文件: %s\n", configPath)
-
-	case spec.TargetCursor:
-		// 创建.cursorrules文件
-		cursorRulesPath := filepath.Join(cwd, ".cursorrules")
-		cursorRulesContent := `# Cursor Rules
-# This file is managed by skill-hub
-
-# Available skills will be injected here`
-		if err := os.WriteFile(cursorRulesPath, []byte(cursorRulesContent), 0644); err != nil {
-			return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建.cursorrules文件失败")
-		}
-		fmt.Printf("✓ 创建文件: %s\n", cursorRulesPath)
-
-	default:
-		return errors.NewWithCode("initializeTargetFiles", errors.ErrInvalidInput,
-			fmt.Sprintf("不支持的目标环境: %s", target))
+	agentsDir := filepath.Join(cwd, ".agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建.agents目录失败")
 	}
+	fmt.Printf("✓ 创建目录: %s\n", agentsDir)
+
+	skillsDir := filepath.Join(agentsDir, "skills")
+	if err := os.MkdirAll(skillsDir, 0755); err != nil {
+		return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建skills目录失败")
+	}
+	fmt.Printf("✓ 创建目录: %s\n", skillsDir)
 
 	return nil
 }

@@ -27,7 +27,6 @@ type RegisterResult struct {
 	ProjectPath string `json:"project_path"`
 	SkillID     string `json:"skill_id"`
 	Version     string `json:"version"`
-	Target      string `json:"target"`
 	LocalPath   string `json:"local_path"`
 	Registered  bool   `json:"registered"`
 }
@@ -79,15 +78,13 @@ func New() *ProjectLifecycle {
 }
 
 func (p *ProjectLifecycle) Register(projectPath, skillID, target string, skipValidate bool) (*RegisterResult, error) {
+	_ = target
+
 	if projectPath == "" {
 		return nil, errors.NewWithCode("Register", errors.ErrInvalidInput, "项目路径不能为空")
 	}
 	if !isValidSkillName(skillID) {
 		return nil, errors.NewWithCodef("Register", errors.ErrValidation, "技能ID '%s' 格式无效。应使用小写字母、数字和连字符，例如：my-logic-skill", skillID)
-	}
-	target = normalizeTargetOrDefault(target)
-	if !isValidTarget(target) {
-		return nil, errors.NewWithCodef("Register", errors.ErrInvalidInput, "无效的项目目标: %s。可用选项: cursor, claude, claude_code, open_code", target)
 	}
 
 	absProjectPath, err := filepath.Abs(projectPath)
@@ -129,11 +126,7 @@ func (p *ProjectLifecycle) Register(projectPath, skillID, target string, skipVal
 	if existing.Variables == nil {
 		existing.Variables = map[string]string{}
 	}
-	existing.Variables["target"] = target
 	projectState.Skills[skillID] = existing
-	if projectState.PreferredTarget == "" {
-		projectState.PreferredTarget = target
-	}
 
 	if err := stateManager.SaveProjectState(projectState); err != nil {
 		return nil, errors.Wrap(err, "Register: 保存项目状态失败")
@@ -143,7 +136,6 @@ func (p *ProjectLifecycle) Register(projectPath, skillID, target string, skipVal
 		ProjectPath: absProjectPath,
 		SkillID:     skillID,
 		Version:     existing.Version,
-		Target:      target,
 		LocalPath:   skillFilePath,
 		Registered:  !existed,
 	}, nil
@@ -152,10 +144,6 @@ func (p *ProjectLifecycle) Register(projectPath, skillID, target string, skipVal
 func (p *ProjectLifecycle) Import(projectPath, skillsDir string, opts ImportOptions) (*ImportSummary, error) {
 	if projectPath == "" {
 		return nil, errors.NewWithCode("Import", errors.ErrInvalidInput, "项目路径不能为空")
-	}
-	opts.Target = normalizeTargetOrDefault(opts.Target)
-	if !isValidTarget(opts.Target) {
-		return nil, errors.NewWithCodef("Import", errors.ErrInvalidInput, "无效的项目目标: %s。可用选项: cursor, claude, claude_code, open_code", opts.Target)
 	}
 
 	absProjectPath, err := filepath.Abs(projectPath)
@@ -251,16 +239,11 @@ func (p *ProjectLifecycle) importOneSkill(projectState *spec.ProjectState, state
 	if !alreadyRegistered {
 		if !opts.DryRun {
 			existing := spec.SkillVars{
-				SkillID: item.ID,
-				Version: skill.ExtractVersion(content),
-				Variables: map[string]string{
-					"target": opts.Target,
-				},
+				SkillID:   item.ID,
+				Version:   skill.ExtractVersion(content),
+				Variables: map[string]string{},
 			}
 			projectState.Skills[item.ID] = existing
-			if projectState.PreferredTarget == "" {
-				projectState.PreferredTarget = opts.Target
-			}
 			if err := stateManager.SaveProjectState(projectState); err != nil {
 				recordImportFailure(summary, item, "register", err)
 				return err
@@ -523,22 +506,6 @@ func currentAuthor() string {
 		return user
 	}
 	return "unknown"
-}
-
-func normalizeTargetOrDefault(target string) string {
-	if strings.TrimSpace(target) == "" {
-		return spec.TargetOpenCode
-	}
-	return spec.NormalizeTarget(strings.TrimSpace(target))
-}
-
-func isValidTarget(target string) bool {
-	switch target {
-	case spec.TargetCursor, spec.TargetClaude, spec.TargetClaudeCode, spec.TargetOpenCode, "opencode":
-		return true
-	default:
-		return false
-	}
 }
 
 func isValidSkillName(name string) bool {

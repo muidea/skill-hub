@@ -37,9 +37,7 @@ func TestProjectInventory_ListAndGet(t *testing.T) {
 					Version:          "1.0.0",
 					Status:           spec.SkillStatusSynced,
 					SourceRepository: "main",
-					Variables: map[string]string{
-						"target": spec.TargetCursor,
-					},
+					Variables:        map[string]string{},
 				},
 			},
 		},
@@ -80,9 +78,6 @@ func TestProjectInventory_ListAndGet(t *testing.T) {
 	}
 	if len(skills) != 1 {
 		t.Fatalf("expected 1 skill, got %d", len(skills))
-	}
-	if skills[0].Target != spec.TargetCursor {
-		t.Fatalf("expected skill target %q, got %q", spec.TargetCursor, skills[0].Target)
 	}
 	if skills[0].SourceRepository != "main" {
 		t.Fatalf("expected source repository main, got %q", skills[0].SourceRepository)

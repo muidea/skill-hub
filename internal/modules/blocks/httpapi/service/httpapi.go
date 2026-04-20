@@ -16,7 +16,6 @@ import (
 	projectusemodule "github.com/muidea/skill-hub/internal/modules/kernel/project_use"
 	runtimemodule "github.com/muidea/skill-hub/internal/modules/kernel/runtime"
 	apperrors "github.com/muidea/skill-hub/pkg/errors"
-	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 type HTTPAPI struct {
@@ -331,7 +330,6 @@ func (h *HTTPAPI) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := strings.TrimSpace(r.URL.Query().Get("target"))
 	limit := 20
 	if limitParam := strings.TrimSpace(r.URL.Query().Get("limit")); limitParam != "" {
 		if parsed, err := strconv.Atoi(limitParam); err == nil && parsed > 0 {
@@ -339,7 +337,7 @@ func (h *HTTPAPI) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items, err := h.runtimeSvc.Service().SearchRemoteSkills(keyword, target, limit)
+	items, err := h.runtimeSvc.Service().SearchRemoteSkills(keyword, "", limit)
 	if err != nil {
 		writeWrappedError(w, err)
 		return
@@ -535,18 +533,12 @@ func (h *HTTPAPI) handleSetProjectTarget(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
 		return
 	}
-	if strings.TrimSpace(req.ProjectPath) == "" || strings.TrimSpace(req.Target) == "" {
-		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 project_path 或 target")
+	if strings.TrimSpace(req.ProjectPath) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 project_path")
 		return
 	}
 
-	target := spec.NormalizeTarget(strings.TrimSpace(req.Target))
-	if target != spec.TargetCursor && target != spec.TargetClaudeCode && target != spec.TargetOpenCode {
-		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "目标值无效")
-		return
-	}
-
-	if err := h.runtimeSvc.Service().SetPreferredTarget(req.ProjectPath, target); err != nil {
+	if err := h.runtimeSvc.Service().SetPreferredTarget(req.ProjectPath, req.Target); err != nil {
 		writeWrappedError(w, err)
 		return
 	}
@@ -555,7 +547,6 @@ func (h *HTTPAPI) handleSetProjectTarget(w http.ResponseWriter, r *http.Request)
 		Code: httpapibiz.CodeOK,
 		Data: httpapibiz.SetProjectTargetData{
 			ProjectPath: req.ProjectPath,
-			Target:      target,
 		},
 	})
 }
@@ -572,7 +563,7 @@ func (h *HTTPAPI) handleUseSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.useSvc.Service().EnableSkill(req.ProjectPath, req.SkillID, req.Repository, req.Target, req.Variables)
+	result, err := h.useSvc.Service().EnableSkill(req.ProjectPath, req.SkillID, req.Repository, "", req.Variables)
 	if err != nil {
 		writeWrappedError(w, err)
 		return
@@ -600,7 +591,7 @@ func (h *HTTPAPI) handleRegisterSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.runtimeSvc.Service().RegisterProjectSkill(req.ProjectPath, req.SkillID, req.Target, req.SkipValidate)
+	result, err := h.runtimeSvc.Service().RegisterProjectSkill(req.ProjectPath, req.SkillID, "", req.SkipValidate)
 	if err != nil {
 		writeWrappedError(w, err)
 		return

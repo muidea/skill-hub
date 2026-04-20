@@ -57,11 +57,10 @@ func (m *StateManager) LoadProjectState(projectPath string) (*spec.ProjectState,
 	data, err := m.fs.ReadFile(m.statePath)
 	if err != nil {
 		if m.fs.IsNotExist(err) {
-			// 文件不存在，返回空状态，默认目标为 open_code
+			// 文件不存在，返回空状态。preferred_target 仅保留历史兼容，不再设置默认值。
 			return &spec.ProjectState{
-				ProjectPath:     absPath,
-				PreferredTarget: spec.TargetOpenCode,
-				Skills:          make(map[string]spec.SkillVars),
+				ProjectPath: absPath,
+				Skills:      make(map[string]spec.SkillVars),
 			}, nil
 		}
 		return nil, fmt.Errorf("读取状态文件失败: %w", err)
@@ -78,11 +77,10 @@ func (m *StateManager) LoadProjectState(projectPath string) (*spec.ProjectState,
 		return &state, nil
 	}
 
-	// 项目状态不存在，创建新状态，默认目标为 open_code
+	// 项目状态不存在，创建新状态。preferred_target 仅保留历史兼容，不再设置默认值。
 	return &spec.ProjectState{
-		ProjectPath:     absPath,
-		PreferredTarget: spec.TargetOpenCode,
-		Skills:          make(map[string]spec.SkillVars),
+		ProjectPath: absPath,
+		Skills:      make(map[string]spec.SkillVars),
 	}, nil
 }
 
@@ -188,16 +186,13 @@ func (m *StateManager) AddSkillToProject(projectPath, skillID, version string, v
 	return m.AddSkillToProjectWithTarget(projectPath, skillID, version, "", variables, "")
 }
 
-// AddSkillToProjectWithTarget 添加技能到项目并指定目标
+// AddSkillToProjectWithTarget 添加技能到项目。target 参数仅保留旧调用兼容，不参与状态写入。
 func (m *StateManager) AddSkillToProjectWithTarget(projectPath, skillID, version, sourceRepository string, variables map[string]string, target string) error {
+	_ = target
+
 	state, err := m.LoadProjectState(projectPath)
 	if err != nil {
 		return err
-	}
-
-	// 如果指定了target且当前没有preferred_target，则设置它
-	if target != "" && state.PreferredTarget == "" {
-		state.PreferredTarget = target
 	}
 
 	state.Skills[skillID] = spec.SkillVars{
@@ -210,21 +205,11 @@ func (m *StateManager) AddSkillToProjectWithTarget(projectPath, skillID, version
 	return m.SaveProjectState(state)
 }
 
-// SetPreferredTarget 设置项目的首选目标
+// SetPreferredTarget 保留历史接口兼容。target 不再影响项目业务逻辑，也不再写入状态。
 func (m *StateManager) SetPreferredTarget(projectPath, target string) error {
-	state, err := m.LoadProjectState(projectPath)
-	if err != nil {
-		return err
-	}
-
-	// 验证目标值
-	normalizedTarget := spec.NormalizeTarget(target)
-	if normalizedTarget != spec.TargetCursor && normalizedTarget != spec.TargetClaudeCode && normalizedTarget != spec.TargetOpenCode && normalizedTarget != "" {
-		return fmt.Errorf("无效的目标值: %s，可用选项: %s, %s, %s", target, spec.TargetCursor, spec.TargetClaudeCode, spec.TargetOpenCode)
-	}
-
-	state.PreferredTarget = normalizedTarget
-	return m.SaveProjectState(state)
+	_ = target
+	_, err := m.LoadProjectState(projectPath)
+	return err
 }
 
 // GetPreferredTarget 获取项目的首选目标
@@ -233,7 +218,7 @@ func (m *StateManager) GetPreferredTarget(projectPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return spec.NormalizeTarget(state.PreferredTarget), nil
+	return state.PreferredTarget, nil
 }
 
 // FindProjectByPath 通过路径查找项目（支持递归向上查找）
@@ -262,8 +247,6 @@ func (m *StateManager) FindProjectByPath(path string) (*spec.ProjectState, error
 	for {
 		// 检查当前路径是否有绑定
 		if state, exists := allStates[currentPath]; exists {
-			// 规范化目标类型
-			state.PreferredTarget = spec.NormalizeTarget(state.PreferredTarget)
 			return &state, nil
 		}
 

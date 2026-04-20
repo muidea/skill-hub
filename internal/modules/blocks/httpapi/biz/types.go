@@ -122,7 +122,6 @@ type SetProjectTargetRequest struct {
 
 type SetProjectTargetData struct {
 	ProjectPath string `json:"project_path"`
-	Target      string `json:"target"`
 }
 
 type UseSkillRequest struct {

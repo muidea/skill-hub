@@ -136,12 +136,11 @@ func (c *Client) PushSkillRepositoryChanges(ctx context.Context, req httpapibiz.
 }
 
 func (c *Client) ListSkills(ctx context.Context, repoNames []string, target string) ([]spec.SkillMetadata, error) {
+	_ = target
+
 	query := url.Values{}
 	if len(repoNames) > 0 {
 		query.Set("repo", strings.Join(repoNames, ","))
-	}
-	if target != "" {
-		query.Set("target", target)
 	}
 	path := "/api/v1/skills"
 	if encoded := query.Encode(); encoded != "" {
@@ -155,11 +154,10 @@ func (c *Client) ListSkills(ctx context.Context, repoNames []string, target stri
 }
 
 func (c *Client) SearchRemoteSkills(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
+	_ = target
+
 	query := url.Values{}
 	query.Set("keyword", keyword)
-	if target != "" {
-		query.Set("target", target)
-	}
 	if limit > 0 {
 		query.Set("limit", fmt.Sprintf("%d", limit))
 	}

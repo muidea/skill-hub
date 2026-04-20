@@ -31,12 +31,14 @@ func init() {
 }
 
 func runList(target string, verbose bool, repoFilters []string) error {
+	_ = target
+
 	repoFilters = normalizeRepoFilters(repoFilters)
 
 	var skillsMetadata []spec.SkillMetadata
 	if client, ok := hubClientIfAvailable(); ok {
 		var err error
-		skillsMetadata, err = client.ListSkills(context.Background(), repoFilters, target)
+		skillsMetadata, err = client.ListSkills(context.Background(), repoFilters, "")
 		if err != nil {
 			return errors.Wrap(err, "通过服务获取技能列表失败")
 		}
@@ -81,7 +83,7 @@ func runList(target string, verbose bool, repoFilters []string) error {
 
 	}
 
-	renderSkillList(skillsMetadata, target, repoFilters, verbose)
+	renderSkillList(skillsMetadata, "", repoFilters, verbose)
 	return nil
 }
 
@@ -190,9 +192,6 @@ func renderSkillList(skillsMetadata []spec.SkillMetadata, target string, repoFil
 		}
 	}
 
-	if target != "" {
-		fmt.Printf("\n目标参数 %s 已保留兼容；当前列表不再按技能 compatibility 过滤\n", target)
-	}
 	if len(repoFilters) > 0 {
 		fmt.Printf("\n已过滤显示仓库: %s\n", strings.Join(repoFilters, ", "))
 	}

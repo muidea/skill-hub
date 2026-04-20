@@ -313,7 +313,7 @@ func TestRunUseViaServiceWithoutLocalConfig(t *testing.T) {
 			return &httpapibiz.ProjectStatusData{Item: &projectstatusservice.ProjectStatusSummary{ProjectPath: projectPath, SkillCount: 0}}, nil
 		},
 		useSkillFn: func(ctx context.Context, req httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error) {
-			return &httpapibiz.UseSkillData{Item: &projectuseservice.UseResult{ProjectPath: req.ProjectPath, SkillID: req.SkillID, Repository: "main", Target: req.Target}}, nil
+			return &httpapibiz.UseSkillData{Item: &projectuseservice.UseResult{ProjectPath: req.ProjectPath, SkillID: req.SkillID, Repository: "main"}}, nil
 		},
 	})
 	defer reset()
@@ -337,7 +337,6 @@ func TestRunApplyViaServiceWithoutLocalConfig(t *testing.T) {
 			return &httpapibiz.ApplyProjectData{
 				Item: &projectapplyservice.ApplyResult{
 					ProjectPath: req.ProjectPath,
-					Target:      spec.TargetOpenCode,
 					DryRun:      true,
 					Items: []projectapplyservice.ApplyResultItem{
 						{SkillID: "demo-skill", Status: "planned", Variables: 1},
@@ -413,7 +412,6 @@ func TestRunRegisterViaServiceWithoutLocalConfig(t *testing.T) {
 					ProjectPath: req.ProjectPath,
 					SkillID:     req.SkillID,
 					Version:     "1.0.0",
-					Target:      req.Target,
 					Registered:  true,
 				},
 			}, nil
@@ -645,7 +643,6 @@ func TestRunSetTargetViaServiceWithoutLocalConfig(t *testing.T) {
 		setProjectTargetFn: func(ctx context.Context, req httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error) {
 			return &httpapibiz.SetProjectTargetData{
 				ProjectPath: req.ProjectPath,
-				Target:      req.Target,
 			}, nil
 		},
 	})
@@ -658,7 +655,7 @@ func TestRunSetTargetViaServiceWithoutLocalConfig(t *testing.T) {
 			}
 		})
 	})
-	if !strings.Contains(output, "首选目标设置为") {
+	if !strings.Contains(output, "set-target 已保留为兼容命令") {
 		t.Fatalf("unexpected set-target output: %q", output)
 	}
 }

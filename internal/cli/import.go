@@ -10,7 +10,6 @@ import (
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	projectlifecycleservice "github.com/muidea/skill-hub/internal/modules/kernel/project_lifecycle/service"
 	"github.com/muidea/skill-hub/pkg/errors"
-	"github.com/muidea/skill-hub/pkg/spec"
 	"github.com/muidea/skill-hub/pkg/utils"
 )
 
@@ -24,8 +23,8 @@ var importCmd = &cobra.Command{
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
+		_ = target
 		opts := projectlifecycleservice.ImportOptions{
-			Target:         spec.NormalizeTarget(target),
 			Archive:        mustGetBoolFlag(cmd, "archive"),
 			Force:          mustGetBoolFlag(cmd, "force"),
 			DryRun:         mustGetBoolFlag(cmd, "dry-run"),
@@ -78,7 +77,7 @@ func runImport(skillsDir string, opts projectlifecycleservice.ImportOptions) err
 		if err := CheckInitDependency(); err != nil {
 			return err
 		}
-		ctx, err := RequireInitAndWorkspace(cwd, opts.Target)
+		ctx, err := RequireInitAndWorkspace(cwd, "")
 		if err != nil {
 			return err
 		}
