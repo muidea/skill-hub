@@ -389,6 +389,7 @@
   <script>
     const state = {
       skills: [],
+      totalSkills: 0,
       page: 1,
       pageSize: 8,
       totalPages: 1
@@ -422,7 +423,7 @@
     function setOverview(pageData) {
       const repoSet = new Set(state.skills.map(item => item.repository).filter(Boolean));
       const target = document.getElementById("target-filter").value.trim() || "全部";
-      document.getElementById("summary-skills").textContent = String(state.skills.length);
+      document.getElementById("summary-skills").textContent = String(state.totalSkills);
       document.getElementById("summary-repos").textContent = String(repoSet.size);
       document.getElementById("summary-target").textContent = `目标过滤: ${target}`;
     }
@@ -501,7 +502,9 @@
       if (target) query.set("target", target);
 
       const data = await api(`/api/v1/skills?${query.toString()}`);
-      state.skills = data.items || [];
+      state.skills = Array.isArray(data.items) ? data.items : [];
+      const total = Number(data.total);
+      state.totalSkills = Number.isFinite(total) ? total : state.skills.length;
       state.page = 1;
       renderSkills();
     }

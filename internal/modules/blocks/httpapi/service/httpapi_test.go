@@ -85,6 +85,72 @@ func TestHTTPAPI_ListProjects(t *testing.T) {
 	}
 }
 
+func TestHTTPAPI_ListSkillsIncludesTotal(t *testing.T) {
+	config.ResetForTest()
+	defer config.ResetForTest()
+
+	homeDir := t.TempDir()
+	t.Setenv("SKILL_HUB_HOME", homeDir)
+
+	configContent := []byte(`
+default_tool: open_code
+multi_repo:
+  enabled: true
+  default_repo: main
+  repositories:
+    main:
+      name: main
+      enabled: true
+      type: official
+`)
+	if err := os.WriteFile(filepath.Join(homeDir, "config.yaml"), configContent, 0644); err != nil {
+		t.Fatalf("write config.yaml: %v", err)
+	}
+
+	skills := map[string]string{
+		"open-code-skill": spec.TargetOpenCode,
+		"cursor-skill":    spec.TargetCursor,
+	}
+	for id, target := range skills {
+		skillDir := filepath.Join(homeDir, "repositories", "main", "skills", id)
+		if err := os.MkdirAll(skillDir, 0755); err != nil {
+			t.Fatalf("mkdir skill dir: %v", err)
+		}
+		content := []byte(`---
+name: ` + id + `
+description: test skill
+version: 1.0.0
+compatibility: ` + target + `
+---
+`)
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), content, 0644); err != nil {
+			t.Fatalf("write skill: %v", err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills?target="+spec.TargetOpenCode, nil)
+	rec := httptest.NewRecorder()
+	New().Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp httpapibiz.Response[httpapibiz.SkillListData]
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Data.Total != 1 {
+		t.Fatalf("expected total 1, got %d", resp.Data.Total)
+	}
+	if len(resp.Data.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(resp.Data.Items))
+	}
+	if resp.Data.Items[0].ID != "open-code-skill" {
+		t.Fatalf("expected open-code-skill, got %q", resp.Data.Items[0].ID)
+	}
+}
+
 func TestHTTPAPI_ProjectStatusRequiresPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/project-status", nil)
 	rec := httptest.NewRecorder()

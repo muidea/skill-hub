@@ -84,6 +84,7 @@ type AddRepoRequest struct {
 
 type SkillListData struct {
 	Items []spec.SkillMetadata `json:"items"`
+	Total int                  `json:"total"`
 }
 
 type RemoteSearchData struct {

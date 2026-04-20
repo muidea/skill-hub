@@ -36,7 +36,7 @@
 4. 推进 `search` 的服务桥接，使 CLI 通过本地服务实例承接远端搜索交互
 5. 收敛服务模式的配置项说明，例如 host、port、browser 行为和服务 URL 覆盖方式
 
-当前进度（2026-04-19）：
+当前进度（2026-04-20）：
 
 - 已完成：`search` 服务桥接
 - 已完成：项目技能生命周期命令 `register` / `import` / `dedupe` / `sync-copies` / `lint --paths` / `validate` / `audit` 的服务桥接
@@ -47,9 +47,10 @@
 - 已完成：HTTP API 包装错误按 `pkg/errors` 稳定错误码返回，并映射到 4xx/5xx 状态
 - 已完成：默认 loopback 监听下增加 Host header loopback 校验，降低本地服务被非本机 Host 访问的风险
 - 已完成：Web UI/API 增加基础安全响应头；默认 loopback 监听下拒绝非 loopback Origin/Referer 或 cross-site Fetch Metadata 的写请求
-- 已完成：`serve --secret-key` 写权限配置；未配置时服务只读，配置后修改类 API 校验 `X-Skill-Hub-Secret-Key`，Web UI 管理端和 CLI bridge 已同步传递
-- 已完成：Web UI 页面级 e2e 回归，覆盖技能目录页、管理端仓库表单、项目工作流入口、secretKey 写入入口和页面初始读取 API
+- 已完成：`serve --secret-key` 写权限配置；未配置时服务只读，配置后修改类 API 校验 `X-Skill-Hub-Secret-Key`；当前阶段 Web UI 管理端不开放密钥输入，CLI bridge 通过环境变量传递
+- 已完成：Web UI 页面级 e2e 回归，覆盖技能目录页真实技能总数、管理端仓库表单、项目工作流入口、管理端不暴露 secretKey 写入入口和页面初始读取 API
 - 已完成：hubclient 保留服务端 `code/message`，CLI bridge 不再把 `READ_ONLY` / `UNAUTHORIZED` 退化为 `SYSTEM_ERROR`；Web UI 管理端对只读与密钥错误显示更明确文案
+- 已完成：Web UI 技能目录总数改为使用 `/api/v1/skills` 的 `data.total`，避免固定或前端推断值
 - 后续暂缓：更完整的服务安全边界，例如密钥轮换、session 或登录态
 
 ## 3. CLI / Service 边界整理

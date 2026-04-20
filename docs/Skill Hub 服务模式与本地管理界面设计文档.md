@@ -251,6 +251,7 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 ### 7.3 技能列表与详情
 
 - `GET /api/v1/skills`
+  - 响应 `data.items` 为当前过滤后的技能列表，`data.total` 为同一过滤条件下的真实技能总数，Web UI 目录页使用该字段展示技能总数
 - `GET /api/v1/search?keyword=<keyword>[&target=<value>][&limit=<n>]`
 - `GET /api/v1/skills/{id}/candidates`
 - `GET /api/v1/skills/{id}?repo=<repo-name>`
@@ -449,7 +450,7 @@ SKILL_HUB_DISABLE_SERVICE_BRIDGE=1
 - 显式绑定到非 loopback 地址时保留远程访问兼容性，不强制套用本地浏览器来源校验
 - 响应统一增加基础安全响应头：`Content-Security-Policy`、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy`
 - 修改类 API 使用 `secretKey` 控制写权限：未配置 `--secret-key` 时服务按只读模式运行，读取类 `GET` 接口和 Web UI 可访问，`POST` / `DELETE` 等写操作返回 `READ_ONLY`
-- 配置 `--secret-key` 后，修改类 API 必须携带 `X-Skill-Hub-Secret-Key`；Web UI 管理端在写操作需要时提示输入并暂存于浏览器会话，CLI bridge 通过 `SKILL_HUB_SERVICE_SECRET_KEY` 传递
+- 配置 `--secret-key` 后，修改类 API 必须携带 `X-Skill-Hub-Secret-Key`；当前阶段 Web UI 管理端不开放写入密钥能力，只展示只读或密钥错误，CLI bridge 通过 `SKILL_HUB_SERVICE_SECRET_KEY` 传递
 - `serve status` 只显示 `write=read-only` 或 `write=secret-key`，不输出密钥明文
 - 不在 Web 页面显示 `git_token`
 - 修改类接口仅面向本地访问场景设计
@@ -537,7 +538,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 
 - `/api/v1/health`
 - Web UI 首页可访问
-- Web UI 页面级结构回归，覆盖技能目录页、管理端仓库表单、项目工作流入口、secretKey 写入入口和页面初始读取 API
+- Web UI 页面级结构回归，覆盖技能目录页真实技能总数、管理端仓库表单、项目工作流入口、管理端不暴露 secretKey 写入入口和页面初始读取 API
 - CLI bridge 的 `repo list` / `list` / `status`
 - CLI bridge 的 `use -> apply -> feedback -> push --dry-run --json` 完整写操作链路
 - 未配置 `secretKey` 时修改类 API 返回只读错误，配置后修改类 API 要求 `X-Skill-Hub-Secret-Key`

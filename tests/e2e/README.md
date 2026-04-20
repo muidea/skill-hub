@@ -51,7 +51,7 @@ Based on the business scenarios defined in the repo test documents and current C
    - `skill-hub serve` health check
    - `skill-hub serve register/start/status/stop/remove` instance management flow
    - Web UI homepage availability
-   - Web UI page-level structure checks for the catalog page, admin repo form, project workflow controls, and secretKey write entry
+   - Web UI page-level structure checks for the catalog total, admin repo form, project workflow controls, and no admin secretKey write entry
    - CLI bridge for `repo list` / `repo list --json` / `list` / `status`
    - CLI bridge preserves service error codes for read-only write attempts
    - CLI bridge write path for `use` / `apply` / `feedback`

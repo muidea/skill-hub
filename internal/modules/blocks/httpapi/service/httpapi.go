@@ -380,7 +380,10 @@ func (h *HTTPAPI) handleSkills(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.SkillListData]{
 		Code: httpapibiz.CodeOK,
-		Data: httpapibiz.SkillListData{Items: skills},
+		Data: httpapibiz.SkillListData{
+			Items: skills,
+			Total: len(skills),
+		},
 	})
 }
 

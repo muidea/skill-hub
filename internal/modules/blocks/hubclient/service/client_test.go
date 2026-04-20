@@ -51,6 +51,7 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 						Items: []spec.SkillMetadata{
 							{ID: "demo", Name: "Demo", Repository: "main"},
 						},
+						Total: 1,
 					},
 				}), nil
 			case "/api/v1/search":

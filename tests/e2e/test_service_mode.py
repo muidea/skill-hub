@@ -173,7 +173,8 @@ class TestServiceMode:
             assert "/api/v1/skill-repository/push-preview" in admin_ui
             assert "expected_changed_files" in admin_ui
             assert "default-repo-push-confirm" in admin_ui
-            assert "X-Skill-Hub-Secret-Key" in admin_ui
+            assert "写入密钥" not in admin_ui
+            assert "skillHubSecretKey" not in admin_ui
 
             push_preview = urllib.request.urlopen(
                 f"{service.base_url}/api/v1/skill-repository/push-preview",
@@ -278,7 +279,7 @@ class TestServiceMode:
         finally:
             service.stop()
 
-    def test_webui_pages_expose_catalog_admin_and_write_controls(self):
+    def test_webui_pages_expose_catalog_admin_and_read_only_write_controls(self):
         self._prepare_service_skill()
         service = self._start_service()
 
@@ -302,7 +303,6 @@ class TestServiceMode:
 
             assert {
                 "refresh-admin",
-                "set-secret-key",
                 "repo-form",
                 "repo-name",
                 "repo-url",
@@ -316,20 +316,21 @@ class TestServiceMode:
             assert {"repo-name", "repo-url", "project-filter"} <= admin_doc.inputs
             assert {"project-target-filter"} <= admin_doc.selects
             assert "刷新管理视图" in admin_doc.buttons
-            assert "写入密钥" in admin_doc.buttons
             assert "添加仓库" in admin_doc.buttons
             assert "/api/v1/repos" in admin_html
             assert "/api/v1/projects" in admin_html
             assert "/api/v1/project-apply" in admin_html
             assert "/api/v1/project-skills/use" in admin_html
             assert "/api/v1/project-feedback/apply" in admin_html
-            assert "X-Skill-Hub-Secret-Key" in admin_html
-            assert 'sessionStorage.getItem("skillHubSecretKey")' in admin_html
+            assert "X-Skill-Hub-Secret-Key" not in admin_html
+            assert "skillHubSecretKey" not in admin_html
+            assert "写入密钥" not in admin_doc.buttons
 
             skills_payload = json.loads(
                 urllib.request.urlopen(f"{service.base_url}/api/v1/skills", timeout=2).read().decode("utf-8")
             )
             assert skills_payload["code"] == "OK"
+            assert skills_payload["data"]["total"] == len(skills_payload["data"]["items"])
             assert any(item["id"] == "service-skill" for item in skills_payload["data"]["items"])
 
             projects_payload = json.loads(

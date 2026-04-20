@@ -470,7 +470,6 @@
         <p>面向管理端的仓库和项目工作区控制台。用于维护多仓配置、同步仓库、查看项目状态以及执行应用和反馈归档。</p>
         <div class="hero-actions">
           <button class="primary" id="refresh-admin" type="button">刷新管理视图</button>
-          <button class="secondary" id="set-secret-key" type="button">写入密钥</button>
           <button class="secondary" type="button" onclick="window.location.href='/'">返回技能目录</button>
         </div>
       </div>
@@ -557,29 +556,16 @@
       projects: [],
       defaultRepo: "",
       defaultPushPreview: null,
-      secretKey: sessionStorage.getItem("skillHubSecretKey") || "",
       pagination: {
         repos: { page: 1, pageSize: 4 },
         projects: { page: 1, pageSize: 3 }
       }
     };
-    const SECRET_KEY_HEADER = "X-Skill-Hub-Secret-Key";
 
-    async function api(path, options = {}, retried = false) {
+    async function api(path, options = {}) {
       const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
-      if (state.secretKey) headers[SECRET_KEY_HEADER] = state.secretKey;
       const res = await fetch(path, { ...options, headers });
       const data = await res.json().catch(() => ({}));
-      if (res.status === 401 && !retried) {
-        const nextSecret = window.prompt("Secret Key", "");
-        if (nextSecret !== null) {
-          state.secretKey = nextSecret.trim();
-          if (state.secretKey) {
-            sessionStorage.setItem("skillHubSecretKey", state.secretKey);
-            return api(path, options, true);
-          }
-        }
-      }
       if (!res.ok || data.code !== "OK") {
         throw new Error(apiErrorMessage(data));
       }
@@ -592,17 +578,6 @@
       if (code === "READ_ONLY") return `只读模式：${message}`;
       if (code === "UNAUTHORIZED") return `密钥无效：${message}`;
       return message;
-    }
-
-    function setSecretKey() {
-      const nextSecret = window.prompt("Secret Key", state.secretKey);
-      if (nextSecret === null) return;
-      state.secretKey = nextSecret.trim();
-      if (state.secretKey) {
-        sessionStorage.setItem("skillHubSecretKey", state.secretKey);
-      } else {
-        sessionStorage.removeItem("skillHubSecretKey");
-      }
     }
 
     function normalizeProjectStatus(status) {
@@ -1177,7 +1152,6 @@ ${escapeHtml((item.changes || []).join("\n") || "无")}</pre>`;
     });
 
     document.getElementById("refresh-admin").addEventListener("click", refreshAdmin);
-    document.getElementById("set-secret-key").addEventListener("click", setSecretKey);
     document.getElementById("repo-filter").addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
