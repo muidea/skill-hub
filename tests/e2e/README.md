@@ -17,28 +17,25 @@ Based on the business scenarios defined in the repo test documents and current C
    - Skill listing verification
 
 2. **Project Application Workflow** (`test_scenario2.py`)
-   - Setting project target with `skill-hub set-target`
    - Enabling skills with `skill-hub use`
    - Physical application with `skill-hub apply`
-   - Command-line target override
+   - State updates without target inputs
 
 3. **Iteration Feedback Workflow** (`test_scenario3.py`)
    - Project file modification detection
    - Status checking with `skill-hub status`
    - Synchronization back to repository with `skill-hub feedback`
-   - Target-specific modification extraction
+   - Standard modification extraction
 
 4. **Cancel and Cleanup Workflow** (`test_scenario4.py`)
    - Skill removal with `skill-hub remove`
    - Physical cleanup verification
-   - Multi-target cleanup with `--target all`
    - Repository safety (never delete source files)
 
-5. **Target Priority and Validation Workflow** (`test_scenario5.py`)
-   - Project/global target priority checks
-   - Skill validation with `skill-hub validate`
-   - Invalid local skill detection
-   - Target inheritance behavior
+5. **Target Business Removal Workflow** (`test_scenario5.py`)
+   - Removed target command/flag entrypoints fail
+   - Standard workflows do not write `preferred_target`
+   - Compatibility metadata does not filter list results
 
 6. **Skill Content Commands** (`test_skill_content_commands.py`)
    - **create**: New skill has standard structure (SKILL.md + scripts/, references/, assets/); when skill already exists, create validates and refreshes state for registration/archiving.

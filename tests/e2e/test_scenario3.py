@@ -252,39 +252,21 @@ class TestScenario3IterationFeedback:
         
         print(f"✓ Multiple modifications handling verified")
         
-    def test_06_target_specific_modification_extraction(self):
-        """Test 3.6: Target specific modification extraction verification"""
-        print("\n=== Test 3.6: Target Specific Modification Extraction ===")
+    def test_06_standard_modification_extraction(self):
+        """Test 3.6: Standard modification extraction verification"""
+        print("\n=== Test 3.6: Standard Modification Extraction ===")
+
+        skill_md = self.project_skills_dir / self.test_skill_name / "SKILL.md"
+        with open(skill_md, 'a') as f:
+            f.write("\n\n## Standard modification extraction\n")
+
+        result = self.cmd.run("status", [self.test_skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub status failed: {result.stderr}"
         
-        # 测试不同Target的修改提取逻辑
-        targets = ["open_code", "cursor", "claude"]
+        result = self.cmd.run("feedback", [self.test_skill_name], cwd=str(self.project_dir), input_text="y\n")
+        assert result.success, f"skill-hub feedback failed: {result.stderr}"
         
-        for target in targets:
-            # 设置 target
-            result = self.cmd.run("set-target", [target], cwd=str(self.project_dir))
-            if result.success:
-                print(f"  Target set: {target}")
-                
-                # 修改技能文件
-                skill_md = self.project_skills_dir / self.test_skill_name / "SKILL.md"
-                with open(skill_md, 'a') as f:
-                    f.write(f"\n\n## Modification for {target} target\n")
-                
-                # 检查状态
-                result = self.cmd.run("status", [self.test_skill_name], cwd=str(self.project_dir))
-                if result.success:
-                    print(f"    Status checked for {target}")
-                
-                # 反馈修改
-                result = self.cmd.run("feedback", [self.test_skill_name], cwd=str(self.project_dir), input_text="y\n")
-                if result.success:
-                    print(f"    Feedback completed for {target}")
-        
-        # 验证提取准确性
-        # 检查不同target下的修改是否被正确处理
-        print(f"  Modification extraction tested for {len(targets)} targets")
-        
-        print(f"✓ Target specific modification extraction verified")
+        print(f"✓ Standard modification extraction verified")
         
     def test_07_json_escaping_handling(self):
         """Test 3.7: JSON escaping handling verification"""

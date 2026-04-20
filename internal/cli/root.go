@@ -45,7 +45,6 @@ func Execute() error {
 
 func init() {
 	rootCmd.AddCommand(initCmd)
-	rootCmd.AddCommand(setTargetCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(searchCmd)
 	rootCmd.AddCommand(createCmd)

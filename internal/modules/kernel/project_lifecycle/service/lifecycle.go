@@ -32,12 +32,11 @@ type RegisterResult struct {
 }
 
 type ImportOptions struct {
-	Target         string `json:"target"`
-	Archive        bool   `json:"archive"`
-	Force          bool   `json:"force"`
-	DryRun         bool   `json:"dry_run"`
-	FailFast       bool   `json:"fail_fast"`
-	FixFrontmatter bool   `json:"fix_frontmatter"`
+	Archive        bool `json:"archive"`
+	Force          bool `json:"force"`
+	DryRun         bool `json:"dry_run"`
+	FailFast       bool `json:"fail_fast"`
+	FixFrontmatter bool `json:"fix_frontmatter"`
 }
 
 type ImportSummary struct {
@@ -77,9 +76,7 @@ func New() *ProjectLifecycle {
 	}
 }
 
-func (p *ProjectLifecycle) Register(projectPath, skillID, target string, skipValidate bool) (*RegisterResult, error) {
-	_ = target
-
+func (p *ProjectLifecycle) Register(projectPath, skillID string, skipValidate bool) (*RegisterResult, error) {
 	if projectPath == "" {
 		return nil, errors.NewWithCode("Register", errors.ErrInvalidInput, "项目路径不能为空")
 	}
@@ -210,7 +207,7 @@ func (p *ProjectLifecycle) importOneSkill(projectState *spec.ProjectState, state
 	}
 
 	if opts.FixFrontmatter {
-		repaired, changed, repairErr := buildRepairedSkillContent(item.ID, content, opts.Target)
+		repaired, changed, repairErr := buildRepairedSkillContent(item.ID, content)
 		if repairErr != nil {
 			recordImportFailure(summary, item, "fix-frontmatter", repairErr)
 			return repairErr
@@ -219,7 +216,7 @@ func (p *ProjectLifecycle) importOneSkill(projectState *spec.ProjectState, state
 			if opts.DryRun {
 				content = repaired
 			} else {
-				if _, repairErr := RepairSkillFrontmatter(item.ID, item.SkillMd, opts.Target); repairErr != nil {
+				if _, repairErr := RepairSkillFrontmatter(item.ID, item.SkillMd); repairErr != nil {
 					recordImportFailure(summary, item, "fix-frontmatter", repairErr)
 					return repairErr
 				}
@@ -274,12 +271,12 @@ func (p *ProjectLifecycle) importOneSkill(projectState *spec.ProjectState, state
 	return nil
 }
 
-func RepairSkillFrontmatter(skillID, skillMdPath, target string) (*RepairResult, error) {
+func RepairSkillFrontmatter(skillID, skillMdPath string) (*RepairResult, error) {
 	content, err := os.ReadFile(skillMdPath)
 	if err != nil {
 		return nil, errors.WrapWithCode(err, "RepairSkillFrontmatter", errors.ErrFileOperation, "读取SKILL.md失败")
 	}
-	repaired, changed, err := buildRepairedSkillContent(skillID, content, target)
+	repaired, changed, err := buildRepairedSkillContent(skillID, content)
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +383,7 @@ func recordImportFailure(summary *ImportSummary, item importSkillItem, command s
 	})
 }
 
-func buildRepairedSkillContent(skillID string, content []byte, target string) ([]byte, bool, error) {
+func buildRepairedSkillContent(skillID string, content []byte) ([]byte, bool, error) {
 	frontmatterBytes, body, hasFrontmatter, validFence := splitSkillFrontmatter(content)
 
 	frontmatter := map[string]interface{}{}

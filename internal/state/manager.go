@@ -183,13 +183,11 @@ func (m *StateManager) PruneInvalidProjectStates() ([]string, error) {
 
 // AddSkillToProject 添加技能到项目
 func (m *StateManager) AddSkillToProject(projectPath, skillID, version string, variables map[string]string) error {
-	return m.AddSkillToProjectWithTarget(projectPath, skillID, version, "", variables, "")
+	return m.AddSkillToProjectWithSource(projectPath, skillID, version, "", variables)
 }
 
-// AddSkillToProjectWithTarget 添加技能到项目。target 参数仅保留旧调用兼容，不参与状态写入。
-func (m *StateManager) AddSkillToProjectWithTarget(projectPath, skillID, version, sourceRepository string, variables map[string]string, target string) error {
-	_ = target
-
+// AddSkillToProjectWithSource 添加技能到项目并记录来源仓库。
+func (m *StateManager) AddSkillToProjectWithSource(projectPath, skillID, version, sourceRepository string, variables map[string]string) error {
 	state, err := m.LoadProjectState(projectPath)
 	if err != nil {
 		return err
@@ -203,22 +201,6 @@ func (m *StateManager) AddSkillToProjectWithTarget(projectPath, skillID, version
 	}
 
 	return m.SaveProjectState(state)
-}
-
-// SetPreferredTarget 保留历史接口兼容。target 不再影响项目业务逻辑，也不再写入状态。
-func (m *StateManager) SetPreferredTarget(projectPath, target string) error {
-	_ = target
-	_, err := m.LoadProjectState(projectPath)
-	return err
-}
-
-// GetPreferredTarget 获取项目的首选目标
-func (m *StateManager) GetPreferredTarget(projectPath string) (string, error) {
-	state, err := m.LoadProjectState(projectPath)
-	if err != nil {
-		return "", err
-	}
-	return state.PreferredTarget, nil
 }
 
 // FindProjectByPath 通过路径查找项目（支持递归向上查找）

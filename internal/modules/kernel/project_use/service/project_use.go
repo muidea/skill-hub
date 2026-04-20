@@ -27,9 +27,7 @@ func New() *ProjectUse {
 	}
 }
 
-func (p *ProjectUse) EnableSkill(projectPath, skillID, repoName, target string, variables map[string]string) (*UseResult, error) {
-	_ = target
-
+func (p *ProjectUse) EnableSkill(projectPath, skillID, repoName string, variables map[string]string) (*UseResult, error) {
 	if projectPath == "" {
 		return nil, errors.NewWithCode("EnableSkill", errors.ErrInvalidInput, "项目路径不能为空")
 	}
@@ -68,7 +66,7 @@ func (p *ProjectUse) EnableSkill(projectPath, skillID, repoName, target string, 
 		return nil, errors.Wrap(err, "EnableSkill: 创建状态管理器失败")
 	}
 
-	if err := stateManager.AddSkillToProjectWithTarget(absProjectPath, skillID, fullSkill.Version, selectedRepo, variables, ""); err != nil {
+	if err := stateManager.AddSkillToProjectWithSource(absProjectPath, skillID, fullSkill.Version, selectedRepo, variables); err != nil {
 		return nil, errors.Wrap(err, "EnableSkill: 保存项目状态失败")
 	}
 

@@ -10,23 +10,6 @@ import (
 	"github.com/muidea/skill-hub/internal/config"
 )
 
-func TestCompleteTargetValues(t *testing.T) {
-	got, dir := completeTargetValues(nil, nil, "")
-	if dir != cobra.ShellCompDirectiveNoFileComp {
-		t.Errorf("directive = %v, want NoFileComp", dir)
-	}
-	if len(got) != 0 {
-		t.Fatalf("len(got) = %d, want 0; got %v", len(got), got)
-	}
-}
-
-func TestCompleteTargetValues_NoMatch(t *testing.T) {
-	got, _ := completeTargetValues(nil, nil, "xyz")
-	if len(got) != 0 {
-		t.Errorf("prefix 'xyz': got %v, want []", got)
-	}
-}
-
 func TestCompleter_WithEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("SKILL_HUB_HOME", tmpDir)
@@ -73,7 +56,7 @@ metadata:
 
 	absTmp, _ := filepath.Abs(tmpDir)
 	statePath := filepath.Join(tmpDir, "state.json")
-	stateContent := `{"` + absTmp + `":{"project_path":"` + absTmp + `","preferred_target":"open_code","skills":{"go-refactor":{"skill_id":"go-refactor","version":"1.0.0","variables":{}}}}}
+	stateContent := `{"` + absTmp + `":{"project_path":"` + absTmp + `","skills":{"go-refactor":{"skill_id":"go-refactor","version":"1.0.0","variables":{}}}}}
 `
 	if err := os.WriteFile(statePath, []byte(stateContent), 0644); err != nil {
 		t.Fatalf("write state: %v", err)

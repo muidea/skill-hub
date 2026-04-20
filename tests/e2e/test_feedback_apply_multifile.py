@@ -147,10 +147,6 @@ class TestFeedbackApplyMultiFile:
         result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
         assert result.success, f"Initial feedback failed: {result.stderr}"
         
-        # Setup project target
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"skill-hub set-target failed: {result.stderr}"
-        
         # Use the skill (now it exists in repository)
         result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir), input_text="\n")
         assert result.success, f"skill-hub use failed: {result.stderr}"
@@ -219,10 +215,6 @@ class TestFeedbackApplyMultiFile:
         # First create the skill directory structure
         agents_skills_dir = self.project_dir / ".agents" / "skills"
         agents_skills_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Setup project first
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"skill-hub set-target failed: {result.stderr}"
         
         # Create skill using skill-hub create
         result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
@@ -302,10 +294,6 @@ class TestFeedbackApplyMultiFile:
         result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success, f"skill-hub init failed: {result.stderr}"
         
-        # Setup project
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"skill-hub set-target failed: {result.stderr}"
-        
         # Create skill
         skill_name = "roundtrip-test-skill"
         result = self.cmd.run("create", [skill_name], cwd=str(self.project_dir))
@@ -365,10 +353,6 @@ class TestFeedbackApplyMultiFile:
         result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
         
-        # Setup target
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(fresh_project_dir))
-        assert result.success
-        
         # Use skill
         result = self.cmd.run("use", [skill_name], cwd=str(fresh_project_dir), input_text="\n")
         assert result.success
@@ -408,10 +392,6 @@ class TestFeedbackApplyMultiFile:
         # Initialize
         result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
-        
-        # Setup project
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"skill-hub set-target failed: {result.stderr}"
         
         # Create skill
         skill_name = "nested-test-skill"
@@ -490,10 +470,6 @@ class TestFeedbackApplyMultiFile:
         # Initialize
         result = self.cmd.run("init", cwd=str(self.home_dir))
         assert result.success
-        
-        # Setup project
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"skill-hub set-target failed: {result.stderr}"
         
         # Create skill
         skill_name = "permission-test-skill"
@@ -791,10 +767,7 @@ class TestFeedbackApplyMultiFile:
         result = self.cmd.run("feedback", [skill_name], cwd=str(self.project_dir), input_text="y\n")
         assert result.success, f"Update feedback failed: {result.stderr}"
         
-        # 5. Setup project and apply
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success
-        
+        # 5. Apply through the standard project workspace
         result = self.cmd.run("use", [skill_name], cwd=str(self.project_dir), input_text="\n")
         assert result.success
         

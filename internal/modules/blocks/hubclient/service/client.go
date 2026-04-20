@@ -135,9 +135,7 @@ func (c *Client) PushSkillRepositoryChanges(ctx context.Context, req httpapibiz.
 	return &data, nil
 }
 
-func (c *Client) ListSkills(ctx context.Context, repoNames []string, target string) ([]spec.SkillMetadata, error) {
-	_ = target
-
+func (c *Client) ListSkills(ctx context.Context, repoNames []string) ([]spec.SkillMetadata, error) {
 	query := url.Values{}
 	if len(repoNames) > 0 {
 		query.Set("repo", strings.Join(repoNames, ","))
@@ -153,9 +151,7 @@ func (c *Client) ListSkills(ctx context.Context, repoNames []string, target stri
 	return data.Items, nil
 }
 
-func (c *Client) SearchRemoteSkills(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
-	_ = target
-
+func (c *Client) SearchRemoteSkills(ctx context.Context, keyword string, limit int) ([]spec.RemoteSearchResult, error) {
 	query := url.Values{}
 	query.Set("keyword", keyword)
 	if limit > 0 {
@@ -175,14 +171,6 @@ func (c *Client) GetProjectStatus(ctx context.Context, projectPath, skillID stri
 		query.Set("skill_id", skillID)
 	}
 	data, err := get[httpapibiz.ProjectStatusData](ctx, c, "/api/v1/project-status?"+query.Encode())
-	if err != nil {
-		return nil, err
-	}
-	return &data, nil
-}
-
-func (c *Client) SetProjectTarget(ctx context.Context, req httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error) {
-	data, err := post[httpapibiz.SetProjectTargetData](ctx, c, "/api/v1/project-target", req)
 	if err != nil {
 		return nil, err
 	}

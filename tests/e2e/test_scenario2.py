@@ -74,15 +74,11 @@ class TestScenario2StateActivation:
         temp_dir = Path(self.home_dir) / "temp-uninitialized-2"
         temp_dir.mkdir(exist_ok=True)
         
-        # 测试未初始化时执行 skill-hub set-target open_code
-        # skill-hub 会自动初始化项目，而不是显示错误
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(temp_dir))
-        # 应该成功执行并初始化项目
-        assert result.success, f"set-target should succeed and auto-initialize: {result.stderr}"
-        assert "当前目录" in result.stdout and "未在skill-hub中注册" in result.stdout, \
-            f"Should auto-initialize when running set-target without init"
+        # 测试未初始化时执行 skill-hub init
+        result = self.cmd.run("init", cwd=str(temp_dir))
+        assert result.success, f"init should succeed: {result.stderr}"
         
-        print(f"✓ set-target command dependency check passed (auto-initialization)")
+        print(f"✓ init command dependency check passed")
         
         # 测试未初始化时执行 skill-hub use non-existent-skill
         # use 命令需要技能存在于仓库中，所以会失败
@@ -107,13 +103,12 @@ class TestScenario2StateActivation:
         
         print(f"✓ apply command dependency check passed (auto-initialization)")
         
-    def test_02_set_project_target(self):
-        """Test 2.2: Project target setting verification"""
-        print("\n=== Test 2.2: Set Project Target ===")
+    def test_02_standard_project_workspace_state(self):
+        """Test 2.2: Standard project workspace state verification"""
+        print("\n=== Test 2.2: Standard Project Workspace State ===")
         
-        # 执行 skill-hub set-target open_code
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"skill-hub set-target failed: {result.stderr}"
+        result = self.cmd.run("create", ["workspace-state-skill"], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub create failed: {result.stderr}"
         
         # 验证 state.json 更新
         state_file = self.skill_hub_dir / "state.json"
@@ -126,16 +121,14 @@ class TestScenario2StateActivation:
         project_path = str(self.project_dir)
         assert project_path in state, f"Project not found in state.json"
         
-        # 检查 target 设置
         project_state = state[project_path]
-        assert project_state.get("preferred_target") == "open_code", f"Target not set to 'open_code' in state.json"
+        assert project_state.get("preferred_target", "") == "", "preferred_target should not be set by standard workflows"
         
         # 验证项目工作区检查逻辑
         # 通过检查项目目录中的 .agents 目录来验证
         assert self.project_agents_dir.exists(), f"Project workspace not properly initialized"
         
-        print(f"✓ Project target set successfully")
-        print(f"  - Target: open_code")
+        print(f"✓ Project workspace state created successfully")
         print(f"  - State.json updated: ✓")
         print(f"  - Project workspace initialized: ✓")
         
@@ -218,36 +211,22 @@ class TestScenario2StateActivation:
         
         print(f"✓ Physical application with all options verified")
         
-    def test_05_command_line_target_override(self):
-        """Test 2.5: Command line target override verification"""
-        print("\n=== Test 2.5: Command Line Target Override ===")
+    def test_05_use_without_target_updates_state_only(self):
+        """Test 2.5: use updates state without target input"""
+        print("\n=== Test 2.5: Use Without Target ===")
         
-        # 首先设置项目 target
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"skill-hub set-target failed: {result.stderr}"
+        result = self.cmd.run("use", [self.test_skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub use failed: {result.stderr}"
         
-        # 测试 skill-hub use git-expert --target cursor
-        result = self.cmd.run("use", [self.test_skill_name, "--target", "cursor"], cwd=str(self.project_dir))
-        # 注意：实际实现可能不支持同时指定技能和 target，这里测试命令语法
-        
-        # 验证命令行参数覆盖项目设置
-        # 检查 state.json 中的 target 设置
         state_file = self.skill_hub_dir / "state.json"
-        if result.success and state_file.exists():
-            with open(state_file, 'r') as f:
-                state = json.load(f)
-            
-            project_path = str(self.project_dir)
-            if project_path in state:
-                project_state = state[project_path]
-                # 检查是否记录了特定技能的 target 覆盖
-                print(f"  Command line target override tested")
+        assert state_file.exists(), f"state.json not found at {state_file}"
+        with open(state_file, 'r') as f:
+            state = json.load(f)
+        project_state = state[str(self.project_dir)]
+        assert project_state.get("preferred_target", "") == "", "use should not set preferred_target"
+        assert self.test_skill_name in project_state.get("skills", {}), "Skill not marked as enabled"
         
-        # 验证目标优先级逻辑
-        # 命令行 target > 项目 target > 全局默认
-        print(f"  Target priority logic verified conceptually")
-        
-        print(f"✓ Command line target override tested")
+        print(f"✓ use updates state without target input")
         
     def test_06_multiple_skills_application(self):
         """Test 2.6: Multiple skills batch application verification"""
@@ -290,32 +269,17 @@ class TestScenario2StateActivation:
         
         print(f"✓ Multiple skills batch application verified")
         
-    def test_07_target_specific_adapters(self):
-        """Test 2.7: Target specific adapters verification"""
-        print("\n=== Test 2.7: Target Specific Adapters ===")
+    def test_07_standard_apply_path(self):
+        """Test 2.7: Standard apply path verification"""
+        print("\n=== Test 2.7: Standard Apply Path ===")
         
-        # 测试不同 Target 的适配器行为
-        targets = ["open_code", "cursor", "claude"]
+        result = self.cmd.run("use", [self.test_skill_name], cwd=str(self.project_dir))
+        assert result.success, f"skill-hub use failed: {result.stderr}"
+        result = self.cmd.run("apply", cwd=str(self.project_dir))
+        assert result.success, f"skill-hub apply failed: {result.stderr}"
+        assert (self.project_skills_dir / self.test_skill_name / "SKILL.md").exists()
         
-        for target in targets:
-            # 设置 target
-            result = self.cmd.run("set-target", [target], cwd=str(self.project_dir))
-            if result.success:
-                print(f"  Target set: {target}")
-                
-                # 启用技能
-                result = self.cmd.run("use", [self.test_skill_name], cwd=str(self.project_dir))
-                if result.success:
-                    # 应用技能
-                    result = self.cmd.run("apply", cwd=str(self.project_dir))
-                    if result.success:
-                        print(f"    Skill applied for target {target}")
-        
-        # 验证适配器正确性
-        # 检查不同 target 下的文件生成情况
-        print(f"  Adapter behavior tested for {len(targets)} targets")
-        
-        print(f"✓ Target specific adapters verified")
+        print(f"✓ Standard apply path verified")
         
     def test_08_apply_without_enable(self):
         """Test 2.8: Apply without enable verification"""

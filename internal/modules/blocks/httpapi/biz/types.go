@@ -115,20 +115,10 @@ type ProjectStatusData struct {
 	Item *projectstatusservice.ProjectStatusSummary `json:"item"`
 }
 
-type SetProjectTargetRequest struct {
-	ProjectPath string `json:"project_path"`
-	Target      string `json:"target"`
-}
-
-type SetProjectTargetData struct {
-	ProjectPath string `json:"project_path"`
-}
-
 type UseSkillRequest struct {
 	ProjectPath string            `json:"project_path"`
 	SkillID     string            `json:"skill_id"`
 	Repository  string            `json:"repository,omitempty"`
-	Target      string            `json:"target,omitempty"`
 	Variables   map[string]string `json:"variables,omitempty"`
 }
 
@@ -139,7 +129,6 @@ type UseSkillData struct {
 type RegisterSkillRequest struct {
 	ProjectPath  string `json:"project_path"`
 	SkillID      string `json:"skill_id"`
-	Target       string `json:"target,omitempty"`
 	SkipValidate bool   `json:"skip_validate"`
 }
 

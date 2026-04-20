@@ -1,7 +1,6 @@
 package service
 
 import (
-	adapterpkg "github.com/muidea/skill-hub/internal/adapter"
 	"github.com/muidea/skill-hub/internal/config"
 	gitpkg "github.com/muidea/skill-hub/internal/git"
 	adaptermodule "github.com/muidea/skill-hub/internal/modules/blocks/adapter"
@@ -61,20 +60,8 @@ func (r *Runtime) StateManager() (*state.StateManager, error) {
 	return r.projectStateSvc.Service().Manager()
 }
 
-func (r *Runtime) SetPreferredTarget(projectPath, target string) error {
-	stateManager, err := r.projectStateSvc.Service().Manager()
-	if err != nil {
-		return errors.Wrap(err, "SetPreferredTarget: 创建状态管理器失败")
-	}
-	return stateManager.SetPreferredTarget(projectPath, target)
-}
-
 func (r *Runtime) RepositoryManager() (*multirepo.Manager, error) {
 	return r.repositorySvc.Service().Manager()
-}
-
-func (r *Runtime) Adapter(target string) (adapterpkg.Adapter, error) {
-	return r.adapterSvc.Service().ForTarget(target)
 }
 
 func (r *Runtime) DefaultRepository() (*config.RepositoryConfig, error) {
@@ -109,8 +96,8 @@ func (r *Runtime) FindSkill(skillID string) ([]spec.SkillMetadata, error) {
 	return r.repositorySvc.Service().FindSkill(skillID)
 }
 
-func (r *Runtime) SearchRemoteSkills(keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
-	return r.skillSvc.Service().SearchRemote(keyword, target, limit)
+func (r *Runtime) SearchRemoteSkills(keyword string, limit int) ([]spec.RemoteSearchResult, error) {
+	return r.skillSvc.Service().SearchRemote(keyword, limit)
 }
 
 func (r *Runtime) LoadSkill(skillID, repoName string) (*spec.Skill, error) {
@@ -197,8 +184,8 @@ func (r *Runtime) CleanupTimestampedBackupDirs(basePath string) error {
 	return r.adapterSvc.Service().CleanupTimestampedBackupDirs(basePath)
 }
 
-func (r *Runtime) EnableSkill(projectPath, skillID, repoName, target string, variables map[string]string) (*projectuseservice.UseResult, error) {
-	return r.projectUseSvc.Service().EnableSkill(projectPath, skillID, repoName, target, variables)
+func (r *Runtime) EnableSkill(projectPath, skillID, repoName string, variables map[string]string) (*projectuseservice.UseResult, error) {
+	return r.projectUseSvc.Service().EnableSkill(projectPath, skillID, repoName, variables)
 }
 
 func (r *Runtime) ApplyProject(projectPath string, dryRun, force bool) (*projectapplyservice.ApplyResult, error) {
@@ -213,8 +200,8 @@ func (r *Runtime) ApplyFeedback(projectPath, skillID string) (*projectfeedbackse
 	return r.projectFeedbackSvc.Service().Apply(projectPath, skillID)
 }
 
-func (r *Runtime) RegisterProjectSkill(projectPath, skillID, target string, skipValidate bool) (*projectlifecycleservice.RegisterResult, error) {
-	return r.projectLifecycleSvc.Service().Register(projectPath, skillID, target, skipValidate)
+func (r *Runtime) RegisterProjectSkill(projectPath, skillID string, skipValidate bool) (*projectlifecycleservice.RegisterResult, error) {
+	return r.projectLifecycleSvc.Service().Register(projectPath, skillID, skipValidate)
 }
 
 func (r *Runtime) ImportProjectSkills(projectPath, skillsDir string, opts projectlifecycleservice.ImportOptions) (*projectlifecycleservice.ImportSummary, error) {

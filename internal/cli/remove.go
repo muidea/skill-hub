@@ -31,7 +31,7 @@ var removeCmd = &cobra.Command{
 }
 
 func runRemove(skillID string) error {
-	ctx, err := RequireInitAndWorkspace("", "")
+	ctx, err := RequireInitAndWorkspace("")
 	if err != nil {
 		return err
 	}
@@ -114,20 +114,6 @@ func renderRemovalWarning(item *projectstatusservice.SkillStatusItem) {
 }
 
 func removeProjectSkillArtifacts(projectPath, skillID string) error {
-	adapter, err := getTargetAdapter(spec.TargetOpenCode)
-	if err != nil {
-		return errors.Wrap(err, "removeProjectSkillArtifacts: 获取适配器失败")
-	}
-	adapter.SetProjectMode()
-
-	if err := applyInProjectDir(projectPath, func() error {
-		return adapter.Remove(skillID)
-	}); err != nil {
-		return errors.Wrap(err, "removeProjectSkillArtifacts: 清理项目技能目录失败")
-	}
-
-	fmt.Println("✓ 已清理项目本地技能目录")
-
 	agentsSkillDir := filepath.Join(projectPath, ".agents", "skills", skillID)
 	if _, err := os.Stat(agentsSkillDir); err == nil {
 		if err := os.RemoveAll(agentsSkillDir); err != nil {
@@ -137,21 +123,6 @@ func removeProjectSkillArtifacts(projectPath, skillID string) error {
 	}
 
 	return nil
-}
-
-func applyInProjectDir(projectPath string, fn func() error) error {
-	originalCwd, err := os.Getwd()
-	if err != nil {
-		return errors.Wrap(err, "applyInProjectDir: 获取当前目录失败")
-	}
-	if err := os.Chdir(projectPath); err != nil {
-		return errors.Wrap(err, "applyInProjectDir: 切换项目目录失败")
-	}
-	defer func() {
-		_ = os.Chdir(originalCwd)
-	}()
-
-	return fn()
 }
 
 // confirmRemoval 确认是否继续移除

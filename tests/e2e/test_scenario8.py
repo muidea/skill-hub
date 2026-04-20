@@ -50,14 +50,14 @@ class TestScenario8RemoteSkillSearch:
         result = home_cmd.run("init", cwd=str(self.project_dir))
         assert result.success, f"skill-hub init failed: {result.stderr}"
         
-        # Create test skills with different names and targets
+        # Create test skills with different names and compatibility descriptions
         test_skills = [
-            {"name": "git-expert", "target": "open_code", "description": "Git expert skill"},
-            {"name": "python-debugger", "target": "open_code", "description": "Python debugging skill"},
-            {"name": "database-optimizer", "target": "cursor", "description": "Database optimization"},
-            {"name": "git-helper", "target": "both", "description": "Git helper utilities"},
-            {"name": "python-web", "target": "open_code", "description": "Python web development"},
-            {"name": "database-migration", "target": "cursor", "description": "Database migration tools"},
+            {"name": "git-expert", "compatibility": "open_code", "description": "Git expert skill"},
+            {"name": "python-debugger", "compatibility": "open_code", "description": "Python debugging skill"},
+            {"name": "database-optimizer", "compatibility": "cursor", "description": "Database optimization"},
+            {"name": "git-helper", "compatibility": "both", "description": "Git helper utilities"},
+            {"name": "python-web", "compatibility": "open_code", "description": "Python web development"},
+            {"name": "database-migration", "compatibility": "cursor", "description": "Database migration tools"},
         ]
         
         project_cmd = CommandRunner()
@@ -78,7 +78,7 @@ class TestScenario8RemoteSkillSearch:
                 with open(meta_file, 'r') as f:
                     meta = yaml.safe_load(f)
                 
-                meta['target'] = skill['target']
+                meta['compatibility'] = skill['compatibility']
                 meta['description'] = skill['description']
                 
                 with open(meta_file, 'w') as f:
@@ -124,31 +124,30 @@ class TestScenario8RemoteSkillSearch:
         
         print(f"✓ Basic search results: {result.stdout[:150]}...")
     
-    def test_03_target_filtered_search(self):
-        """Test 8.3: Search filtered by target"""
-        print("\n=== Test 8.2: Target Filtered Search ===")
+    def test_03_search_ignores_compatibility_metadata(self):
+        """Test 8.3: Search is not filtered by compatibility metadata"""
+        print("\n=== Test 8.3: Search Ignores Compatibility Metadata ===")
         
         # Setup test skills
         self._setup_test_skills()
         
-        # Test search for "database" with open_code target
+        # Search should use keyword matching only; compatibility metadata is display-only.
         project_cmd = CommandRunner()
-        result = project_cmd.run("search", ["database", "--target", "open_code"], cwd=str(self.project_dir))
+        result = project_cmd.run("search", ["database"], cwd=str(self.project_dir))
         
         assert result.success, f"skill-hub search failed: {result.stderr}"
         
-        # Note: database skills are marked as cursor target, so may not appear
-        # This tests that target filtering works
-        print(f"✓ Target filtered search: {result.stdout[:150]}...")
+        assert "database" in result.stdout.lower()
+        print(f"✓ Compatibility metadata did not filter database results: {result.stdout[:150]}...")
         
-        # Test search for "python" with open_code target
-        result = project_cmd.run("search", ["python", "--target", "open_code"], cwd=str(self.project_dir))
+        # Test search for "python"
+        result = project_cmd.run("search", ["python"], cwd=str(self.project_dir))
         assert result.success, f"skill-hub search failed: {result.stderr}"
         
-        # Should find python skills with open_code target
+        # Should find python skills regardless of compatibility metadata.
         assert "python" in result.stdout.lower()
         
-        print(f"✓ Python search with open_code target: {result.stdout[:150]}...")
+        print(f"✓ Python search without target input: {result.stdout[:150]}...")
     
     def test_04_search_result_limit(self):
         """Test 8.4: Search with result limit"""

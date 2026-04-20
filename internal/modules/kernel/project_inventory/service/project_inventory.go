@@ -10,17 +10,15 @@ import (
 )
 
 type ProjectSummary struct {
-	ID              string `json:"id"`
-	ProjectPath     string `json:"project_path"`
-	PreferredTarget string `json:"preferred_target,omitempty"`
-	SkillCount      int    `json:"skill_count"`
+	ID          string `json:"id"`
+	ProjectPath string `json:"project_path"`
+	SkillCount  int    `json:"skill_count"`
 }
 
 type ProjectDetail struct {
-	ID              string `json:"id"`
-	ProjectPath     string `json:"project_path"`
-	PreferredTarget string `json:"preferred_target,omitempty"`
-	SkillCount      int    `json:"skill_count"`
+	ID          string `json:"id"`
+	ProjectPath string `json:"project_path"`
+	SkillCount  int    `json:"skill_count"`
 }
 
 type ProjectSkill struct {

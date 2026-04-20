@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	projectapplyservice "github.com/muidea/skill-hub/internal/modules/kernel/project_apply/service"
 	"github.com/muidea/skill-hub/pkg/errors"
-	"github.com/muidea/skill-hub/pkg/spec"
 	"github.com/muidea/skill-hub/pkg/utils"
 )
 
@@ -35,7 +35,7 @@ func runApply(dryRun bool, force bool) error {
 		return runApplyViaService(client, dryRun, force)
 	}
 
-	ctx, err := RequireInitAndWorkspace("", "")
+	ctx, err := RequireInitAndWorkspace("")
 	if err != nil {
 		return err
 	}
@@ -67,14 +67,6 @@ func runApply(dryRun bool, force bool) error {
 		fmt.Println("将显示将要执行的变更，不实际修改文件")
 	}
 
-	adapter, err := getTargetAdapter(spec.TargetOpenCode)
-	if err != nil {
-		return errors.WrapWithCode(err, "runApply", errors.ErrSystem, "获取适配器失败")
-	}
-
-	// 设置为项目模式
-	adapter.SetProjectMode()
-
 	// 应用所有技能
 	for skillID, skillVars := range skills {
 		fmt.Printf("应用技能: %s\n", skillID)
@@ -91,19 +83,11 @@ func runApply(dryRun bool, force bool) error {
 			}
 		}
 
-		// 从仓库获取技能内容
-		content, err := getSkillContent(sourceRepository, skillID)
-		if err != nil {
-			fmt.Printf("⚠️  获取技能内容失败: %s: %v\n", skillID, err)
-			continue
-		}
-
 		if dryRun {
 			fmt.Println("  [演习] 将应用技能到标准项目技能目录")
 			fmt.Printf("  变量: %v\n", skillVars.Variables)
 		} else {
-			// 实际应用技能
-			if err := adapter.Apply(skillID, content, cloneApplyVariables(skillVars.Variables, sourceRepository)); err != nil {
+			if err := copyRepositorySkillToProject(ctx.Cwd, sourceRepository, skillID); err != nil {
 				fmt.Printf("⚠️  应用技能失败: %s: %v\n", skillID, err)
 			} else {
 				fmt.Printf("✓ 成功应用技能: %s\n", skillID)
@@ -118,6 +102,22 @@ func runApply(dryRun bool, force bool) error {
 	}
 
 	return nil
+}
+
+func copyRepositorySkillToProject(projectPath, repoName, skillID string) error {
+	repoPath, err := repositoryPath(repoName)
+	if err != nil {
+		return errors.Wrap(err, "copyRepositorySkillToProject: 获取仓库路径失败")
+	}
+	srcDir := filepath.Join(repoPath, "skills", skillID)
+	if _, err := os.Stat(filepath.Join(srcDir, "SKILL.md")); err != nil {
+		if os.IsNotExist(err) {
+			return errors.NewWithCodef("copyRepositorySkillToProject", errors.ErrFileNotFound, "技能文件在仓库中不存在: %s", srcDir)
+		}
+		return errors.Wrap(err, "copyRepositorySkillToProject: 检查仓库技能失败")
+	}
+	dstDir := filepath.Join(projectPath, ".agents", "skills", skillID)
+	return copySkillDirectory(srcDir, dstDir)
 }
 
 type serviceApplyClient interface {
@@ -184,35 +184,4 @@ func renderApplyResult(result *projectapplyservice.ApplyResult) {
 	} else {
 		fmt.Println("\n✅ 所有技能应用完成")
 	}
-}
-
-func getSkillContent(repoName, skillID string) (string, error) {
-	if repoName == "" {
-		content, err := readDefaultRepositorySkillContent(skillID)
-		if err != nil {
-			return "", errors.Wrap(err, "getSkillContent: 获取默认仓库技能内容失败")
-		}
-		return content, nil
-	}
-
-	content, err := readRepositorySkillContent(repoName, skillID)
-	if err != nil {
-		return "", errors.Wrap(err, "getSkillContent: 获取来源仓库技能内容失败")
-	}
-	return content, nil
-}
-
-func cloneApplyVariables(variables map[string]string, repoName string) map[string]string {
-	if len(variables) == 0 && repoName == "" {
-		return map[string]string{}
-	}
-
-	cloned := make(map[string]string, len(variables)+1)
-	for key, value := range variables {
-		cloned[key] = value
-	}
-	if repoName != "" {
-		cloned["_skill_hub_source_repository"] = repoName
-	}
-	return cloned
 }

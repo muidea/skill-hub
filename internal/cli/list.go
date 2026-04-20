@@ -15,30 +15,26 @@ import (
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "列出可用技能",
-	Long:  "显示本地技能仓库中的所有技能，支持按仓库过滤。--target 参数保留用于兼容旧脚本，不再限制技能列表。",
+	Long:  "显示本地技能仓库中的所有技能，支持按仓库过滤。",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		target, _ := cmd.Flags().GetString("target")
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		repoFilters, _ := cmd.Flags().GetStringSlice("repo")
-		return runList(target, verbose, repoFilters)
+		return runList(verbose, repoFilters)
 	},
 }
 
 func init() {
-	listCmd.Flags().String("target", "", targetFilterFlagUsage)
 	listCmd.Flags().Bool("verbose", false, "显示详细信息，包括技能描述、版本、适用说明等")
 	listCmd.Flags().StringSlice("repo", []string{}, "按仓库名称过滤技能列表（可多次使用指定多个仓库）")
 }
 
-func runList(target string, verbose bool, repoFilters []string) error {
-	_ = target
-
+func runList(verbose bool, repoFilters []string) error {
 	repoFilters = normalizeRepoFilters(repoFilters)
 
 	var skillsMetadata []spec.SkillMetadata
 	if client, ok := hubClientIfAvailable(); ok {
 		var err error
-		skillsMetadata, err = client.ListSkills(context.Background(), repoFilters, "")
+		skillsMetadata, err = client.ListSkills(context.Background(), repoFilters)
 		if err != nil {
 			return errors.Wrap(err, "通过服务获取技能列表失败")
 		}
@@ -83,11 +79,11 @@ func runList(target string, verbose bool, repoFilters []string) error {
 
 	}
 
-	renderSkillList(skillsMetadata, "", repoFilters, verbose)
+	renderSkillList(skillsMetadata, repoFilters, verbose)
 	return nil
 }
 
-func renderSkillList(skillsMetadata []spec.SkillMetadata, target string, repoFilters []string, verbose bool) {
+func renderSkillList(skillsMetadata []spec.SkillMetadata, repoFilters []string, verbose bool) {
 	if len(skillsMetadata) == 0 {
 		fmt.Println("ℹ️  未找到任何技能")
 		return

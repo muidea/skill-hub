@@ -116,10 +116,6 @@ func completeLocalSkillIDsForCwd(cmd *cobra.Command, args []string, toComplete s
 	return filterPrefix(ids, toComplete), shellCompNoFile
 }
 
-func completeTargetValues(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return nil, shellCompNoFile
-}
-
 func completeRepoNames(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	repos, err := listRepositories(true)
 	if err != nil {

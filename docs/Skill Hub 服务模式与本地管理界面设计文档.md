@@ -252,14 +252,15 @@ CLI bridge 也只调用 HTTP API，不重复实现业务逻辑。
 
 - `GET /api/v1/skills`
   - 响应 `data.items` 为当前仓库过滤后的技能列表，`data.total` 为同一过滤条件下的真实技能总数，Web UI 目录页使用该字段展示技能总数
-- `GET /api/v1/search?keyword=<keyword>[&target=<value>][&limit=<n>]`
+- `GET /api/v1/search?keyword=<keyword>[&limit=<n>]`
 - `GET /api/v1/skills/{id}/candidates`
 - `GET /api/v1/skills/{id}?repo=<repo-name>`
 
 支持查询参数：
 
 - `repo`
-- `target`：保留兼容，不参与过滤、校验或业务逻辑
+
+`target` 查询参数和 `/api/v1/project-target` 管理入口已移除；Skill `compatibility` 仅在详情和列表中作为说明展示，不参与过滤、校验或业务逻辑。
 
 ### 7.4 项目与工作区技能
 

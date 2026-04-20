@@ -54,7 +54,6 @@ func (h *HTTPAPI) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/projects", h.handleProjects)
 	mux.HandleFunc("/api/v1/projects/", h.handleProjectActions)
 	mux.HandleFunc("/api/v1/project-status", h.handleProjectStatus)
-	mux.HandleFunc("/api/v1/project-target", h.handleSetProjectTarget)
 	mux.HandleFunc("/api/v1/project-skills/use", h.handleUseSkill)
 	mux.HandleFunc("/api/v1/project-skills/register", h.handleRegisterSkill)
 	mux.HandleFunc("/api/v1/project-skills/import", h.handleImportSkills)
@@ -337,7 +336,7 @@ func (h *HTTPAPI) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items, err := h.runtimeSvc.Service().SearchRemoteSkills(keyword, "", limit)
+	items, err := h.runtimeSvc.Service().SearchRemoteSkills(keyword, limit)
 	if err != nil {
 		writeWrappedError(w, err)
 		return
@@ -522,35 +521,6 @@ func (h *HTTPAPI) handleProjectStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *HTTPAPI) handleSetProjectTarget(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
-		return
-	}
-
-	var req httpapibiz.SetProjectTargetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
-		return
-	}
-	if strings.TrimSpace(req.ProjectPath) == "" {
-		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 project_path")
-		return
-	}
-
-	if err := h.runtimeSvc.Service().SetPreferredTarget(req.ProjectPath, req.Target); err != nil {
-		writeWrappedError(w, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.SetProjectTargetData]{
-		Code: httpapibiz.CodeOK,
-		Data: httpapibiz.SetProjectTargetData{
-			ProjectPath: req.ProjectPath,
-		},
-	})
-}
-
 func (h *HTTPAPI) handleUseSkill(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
@@ -563,7 +533,7 @@ func (h *HTTPAPI) handleUseSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.useSvc.Service().EnableSkill(req.ProjectPath, req.SkillID, req.Repository, "", req.Variables)
+	result, err := h.useSvc.Service().EnableSkill(req.ProjectPath, req.SkillID, req.Repository, req.Variables)
 	if err != nil {
 		writeWrappedError(w, err)
 		return
@@ -591,7 +561,7 @@ func (h *HTTPAPI) handleRegisterSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.runtimeSvc.Service().RegisterProjectSkill(req.ProjectPath, req.SkillID, "", req.SkipValidate)
+	result, err := h.runtimeSvc.Service().RegisterProjectSkill(req.ProjectPath, req.SkillID, req.SkipValidate)
 	if err != nil {
 		writeWrappedError(w, err)
 		return

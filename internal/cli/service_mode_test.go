@@ -20,14 +20,14 @@ import (
 
 func TestRunListViaServiceWithoutLocalConfig(t *testing.T) {
 	reset := stubServiceBridge(t, &fakeServiceBridgeClient{
-		listSkillsFn: func(ctx context.Context, repoNames []string, target string) ([]spec.SkillMetadata, error) {
+		listSkillsFn: func(ctx context.Context, repoNames []string) ([]spec.SkillMetadata, error) {
 			return []spec.SkillMetadata{{ID: "demo-skill", Name: "Demo Skill", Version: "1.0.0", Repository: "main", Compatibility: "open_code"}}, nil
 		},
 	})
 	defer reset()
 
 	output := captureStdout(t, func() {
-		if err := runList("", false, nil); err != nil {
+		if err := runList(false, nil); err != nil {
 			t.Fatalf("runList returned error: %v", err)
 		}
 	})
@@ -320,7 +320,7 @@ func TestRunUseViaServiceWithoutLocalConfig(t *testing.T) {
 
 	output := withWorkingDir(t, projectDir, func() string {
 		return captureStdout(t, func() {
-			if err := runUse("demo-skill", spec.TargetOpenCode); err != nil {
+			if err := runUse("demo-skill"); err != nil {
 				t.Fatalf("runUse returned error: %v", err)
 			}
 		})
@@ -421,7 +421,7 @@ func TestRunRegisterViaServiceWithoutLocalConfig(t *testing.T) {
 
 	output := withWorkingDir(t, projectDir, func() string {
 		return captureStdout(t, func() {
-			if err := runRegister("demo-skill", spec.TargetOpenCode, false); err != nil {
+			if err := runRegister("demo-skill", false); err != nil {
 				t.Fatalf("runRegister returned error: %v", err)
 			}
 		})
@@ -452,7 +452,6 @@ func TestRunImportViaServiceWithoutLocalConfig(t *testing.T) {
 	output := withWorkingDir(t, projectDir, func() string {
 		return captureStdout(t, func() {
 			err := runImport(".agents/skills", projectlifecycleservice.ImportOptions{
-				Target:  spec.TargetOpenCode,
 				Archive: true,
 				Force:   true,
 			})
@@ -637,32 +636,9 @@ func TestRunAuditViaServiceWithoutLocalConfig(t *testing.T) {
 	}
 }
 
-func TestRunSetTargetViaServiceWithoutLocalConfig(t *testing.T) {
-	projectDir := t.TempDir()
-	reset := stubServiceBridge(t, &fakeServiceBridgeClient{
-		setProjectTargetFn: func(ctx context.Context, req httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error) {
-			return &httpapibiz.SetProjectTargetData{
-				ProjectPath: req.ProjectPath,
-			}, nil
-		},
-	})
-	defer reset()
-
-	output := withWorkingDir(t, projectDir, func() string {
-		return captureStdout(t, func() {
-			if err := runSetTarget(spec.TargetOpenCode); err != nil {
-				t.Fatalf("runSetTarget returned error: %v", err)
-			}
-		})
-	})
-	if !strings.Contains(output, "set-target 已保留为兼容命令") {
-		t.Fatalf("unexpected set-target output: %q", output)
-	}
-}
-
 func TestRunSearchViaServiceWithoutLocalConfig(t *testing.T) {
 	reset := stubServiceBridge(t, &fakeServiceBridgeClient{
-		searchRemoteSkillsFn: func(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
+		searchRemoteSkillsFn: func(ctx context.Context, keyword string, limit int) ([]spec.RemoteSearchResult, error) {
 			return []spec.RemoteSearchResult{
 				{FullName: "demo/search-skill", Description: "demo", HTMLURL: "https://example.com/demo"},
 			}, nil
@@ -671,7 +647,7 @@ func TestRunSearchViaServiceWithoutLocalConfig(t *testing.T) {
 	defer reset()
 
 	output := captureStdout(t, func() {
-		if err := runSearch("demo", spec.TargetOpenCode, 5); err != nil {
+		if err := runSearch("demo", 5); err != nil {
 			t.Fatalf("runSearch returned error: %v", err)
 		}
 	})
@@ -682,14 +658,14 @@ func TestRunSearchViaServiceWithoutLocalConfig(t *testing.T) {
 
 func TestRunSearchViaServiceFailureIsGraceful(t *testing.T) {
 	reset := stubServiceBridge(t, &fakeServiceBridgeClient{
-		searchRemoteSkillsFn: func(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
+		searchRemoteSkillsFn: func(ctx context.Context, keyword string, limit int) ([]spec.RemoteSearchResult, error) {
 			return nil, errors.New("service unavailable")
 		},
 	})
 	defer reset()
 
 	output := captureStdout(t, func() {
-		if err := runSearch("demo", spec.TargetOpenCode, 5); err != nil {
+		if err := runSearch("demo", 5); err != nil {
 			t.Fatalf("runSearch returned error: %v", err)
 		}
 	})
@@ -753,10 +729,9 @@ type fakeServiceBridgeClient struct {
 	syncSkillRepositoryFn   func(context.Context) (*httpapibiz.SyncSkillRepositoryData, error)
 	pushPreviewFn           func(context.Context) (*httpapibiz.PushSkillRepositoryPreviewData, error)
 	pushSkillRepositoryFn   func(context.Context, httpapibiz.PushSkillRepositoryRequest) (*httpapibiz.PushSkillRepositoryData, error)
-	listSkillsFn            func(context.Context, []string, string) ([]spec.SkillMetadata, error)
-	searchRemoteSkillsFn    func(context.Context, string, string, int) ([]spec.RemoteSearchResult, error)
+	listSkillsFn            func(context.Context, []string) ([]spec.SkillMetadata, error)
+	searchRemoteSkillsFn    func(context.Context, string, int) ([]spec.RemoteSearchResult, error)
 	getProjectStatusFn      func(context.Context, string, string) (*httpapibiz.ProjectStatusData, error)
-	setProjectTargetFn      func(context.Context, httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error)
 	findSkillCandidatesFn   func(context.Context, string) ([]spec.SkillMetadata, error)
 	getSkillDetailFn        func(context.Context, string, string) (*spec.Skill, error)
 	useSkillFn              func(context.Context, httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error)
@@ -845,15 +820,15 @@ func (f *fakeServiceBridgeClient) PushSkillRepositoryChanges(ctx context.Context
 	}
 	return &httpapibiz.PushSkillRepositoryData{Status: "pushed"}, nil
 }
-func (f *fakeServiceBridgeClient) ListSkills(ctx context.Context, repoNames []string, target string) ([]spec.SkillMetadata, error) {
+func (f *fakeServiceBridgeClient) ListSkills(ctx context.Context, repoNames []string) ([]spec.SkillMetadata, error) {
 	if f.listSkillsFn != nil {
-		return f.listSkillsFn(ctx, repoNames, target)
+		return f.listSkillsFn(ctx, repoNames)
 	}
 	return nil, nil
 }
-func (f *fakeServiceBridgeClient) SearchRemoteSkills(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
+func (f *fakeServiceBridgeClient) SearchRemoteSkills(ctx context.Context, keyword string, limit int) ([]spec.RemoteSearchResult, error) {
 	if f.searchRemoteSkillsFn != nil {
-		return f.searchRemoteSkillsFn(ctx, keyword, target, limit)
+		return f.searchRemoteSkillsFn(ctx, keyword, limit)
 	}
 	return nil, nil
 }
@@ -862,12 +837,6 @@ func (f *fakeServiceBridgeClient) GetProjectStatus(ctx context.Context, projectP
 		return f.getProjectStatusFn(ctx, projectPath, skillID)
 	}
 	return &httpapibiz.ProjectStatusData{}, nil
-}
-func (f *fakeServiceBridgeClient) SetProjectTarget(ctx context.Context, req httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error) {
-	if f.setProjectTargetFn != nil {
-		return f.setProjectTargetFn(ctx, req)
-	}
-	return &httpapibiz.SetProjectTargetData{}, nil
 }
 func (f *fakeServiceBridgeClient) FindSkillCandidates(ctx context.Context, skillID string) ([]spec.SkillMetadata, error) {
 	if f.findSkillCandidatesFn != nil {

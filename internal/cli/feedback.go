@@ -83,7 +83,7 @@ func runFeedback(skillID string) error {
 		return runFeedbackViaService(client, skillID)
 	}
 
-	ctx, err := RequireInitAndWorkspace("", "")
+	ctx, err := RequireInitAndWorkspace("")
 	if err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func runFeedbackStructured(skillIDs []string, all bool) (*feedbackSummary, error
 		return summary, nil
 	}
 
-	ctx, err := RequireInitAndWorkspace(cwd, "")
+	ctx, err := RequireInitAndWorkspace(cwd)
 	if err != nil {
 		return summary, err
 	}

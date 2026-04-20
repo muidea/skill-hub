@@ -15,29 +15,25 @@ import (
 var searchCmd = &cobra.Command{
 	Use:   "search <keyword>",
 	Short: "搜索远程技能",
-	Long:  "通过 GitHub API 搜索带有 agent-skills 标签的远程技能仓库。--target 参数保留用于兼容旧脚本，不再限制搜索结果。",
+	Long:  "通过 GitHub API 搜索带有 agent-skills 标签的远程技能仓库。",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		target, _ := cmd.Flags().GetString("target")
 		limit, _ := cmd.Flags().GetInt("limit")
-		return runSearch(args[0], target, limit)
+		return runSearch(args[0], limit)
 	},
 }
 
 func init() {
-	searchCmd.Flags().String("target", "", targetFilterFlagUsage)
 	searchCmd.Flags().Int("limit", 20, "限制返回结果数量，默认 20")
 }
 
-func runSearch(keyword, target string, limit int) error {
-	_ = target
-
+func runSearch(keyword string, limit int) error {
 	fmt.Printf("搜索远程技能: %s\n", keyword)
 	fmt.Printf("结果数量限制: %d\n", limit)
 
 	if client, ok := hubClientIfAvailable(); ok {
 		fmt.Println("\n正在通过本地服务搜索远端技能...")
-		results, err := client.SearchRemoteSkills(context.Background(), keyword, "", limit)
+		results, err := client.SearchRemoteSkills(context.Background(), keyword, limit)
 		if err != nil {
 			fmt.Printf("⚠️  本地服务搜索失败: %v\n", err)
 			fmt.Println("\n备用搜索方法:")
@@ -46,7 +42,7 @@ func runSearch(keyword, target string, limit int) error {
 			fmt.Println("3. 使用 'skill-hub list' 查看本地已有技能")
 			return nil
 		}
-		displaySearchResults(results, keyword, "", limit)
+		displaySearchResults(results, keyword, limit)
 		return nil
 	}
 
@@ -55,7 +51,7 @@ func runSearch(keyword, target string, limit int) error {
 		return err
 	}
 
-	results, err := skillservice.New().SearchRemote(keyword, "", limit)
+	results, err := skillservice.New().SearchRemote(keyword, limit)
 	if err != nil {
 		fmt.Printf("⚠️  远端搜索失败: %v\n", err)
 		fmt.Println("\n备用搜索方法:")
@@ -65,7 +61,7 @@ func runSearch(keyword, target string, limit int) error {
 		return nil
 	}
 
-	displaySearchResults(results, keyword, "", limit)
+	displaySearchResults(results, keyword, limit)
 	return nil
 }
 
@@ -93,14 +89,10 @@ func formatTimeAgo(t time.Time) string {
 	}
 }
 
-func displaySearchResults(results []spec.RemoteSearchResult, keyword, target string, limit int) {
+func displaySearchResults(results []spec.RemoteSearchResult, keyword string, limit int) {
 	if len(results) == 0 {
 		fmt.Println("\nℹ️  未找到相关技能")
-		if target != "" {
-			fmt.Printf("搜索关键词: %s (目标参数: %s)\n", keyword, target)
-		} else {
-			fmt.Printf("搜索关键词: %s\n", keyword)
-		}
+		fmt.Printf("搜索关键词: %s\n", keyword)
 		return
 	}
 
@@ -136,11 +128,7 @@ func displaySearchResults(results []spec.RemoteSearchResult, keyword, target str
 	}
 
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Printf("找到 %d 个相关技能", len(results))
-	if target != "" {
-		fmt.Printf(" (目标参数: %s)", target)
-	}
-	fmt.Println()
+	fmt.Printf("找到 %d 个相关技能\n", len(results))
 
 	fmt.Println("\n使用建议:")
 	fmt.Println("1. 查看技能详情: 访问上面的GitHub链接")

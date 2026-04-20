@@ -112,7 +112,7 @@ func runValidateRequest(opts projectlifecycleservice.ValidateOptions, jsonOutput
 		if err := CheckInitDependency(); err != nil {
 			return err
 		}
-		ctx, err := RequireInitAndWorkspace(cwd, "")
+		ctx, err := RequireInitAndWorkspace(cwd)
 		if err != nil {
 			return err
 		}

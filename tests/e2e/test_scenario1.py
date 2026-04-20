@@ -80,11 +80,7 @@ class TestScenario1LocalIncubation:
         # 注意：实际测试中可能需要跳过或使用模拟仓库
         print(f"⚠️  Note: git_url parameter test requires actual git repository")
         
-        # 测试带 --target 参数的 init
-        result = self.cmd.run("init", ["--target", "open_code"], cwd=str(self.project_dir))
-        # init 可能不支持重复初始化，这里只验证命令语法正确
-        
-        print(f"✓ All init command variations tested")
+        print(f"✓ init command tested")
         
     def test_02_command_dependency_check(self):
         """Test 1.2: Command dependency check verification"""
@@ -295,12 +291,12 @@ class TestScenario1LocalIncubation:
         if "未找到任何技能" in result.stdout or "No skills found" in result.stdout:
             print(f"  ✓ List is empty (expected for fresh environment)")
         
-        # 执行 skill-hub list --target open_code
-        result = self.cmd.run("list", ["--target", "open_code"], cwd=str(self.project_dir))
-        assert result.success, f"skill-hub list --target failed: {result.stderr}"
+        # 执行 skill-hub list
+        result = self.cmd.run("list", cwd=str(self.project_dir))
+        assert result.success, f"skill-hub list failed: {result.stderr}"
         
-        # 验证目标环境过滤
-        print(f"  Target filtering tested: ✓")
+        # 验证标准列表路径
+        print(f"  Standard list path tested: ✓")
         
         # 执行 skill-hub list --verbose
         result = self.cmd.run("list", ["--verbose"], cwd=str(self.project_dir))

@@ -20,8 +20,8 @@ class TestStatePrune:
         result = self.cmd.run("init", cwd=str(self.project_dir))
         assert result.success, f"init failed: {result.stderr}"
 
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"set-target failed: {result.stderr}"
+        result = self.cmd.run("create", ["prune-state-skill"], cwd=str(self.project_dir), input_text="\n")
+        assert result.success, f"create failed: {result.stderr}"
 
         result = self.cmd.run("prune", cwd=str(self.home_dir))
         assert result.success, f"prune failed: {result.stderr}"
@@ -34,8 +34,8 @@ class TestStatePrune:
         result = self.cmd.run("init", cwd=str(self.project_dir))
         assert result.success, f"init failed: {result.stderr}"
 
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"set-target failed: {result.stderr}"
+        result = self.cmd.run("create", ["prune-stale-skill"], cwd=str(self.project_dir), input_text="\n")
+        assert result.success, f"create failed: {result.stderr}"
 
         stale_project_path = str(self.project_dir)
         shutil.rmtree(self.project_dir)

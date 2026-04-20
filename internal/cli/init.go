@@ -23,21 +23,14 @@ var initCmd = &cobra.Command{
 项目本地技能目录默认使用 .agents/skills。
 
 如果提供了Git仓库URL，会克隆远程仓库到本地。
-如果没有提供URL，会创建一个空的本地仓库。`,
+	如果没有提供URL，会创建一个空的本地仓库。`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		target, _ := cmd.Flags().GetString("target")
-		return runInit(args, target)
+		return runInit(args)
 	},
 }
 
-func init() {
-	initCmd.Flags().String("target", "open_code", targetFlagUsage)
-}
-
-func runInit(args []string, target string) error {
-	_ = target
-
+func runInit(args []string) error {
 	// 获取日志记录器
 	logger := logging.GetGlobalLogger().WithOperation("runInit")
 

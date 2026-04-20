@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	adapterpkg "github.com/muidea/skill-hub/internal/adapter"
 	"github.com/muidea/skill-hub/internal/config"
 	gitpkg "github.com/muidea/skill-hub/internal/git"
 	runtimemodule "github.com/muidea/skill-hub/internal/modules/kernel/runtime"
@@ -53,28 +52,6 @@ func newStateManager() (*state.StateManager, error) {
 
 func newRepositoryManager() (*multirepo.Manager, error) {
 	return runtimeSvc.RepositoryManager()
-}
-
-func getTargetAdapter(target string) (adapterpkg.Adapter, error) {
-	return runtimeSvc.Adapter(target)
-}
-
-func readDefaultRepositorySkillContent(skillID string) (string, error) {
-	return runtimeSvc.ReadDefaultRepositorySkillContent(skillID)
-}
-
-func readRepositorySkillContent(repoName, skillID string) (string, error) {
-	repoPath, err := repositoryPath(repoName)
-	if err != nil {
-		return "", errors.Wrap(err, "readRepositorySkillContent: 获取仓库路径失败")
-	}
-
-	skillPath := filepath.Join(repoPath, "skills", skillID, "SKILL.md")
-	content, err := os.ReadFile(skillPath)
-	if err != nil {
-		return "", errors.Wrap(err, "readRepositorySkillContent: 读取技能文件失败")
-	}
-	return string(content), nil
 }
 
 func getRepoSkillDirPath(skillID string) (string, error) {
@@ -174,7 +151,7 @@ func setSkillRepositoryRemote(url string) error {
 }
 
 // RequireInitAndWorkspace 执行 CheckInitDependency、EnsureProjectWorkspace 并创建 StateManager，返回 RunContext
-func RequireInitAndWorkspace(cwd, target string) (*RunContext, error) {
+func RequireInitAndWorkspace(cwd string) (*RunContext, error) {
 	if err := CheckInitDependency(); err != nil {
 		return nil, err
 	}
@@ -185,7 +162,7 @@ func RequireInitAndWorkspace(cwd, target string) (*RunContext, error) {
 			return nil, utils.GetCwdErr(err)
 		}
 	}
-	projectState, err := EnsureProjectWorkspace(cwd, target)
+	projectState, err := EnsureProjectWorkspace(cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +214,7 @@ func CheckProjectWorkspace(cwd string) (*spec.ProjectState, error) {
 
 // EnsureProjectWorkspace 确保项目工作区存在
 // 符合规范要求：如果当前目录不存在于state.json中，则提示是否需要新建项目工作区
-func EnsureProjectWorkspace(cwd, target string) (*spec.ProjectState, error) {
+func EnsureProjectWorkspace(cwd string) (*spec.ProjectState, error) {
 	stateManager, err := newStateManager()
 	if err != nil {
 		return nil, errors.WrapWithCode(err, "EnsureProjectWorkspace", errors.ErrSystem, "创建状态管理器失败")
@@ -260,7 +237,7 @@ func EnsureProjectWorkspace(cwd, target string) (*spec.ProjectState, error) {
 
 		if response == "" || strings.ToLower(response) == "y" {
 			// 创建项目工作区
-			return createNewProjectWorkspace(cwd, target, stateManager)
+			return createNewProjectWorkspace(cwd, stateManager)
 		} else {
 			return nil, errors.NewWithCode("EnsureProjectWorkspace", errors.ErrUserCancel, "操作取消")
 		}
@@ -269,13 +246,11 @@ func EnsureProjectWorkspace(cwd, target string) (*spec.ProjectState, error) {
 	return projectState, nil
 }
 
-// createNewProjectWorkspace 创建新的项目工作区。target 参数仅保留旧调用兼容。
-func createNewProjectWorkspace(cwd, target string, stateManager *state.StateManager) (*spec.ProjectState, error) {
-	_ = target
-
+// createNewProjectWorkspace 创建新的项目工作区。
+func createNewProjectWorkspace(cwd string, stateManager *state.StateManager) (*spec.ProjectState, error) {
 	fmt.Println("正在创建新的项目工作区...")
 
-	if err := initializeTargetFiles(cwd, ""); err != nil {
+	if err := initializeWorkspaceFiles(cwd); err != nil {
 		return nil, errors.WrapWithCode(err, "createNewProjectWorkspace", errors.ErrFileOperation, "初始化工作区文件失败")
 	}
 
@@ -294,19 +269,17 @@ func createNewProjectWorkspace(cwd, target string, stateManager *state.StateMana
 	return projectState, nil
 }
 
-// initializeTargetFiles 初始化标准 .agents/skills 工作区。target 参数仅保留旧测试和调用兼容。
-func initializeTargetFiles(cwd, target string) error {
-	_ = target
-
+// initializeWorkspaceFiles 初始化标准 .agents/skills 工作区。
+func initializeWorkspaceFiles(cwd string) error {
 	agentsDir := filepath.Join(cwd, ".agents")
 	if err := os.MkdirAll(agentsDir, 0755); err != nil {
-		return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建.agents目录失败")
+		return errors.WrapWithCode(err, "initializeWorkspaceFiles", errors.ErrFileOperation, "创建.agents目录失败")
 	}
 	fmt.Printf("✓ 创建目录: %s\n", agentsDir)
 
 	skillsDir := filepath.Join(agentsDir, "skills")
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
-		return errors.WrapWithCode(err, "initializeTargetFiles", errors.ErrFileOperation, "创建skills目录失败")
+		return errors.WrapWithCode(err, "initializeWorkspaceFiles", errors.ErrFileOperation, "创建skills目录失败")
 	}
 	fmt.Printf("✓ 创建目录: %s\n", skillsDir)
 

@@ -22,21 +22,17 @@ var useCmd = &cobra.Command{
 如果项目工作区里首次使用技能，也会同步在state.json里完成项目工作区信息刷新`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		target, _ := cmd.Flags().GetString("target")
-		return runUse(args[0], target)
+		return runUse(args[0])
 	},
 }
 
 func init() {
-	useCmd.Flags().String("target", "open_code", targetFlagUsage)
 	useCmd.ValidArgsFunction = completeSkillIDs
 }
 
-func runUse(skillID string, target string) error {
-	_ = target
-
+func runUse(skillID string) error {
 	if client, ok := hubClientIfAvailable(); ok {
-		return runUseViaService(client, skillID, "")
+		return runUseViaService(client, skillID)
 	}
 
 	if err := CheckInitDependency(); err != nil {
@@ -78,7 +74,7 @@ func runUse(skillID string, target string) error {
 		fmt.Printf("标签: %s\n", strings.Join(fullSkill.Tags, ", "))
 	}
 
-	ctx, err := RequireInitAndWorkspace("", "")
+	ctx, err := RequireInitAndWorkspace("")
 	if err != nil {
 		return err
 	}
@@ -100,7 +96,7 @@ func runUse(skillID string, target string) error {
 		return err
 	}
 
-	if err := ctx.StateManager.AddSkillToProjectWithTarget(ctx.Cwd, skillID, fullSkill.Version, selectedSkill.Repository, variables, ""); err != nil {
+	if err := ctx.StateManager.AddSkillToProjectWithSource(ctx.Cwd, skillID, fullSkill.Version, selectedSkill.Repository, variables); err != nil {
 		return errors.Wrap(err, "保存项目状态失败")
 	}
 
@@ -111,9 +107,7 @@ func runUse(skillID string, target string) error {
 	return nil
 }
 
-func runUseViaService(client serviceUseClient, skillID string, target string) error {
-	_ = target
-
+func runUseViaService(client serviceUseClient, skillID string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err

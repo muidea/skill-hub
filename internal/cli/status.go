@@ -69,7 +69,7 @@ func runStatus(skillID string, verbose bool, jsonOutputOpt ...bool) error {
 		}
 	}
 
-	ctx, err := RequireInitAndWorkspace("", "")
+	ctx, err := RequireInitAndWorkspace("")
 	if err != nil {
 		return err
 	}

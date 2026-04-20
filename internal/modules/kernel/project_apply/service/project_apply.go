@@ -2,10 +2,10 @@ package service
 
 import (
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 
-	adaptermodule "github.com/muidea/skill-hub/internal/modules/blocks/adapter"
 	projectstatemodule "github.com/muidea/skill-hub/internal/modules/kernel/project_state"
 	repositorymodule "github.com/muidea/skill-hub/internal/modules/kernel/repository"
 	"github.com/muidea/skill-hub/pkg/errors"
@@ -30,16 +30,12 @@ type ApplyResultItem struct {
 type ProjectApply struct {
 	projectStateSvc *projectstatemodule.ProjectState
 	repositorySvc   *repositorymodule.Repository
-	adapterSvc      *adaptermodule.Adapter
 }
-
-const sourceRepositoryVariable = "_skill_hub_source_repository"
 
 func New() *ProjectApply {
 	return &ProjectApply{
 		projectStateSvc: projectstatemodule.New(),
 		repositorySvc:   repositorymodule.New(),
-		adapterSvc:      adaptermodule.New(),
 	}
 }
 
@@ -64,12 +60,6 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 			Items:       []ApplyResultItem{},
 		}, nil
 	}
-
-	adapter, err := p.adapterSvc.Service().ForTarget(spec.TargetOpenCode)
-	if err != nil {
-		return nil, errors.WrapWithCode(err, "Apply", errors.ErrSystem, "获取适配器失败")
-	}
-	adapter.SetProjectMode()
 
 	skillIDs := make([]string, 0, len(skills))
 	for skillID := range skills {
@@ -98,14 +88,6 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 			continue
 		}
 
-		content, err := p.repositorySvc.Service().ReadSkillContent(repoName, skillID)
-		if err != nil {
-			item.Status = "error"
-			item.Message = err.Error()
-			result.Items = append(result.Items, item)
-			continue
-		}
-
 		if dryRun {
 			item.Status = "planned"
 			item.Message = "dry-run"
@@ -113,10 +95,7 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 			continue
 		}
 
-		applyVariables := cloneApplyVariables(skillVars.Variables, repoName)
-		if err := p.applyInProjectDir(projectState.ProjectPath, func() error {
-			return adapter.Apply(skillID, content, applyVariables)
-		}); err != nil {
+		if err := p.copyRepositorySkillToProject(projectState.ProjectPath, repoName, skillID); err != nil {
 			item.Status = "error"
 			item.Message = err.Error()
 			result.Items = append(result.Items, item)
@@ -145,35 +124,89 @@ func (p *ProjectApply) resolveSourceRepository(skillVars spec.SkillVars) (string
 	return defaultRepo.Name, nil
 }
 
-func cloneApplyVariables(variables map[string]string, repoName string) map[string]string {
-	if len(variables) == 0 && repoName == "" {
-		return map[string]string{}
-	}
-
-	cloned := make(map[string]string, len(variables)+1)
-	for key, value := range variables {
-		cloned[key] = value
-	}
-	if repoName != "" {
-		cloned[sourceRepositoryVariable] = repoName
-	}
-	return cloned
-}
-
-func (p *ProjectApply) applyInProjectDir(projectPath string, fn func() error) error {
+func (p *ProjectApply) copyRepositorySkillToProject(projectPath, repoName, skillID string) error {
 	projectApplyCwdMu.Lock()
 	defer projectApplyCwdMu.Unlock()
 
-	originalCwd, err := os.Getwd()
+	repoPath, err := p.repositorySvc.Service().Path(repoName)
 	if err != nil {
-		return errors.Wrap(err, "applyInProjectDir: 获取当前目录失败")
+		return errors.Wrap(err, "copyRepositorySkillToProject: 获取仓库路径失败")
 	}
-	if err := os.Chdir(projectPath); err != nil {
-		return errors.Wrap(err, "applyInProjectDir: 切换项目目录失败")
+	srcDir := filepath.Join(repoPath, "skills", skillID)
+	if _, err := os.Stat(filepath.Join(srcDir, "SKILL.md")); err != nil {
+		if os.IsNotExist(err) {
+			return errors.NewWithCodef("copyRepositorySkillToProject", errors.ErrFileNotFound, "技能文件在仓库中不存在: %s", srcDir)
+		}
+		return errors.Wrap(err, "copyRepositorySkillToProject: 检查仓库技能失败")
 	}
-	defer func() {
-		_ = os.Chdir(originalCwd)
-	}()
+	dstDir := filepath.Join(projectPath, ".agents", "skills", skillID)
+	return syncSkillDirectory(srcDir, dstDir)
+}
 
-	return fn()
+func syncSkillDirectory(srcDir, dstDir string) error {
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		return errors.WrapWithCode(err, "syncSkillDirectory", errors.ErrFileOperation, "创建目标目录失败")
+	}
+
+	srcFiles := make(map[string]bool)
+	if err := filepath.Walk(srcDir, func(srcPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			relPath, err := filepath.Rel(srcDir, srcPath)
+			if err != nil {
+				return err
+			}
+			srcFiles[relPath] = true
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "syncSkillDirectory: 遍历源目录失败")
+	}
+
+	dstFiles := make(map[string]bool)
+	if err := filepath.Walk(dstDir, func(dstPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			relPath, err := filepath.Rel(dstDir, dstPath)
+			if err != nil {
+				return err
+			}
+			dstFiles[relPath] = true
+		}
+		return nil
+	}); err != nil && !os.IsNotExist(err) {
+		return errors.Wrap(err, "syncSkillDirectory: 遍历目标目录失败")
+	}
+
+	for relPath := range srcFiles {
+		srcPath := filepath.Join(srcDir, relPath)
+		dstPath := filepath.Join(dstDir, relPath)
+		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+			return errors.Wrapf(err, "syncSkillDirectory: 创建目录失败 %s", filepath.Dir(dstPath))
+		}
+		content, err := os.ReadFile(srcPath)
+		if err != nil {
+			return errors.Wrap(err, "syncSkillDirectory: 读取源文件失败")
+		}
+		info, err := os.Stat(srcPath)
+		if err != nil {
+			return errors.Wrap(err, "syncSkillDirectory: 获取源文件权限失败")
+		}
+		if err := os.WriteFile(dstPath, content, info.Mode()); err != nil {
+			return errors.Wrap(err, "syncSkillDirectory: 写入目标文件失败")
+		}
+		delete(dstFiles, relPath)
+	}
+
+	for relPath := range dstFiles {
+		if err := os.Remove(filepath.Join(dstDir, relPath)); err != nil {
+			return errors.Wrap(err, "syncSkillDirectory: 删除目标多余文件失败")
+		}
+	}
+
+	return nil
 }

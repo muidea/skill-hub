@@ -28,10 +28,9 @@ type serviceBridgeClient interface {
 	SyncSkillRepositoryAndRefresh(ctx context.Context) (*httpapibiz.SyncSkillRepositoryData, error)
 	PushSkillRepositoryPreview(ctx context.Context) (*httpapibiz.PushSkillRepositoryPreviewData, error)
 	PushSkillRepositoryChanges(ctx context.Context, req httpapibiz.PushSkillRepositoryRequest) (*httpapibiz.PushSkillRepositoryData, error)
-	ListSkills(ctx context.Context, repoNames []string, target string) ([]spec.SkillMetadata, error)
-	SearchRemoteSkills(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error)
+	ListSkills(ctx context.Context, repoNames []string) ([]spec.SkillMetadata, error)
+	SearchRemoteSkills(ctx context.Context, keyword string, limit int) ([]spec.RemoteSearchResult, error)
 	GetProjectStatus(ctx context.Context, projectPath, skillID string) (*httpapibiz.ProjectStatusData, error)
-	SetProjectTarget(ctx context.Context, req httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error)
 	FindSkillCandidates(ctx context.Context, skillID string) ([]spec.SkillMetadata, error)
 	GetSkillDetail(ctx context.Context, skillID, repoName string) (*spec.Skill, error)
 	UseSkill(ctx context.Context, req httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error)
@@ -103,20 +102,16 @@ func (h *hubBridgeClient) PushSkillRepositoryChanges(ctx context.Context, req ht
 	return h.client.Service().PushSkillRepositoryChanges(ctx, req)
 }
 
-func (h *hubBridgeClient) ListSkills(ctx context.Context, repoNames []string, target string) ([]spec.SkillMetadata, error) {
-	return h.client.Service().ListSkills(ctx, repoNames, target)
+func (h *hubBridgeClient) ListSkills(ctx context.Context, repoNames []string) ([]spec.SkillMetadata, error) {
+	return h.client.Service().ListSkills(ctx, repoNames)
 }
 
-func (h *hubBridgeClient) SearchRemoteSkills(ctx context.Context, keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
-	return h.client.Service().SearchRemoteSkills(ctx, keyword, target, limit)
+func (h *hubBridgeClient) SearchRemoteSkills(ctx context.Context, keyword string, limit int) ([]spec.RemoteSearchResult, error) {
+	return h.client.Service().SearchRemoteSkills(ctx, keyword, limit)
 }
 
 func (h *hubBridgeClient) GetProjectStatus(ctx context.Context, projectPath, skillID string) (*httpapibiz.ProjectStatusData, error) {
 	return h.client.Service().GetProjectStatus(ctx, projectPath, skillID)
-}
-
-func (h *hubBridgeClient) SetProjectTarget(ctx context.Context, req httpapibiz.SetProjectTargetRequest) (*httpapibiz.SetProjectTargetData, error) {
-	return h.client.Service().SetProjectTarget(ctx, req)
 }
 
 func (h *hubBridgeClient) FindSkillCandidates(ctx context.Context, skillID string) ([]spec.SkillMetadata, error) {

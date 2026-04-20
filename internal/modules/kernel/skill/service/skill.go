@@ -34,8 +34,7 @@ func (s *Skill) SkillsDir() (string, error) {
 	return engine.GetSkillsDir()
 }
 
-func (s *Skill) SearchRemote(keyword, target string, limit int) ([]spec.RemoteSearchResult, error) {
-	_ = target
+func (s *Skill) SearchRemote(keyword string, limit int) ([]spec.RemoteSearchResult, error) {
 	return searchGitHubRepositories(keyword, limit)
 }
 

@@ -21,24 +21,15 @@ var createCmd = &cobra.Command{
 	Short: "创建新技能模板",
 	Long: `在当前项目的本地技能工作区创建一个新技能，默认写入 .agents/skills/<id>/。
 
---target 仅保留兼容旧脚本，不影响工作区结构、项目状态或技能兼容性声明。
-
 创建的技能仅存在于项目本地，需要通过 feedback 命令同步到仓库。
 create命令将会刷新state.json，标记当前项目工作区在使用该技能。`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		target, _ := cmd.Flags().GetString("target")
-		return runCreate(args[0], target)
+		return runCreate(args[0])
 	},
 }
 
-func init() {
-	createCmd.Flags().String("target", "open_code", targetFlagUsage)
-}
-
-func runCreate(skillID string, target string) error {
-	_ = target
-
+func runCreate(skillID string) error {
 	if err := CheckInitDependency(); err != nil {
 		return err
 	}
@@ -47,7 +38,7 @@ func runCreate(skillID string, target string) error {
 		return errors.NewWithCodef("runCreate", errors.ErrValidation, "技能ID '%s' 格式无效。应使用小写字母、数字和连字符，例如：my-logic-skill", skillID)
 	}
 
-	ctx, err := RequireInitAndWorkspace("", "")
+	ctx, err := RequireInitAndWorkspace("")
 	if err != nil {
 		return err
 	}
@@ -83,7 +74,7 @@ func runCreate(skillID string, target string) error {
 				return nil
 			}
 			fmt.Println("正在刷新项目状态...")
-			if err := refreshProjectState(ctx.Cwd, skillID, ""); err != nil {
+			if err := refreshProjectState(ctx.Cwd, skillID); err != nil {
 				return errors.Wrap(err, "刷新项目状态失败")
 			}
 			fmt.Printf("✅ 技能 '%s' 已成功登记到项目状态\n", skillID)
@@ -115,7 +106,7 @@ func runCreate(skillID string, target string) error {
 		description = fmt.Sprintf("为项目定制的 %s 技能", skillID)
 	}
 
-	content, err := generateSkillContent(skillID, description, "")
+	content, err := generateSkillContent(skillID, description)
 	if err != nil {
 		return errors.Wrap(err, "生成技能内容失败")
 	}
@@ -128,7 +119,7 @@ func runCreate(skillID string, target string) error {
 	fmt.Printf("✅ 技能模板创建成功: %s\n", skillFilePath)
 
 	fmt.Println("正在刷新项目状态...")
-	if err := refreshProjectState(ctx.Cwd, skillID, ""); err != nil {
+	if err := refreshProjectState(ctx.Cwd, skillID); err != nil {
 		return errors.Wrap(err, "刷新项目状态失败")
 	}
 
@@ -141,9 +132,7 @@ func runCreate(skillID string, target string) error {
 }
 
 // generateSkillContent 生成技能内容
-func generateSkillContent(name, description, target string) (string, error) {
-	_ = target
-
+func generateSkillContent(name, description string) (string, error) {
 	// 获取当前时间
 	timestamp := time.Now().Format(time.RFC3339)
 
@@ -301,9 +290,7 @@ func alreadyRegisteredAndSynced(projectPath, skillID, skillDir string) bool {
 	return err == nil && equal
 }
 
-func refreshProjectState(projectPath, skillID, target string) error {
-	_ = target
-
+func refreshProjectState(projectPath, skillID string) error {
 	stateManager, err := newStateManager()
 	if err != nil {
 		return errors.WrapWithCode(err, "refreshProjectState", errors.ErrSystem, "创建状态管理器失败")

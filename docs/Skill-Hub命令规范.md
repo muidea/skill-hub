@@ -28,29 +28,28 @@
 ### 3.1. 环境配置
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
-| `init` | 初始化本地仓库 | `skill-hub init [git_url] [--target <value>]` |
-| `set-target` | 兼容旧脚本的目标命令 | `skill-hub set-target <value>` |
+| `init` | 初始化本地仓库 | `skill-hub init [git_url]` |
 | `serve` | 以本地服务模式运行 | `skill-hub serve [--host <value>] [--port <value>] [--secret-key <value>] [--open-browser]` |
 
 ### 3.2. 技能发现
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
-| `list` | 列出可用技能 | `skill-hub list [--target <value>] [--verbose]` |
-| `search` | 搜索远程技能 | `skill-hub search <keyword> [--target <value>] [--limit <number>]` |
+| `list` | 列出可用技能 | `skill-hub list [--verbose]` |
+| `search` | 搜索远程技能 | `skill-hub search <keyword> [--limit <number>]` |
 
 ### 3.3. 技能创建/移除/验证/使用
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
-| `create` | 创建新技能模板 | `skill-hub create <id> [--target <value>]` |
-| `register` | 登记已有项目本地技能 | `skill-hub register <id> [--target <value>] [--skip-validate]` |
-| `import` | 批量登记、验证并可选归档已有技能 | `skill-hub import <skills-dir> [--target <value>] [--fix-frontmatter] [--archive] [--force] [--dry-run] [--fail-fast]` |
+| `create` | 创建新技能模板 | `skill-hub create <id>` |
+| `register` | 登记已有项目本地技能 | `skill-hub register <id> [--skip-validate]` |
+| `import` | 批量登记、验证并可选归档已有技能 | `skill-hub import <skills-dir> [--fix-frontmatter] [--archive] [--force] [--dry-run] [--fail-fast]` |
 | `dedupe` | 检测嵌套项目中的重复技能副本 | `skill-hub dedupe <scope> [--canonical <dir>] [--strategy newest|canonical|fail-on-conflict] [--json]` |
 | `sync-copies` | 从 canonical 目录同步同 ID 技能副本 | `skill-hub sync-copies --canonical <dir> [--scope <dir>] [--dry-run] [--no-backup] [--json]` |
 | `lint` | 审计项目技能内容 | `skill-hub lint [scope] --paths [--project-root <dir>] [--fix] [--dry-run] [--no-backup] [--json]` |
 | `audit` | 生成技能刷新审计报告 | `skill-hub audit [scope] [--output <file>] [--format markdown|json] [--canonical <dir>] [--project-root <dir>]` |
 | `remove` | 移除项目技能 | `skill-hub remove <id>` |
 | `validate` | 验证技能合规性 | `skill-hub validate <id> [--fix] [--links] [--json]` 或 `skill-hub validate --all [--fix] [--links] [--json]` |
-| `use` | 使用本地仓库里的指定技能 | `skill-hub use <id> [--target <value>]` |
+| `use` | 使用本地仓库里的指定技能 | `skill-hub use <id>` |
 
 
 ### 3.4. 技能状态
@@ -155,17 +154,16 @@ skill-hub serve remove local
 
 ### 4.1 init - 初始化本地仓库
 
-**语法**: `skill-hub init [git_url] [--target <value>]`
+**语法**: `skill-hub init [git_url]`
 
 **参数**:
 - `git_url` (可选): Git 仓库 URL，用于初始化技能仓库。如未提供，表示不使用远端仓库，只进行本地管理
-- `--target <value>` (可选): 保留兼容旧脚本，不写入项目状态、不影响初始化行为。
 
 **功能描述**:
 
 创建 `~/.skill-hub` 目录结构，初始化全局配置。采用多仓库架构，默认创建名为"main"的本地仓库。
 
-如提供了`git_url` 参数，则克隆远程技能仓库到默认仓库；否则创建空的本地仓库。`target` 不再作为项目默认值写入。
+如提供了`git_url` 参数，则克隆远程技能仓库到默认仓库；否则创建空的本地仓库。`target` 不再作为项目默认值写入，也不再作为 CLI 参数入口。
 
 完成本地仓库初始化后，会刷新技能索引。当前实现中：
 
@@ -183,37 +181,13 @@ skill-hub init
 # 使用自定义仓库初始化
 skill-hub init https://github.com/example/skills-repo.git
 
-# 兼容旧脚本传入 --target，实际不影响初始化
-skill-hub init https://github.com/example/skills-repo.git --target open_code
-```
-
-### 4.2 set-target - 兼容旧脚本的目标命令
-
-**语法**: `skill-hub set-target <value>`
-
-**参数**:
-- `value` (必需): 兼容参数，内容不参与业务逻辑。
-
-**功能描述**:
-
-该命令仅为兼容旧脚本保留，执行后不写入 `state.json`，不创建 target 专属文件，不影响后续 `create`、`use`、`apply`、`status`、`feedback` 等命令。项目工作区统一使用 `.agents/skills`。
-
-
-**示例**:
-```bash
-# 兼容旧脚本调用
-skill-hub set-target open_code
-
-# 设置项目为 Cursor 环境
-skill-hub set-target cursor
 ```
 
 ### 4.3 list - 列出可用技能
 
-**语法**: `skill-hub list [--target <value>] [--verbose] [--repo <repo-name>...]`
+**语法**: `skill-hub list [--verbose] [--repo <repo-name>...]`
 
 **选项**:
-- `--target <value>`: 保留兼容的目标参数，不再限制技能列表。
 - `--verbose`: 显示详细信息，包括技能描述、版本、适用说明等。
 - `--repo <repo-name>`: 按仓库名称过滤技能列表（可多次使用指定多个仓库）。
 
@@ -235,9 +209,6 @@ skill-hub set-target cursor
 # 显示所有技能
 skill-hub list
 
-# 兼容旧脚本传入 --target，结果不按 target 过滤
-skill-hub list --target cursor
-
 # 显示详细信息
 skill-hub list --verbose
 
@@ -248,18 +219,17 @@ skill-hub list --repo skills-repo
 skill-hub list --repo skills-repo --repo openclaw
 
 # 组合使用过滤选项
-skill-hub list --repo skills-repo --target cursor --verbose
+skill-hub list --repo skills-repo --verbose
 ```
 
 ### 4.4 search - 搜索远程技能
 
-**语法**: `skill-hub search <keyword> [--target <value>] [--limit <number>]`
+**语法**: `skill-hub search <keyword> [--limit <number>]`
 
 **参数**:
 - `keyword` (必需): 搜索关键词。
 
 **选项**:
-- `--target <value>`: 保留兼容的目标参数，不再限制搜索结果。
 - `--limit <number>`: 限制返回结果数量，默认 20。
 
 **功能描述**:
@@ -278,21 +248,20 @@ skill-hub list --repo skills-repo --target cursor --verbose
 # 搜索 git 相关技能
 skill-hub search git
 
-# 搜索 database 相关技能，保留 target 参数兼容旧脚本，限制 10 个结果
-skill-hub search database --target open_code --limit 10
+# 搜索 database 相关技能，限制 10 个结果
+skill-hub search database --limit 10
 ```
 
 ### 4.5 create - 在项目工作区创建一个新技能
 
-**语法**: `skill-hub create <id> [--target <value>]`
+**语法**: `skill-hub create <id>`
 
 **参数**:
 - `id` (必需): 新技能的标识符。
-- `--target <value>` (可选): 保留兼容旧脚本，不影响模板内容、项目状态或工作区初始化。
 
 **功能描述**:
 
-在项目工作区创建一个新技能。`--target` 仅作为兼容参数接受，不写入项目状态、不选择工作区目标，也不写入技能 `compatibility` 声明。
+在项目工作区创建一个新技能。不写入项目 target，也不主动写入技能 `compatibility` 声明。
 
 生成的技能目录结构包含：`SKILL.md`（核心定义）、`scripts/`（可执行脚本）、`references/`（参考资料）、`assets/`（静态资源）。若该技能已存在（同名目录下已有 `SKILL.md`），则主动进行验证。验证通过时：若该技能已在本地仓库 state 中登记且与仓库内容一致，则不执行任何操作；否则刷新项目状态（state.json），便于技能登记与归档。验证不通过时提示是否重新创建。
 
@@ -310,17 +279,14 @@ skill-hub search database --target open_code --limit 10
 # 创建名为 my-logic 的技能
 skill-hub create my-logic
 
-# 创建兼容 OpenCode 的 my-logic 技能
-skill-hub create my-logic --target open_code
 ```
 
 ### 4.5.1 register - 登记已有项目本地技能
 
-**语法**: `skill-hub register <id> [--target <value>] [--skip-validate]`
+**语法**: `skill-hub register <id> [--skip-validate]`
 
 **参数**:
 - `id` (必需): 已存在于 `.agents/skills/<id>/SKILL.md` 的技能标识符。
-- `--target <value>` (可选): 保留兼容旧脚本，不写入项目状态。
 - `--skip-validate` (可选): 跳过 `SKILL.md` 验证，直接登记项目状态。
 
 **功能描述**:
@@ -333,17 +299,16 @@ skill-hub create my-logic --target open_code
 
 **示例**:
 ```bash
-skill-hub register existing-skill --target open_code
+skill-hub register existing-skill
 skill-hub register legacy-skill --skip-validate
 ```
 
 ### 4.5.2 import - 批量导入已有技能
 
-**语法**: `skill-hub import <skills-dir> [--target <value>] [--fix-frontmatter] [--archive] [--force] [--dry-run] [--fail-fast]`
+**语法**: `skill-hub import <skills-dir> [--fix-frontmatter] [--archive] [--force] [--dry-run] [--fail-fast]`
 
 **参数**:
 - `skills-dir` (必需): 包含 `<id>/SKILL.md` 子目录的技能目录，典型值为 `.agents/skills`。
-- `--target <value>` (可选): 保留兼容旧脚本，不写入项目状态、不影响修复或归档。
 - `--fix-frontmatter` (可选): 导入前修复缺失或不完整的 frontmatter，修改前创建 `SKILL.md.bak.<timestamp>`。
 - `--archive` (可选): 验证通过后归档到默认仓库。
 - `--force` (可选): 批量流程不进行交互确认；不会自动删除源技能。
@@ -367,7 +332,7 @@ skill-hub register legacy-skill --skip-validate
 
 **示例**:
 ```bash
-skill-hub import .agents/skills --target open_code --fix-frontmatter --archive --force
+skill-hub import .agents/skills --fix-frontmatter --archive --force
 skill-hub import .agents/skills --dry-run
 ```
 
@@ -546,11 +511,10 @@ skill-hub validate --all --links --json
 
 ### 4.8 use - 使用技能
 
-**语法**: `skill-hub use <id> [--target <value>]`
+**语法**: `skill-hub use <id>`
 
 **参数**:
 - `id` (必需): 要启用的技能标识符。
-- `--target <value>` (可选): 保留兼容旧脚本，不写入项目状态。
 
 **功能描述**:
 
@@ -572,8 +536,6 @@ skill-hub validate --all --links --json
 # 启用 git-expert 技能
 skill-hub use git-expert
 
-# 兼容旧脚本传入 --target，实际不写入状态
-skill-hub use git-expert --target open_code
 ```
 
 ### 4.9 status - 检查技能状态
@@ -1111,7 +1073,6 @@ skill-hub repo sync --json
 - `repo *`
 - `list`
 - `search`
-- `set-target`
 - `status`
 - `use`
 - `register`

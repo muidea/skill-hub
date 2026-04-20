@@ -83,9 +83,12 @@ func TestHTTPAPI_ListProjects(t *testing.T) {
 	if resp.Data.Items[0].ProjectPath != "/tmp/project-one" {
 		t.Fatalf("expected project path /tmp/project-one, got %q", resp.Data.Items[0].ProjectPath)
 	}
+	if bytes.Contains(rec.Body.Bytes(), []byte("preferred_target")) {
+		t.Fatalf("project target should not be exposed in project list response: %s", rec.Body.String())
+	}
 }
 
-func TestHTTPAPI_ListSkillsIncludesTotalAndKeepsTargetNoop(t *testing.T) {
+func TestHTTPAPI_ListSkillsIncludesTotalAndShowsCompatibilityOnly(t *testing.T) {
 	config.ResetForTest()
 	defer config.ResetForTest()
 
@@ -128,7 +131,7 @@ compatibility: ` + target + `
 		}
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills?target="+spec.TargetOpenCode, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/skills", nil)
 	rec := httptest.NewRecorder()
 	New().Handler().ServeHTTP(rec, req)
 
@@ -151,7 +154,7 @@ compatibility: ` + target + `
 		ids[item.ID] = true
 	}
 	if !ids["open-code-skill"] || !ids["cursor-skill"] {
-		t.Fatalf("expected target query to keep both skills, got %#v", ids)
+		t.Fatalf("expected compatibility metadata to be display-only, got %#v", ids)
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/muidea/skill-hub/internal/testutils"
-	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 func TestCheckInitDependency(t *testing.T) {
@@ -168,7 +167,7 @@ func TestEnsureProjectWorkspace(t *testing.T) {
 			t.Fatalf("更新状态文件失败: %v", err)
 		}
 
-		projectState, err := EnsureProjectWorkspace(projectDir, "open_code")
+		projectState, err := EnsureProjectWorkspace(projectDir)
 		if err != nil {
 			t.Errorf("EnsureProjectWorkspace() error = %v", err)
 			return
@@ -386,17 +385,14 @@ func TestCheckSkillInProject(t *testing.T) {
 	}
 }
 
-func TestInitializeTargetFiles(t *testing.T) {
+func TestInitializeWorkspaceFiles(t *testing.T) {
 	tests := []struct {
-		name        string
-		target      string
-		wantErr     bool
-		errContains string
-		checkFiles  func(t *testing.T, cwd string) bool
+		name       string
+		wantErr    bool
+		checkFiles func(t *testing.T, cwd string) bool
 	}{
 		{
-			name:    "open_code目标",
-			target:  spec.TargetOpenCode,
+			name:    "初始化标准目录",
 			wantErr: false,
 			checkFiles: func(t *testing.T, cwd string) bool {
 				agentsDir := filepath.Join(cwd, ".agents")
@@ -410,48 +406,12 @@ func TestInitializeTargetFiles(t *testing.T) {
 					t.Errorf("skills目录未创建: %v", err)
 					return false
 				}
-				return true
-			},
-		},
-		{
-			name:    "claude_code参数保留兼容但初始化标准目录",
-			target:  spec.TargetClaudeCode,
-			wantErr: false,
-			checkFiles: func(t *testing.T, cwd string) bool {
-				if _, err := os.Stat(filepath.Join(cwd, ".agents", "skills")); os.IsNotExist(err) {
-					t.Errorf("标准skills目录未创建: %v", err)
-					return false
-				}
 				if _, err := os.Stat(filepath.Join(cwd, ".claude")); err == nil {
-					t.Errorf("不应根据target创建.claude目录")
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "cursor参数保留兼容但初始化标准目录",
-			target:  spec.TargetCursor,
-			wantErr: false,
-			checkFiles: func(t *testing.T, cwd string) bool {
-				if _, err := os.Stat(filepath.Join(cwd, ".agents", "skills")); os.IsNotExist(err) {
-					t.Errorf("标准skills目录未创建: %v", err)
+					t.Errorf("不应创建.claude目录")
 					return false
 				}
 				if _, err := os.Stat(filepath.Join(cwd, ".cursorrules")); err == nil {
-					t.Errorf("不应根据target创建.cursorrules")
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "无效目标参数也仅按兼容参数忽略",
-			target:  "invalid_target",
-			wantErr: false,
-			checkFiles: func(t *testing.T, cwd string) bool {
-				if _, err := os.Stat(filepath.Join(cwd, ".agents", "skills")); os.IsNotExist(err) {
-					t.Errorf("标准skills目录未创建: %v", err)
+					t.Errorf("不应创建.cursorrules")
 					return false
 				}
 				return true
@@ -461,18 +421,12 @@ func TestInitializeTargetFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tempDir := testutils.TempDir(t, "test-target-files-")
+			tempDir := testutils.TempDir(t, "test-workspace-files-")
 
-			err := initializeTargetFiles(tempDir, tt.target)
+			err := initializeWorkspaceFiles(tempDir)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("initializeTargetFiles() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("initializeWorkspaceFiles() error = %v, wantErr %v", err, tt.wantErr)
 				return
-			}
-
-			if tt.wantErr && tt.errContains != "" && err != nil {
-				if errStr := err.Error(); !contains(errStr, tt.errContains) {
-					t.Errorf("initializeTargetFiles() error = %v, should contain %v", errStr, tt.errContains)
-				}
 			}
 
 			if !tt.wantErr && tt.checkFiles != nil {
@@ -523,7 +477,7 @@ func TestRequireInitAndWorkspace(t *testing.T) {
 			t.Fatalf("写入状态文件失败: %v", err)
 		}
 
-		ctx, err := RequireInitAndWorkspace(projectDir, "")
+		ctx, err := RequireInitAndWorkspace(projectDir)
 		if err != nil {
 			t.Fatalf("RequireInitAndWorkspace() error = %v", err)
 		}

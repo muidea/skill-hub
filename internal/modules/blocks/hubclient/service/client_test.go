@@ -91,19 +91,6 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 						},
 					},
 				}), nil
-			case "/api/v1/project-target":
-				body, _ := io.ReadAll(req.Body)
-				var payload httpapibiz.SetProjectTargetRequest
-				if err := json.Unmarshal(body, &payload); err != nil {
-					t.Fatalf("unmarshal set project target request: %v", err)
-				}
-				if payload.ProjectPath != "/tmp/project" || payload.Target != spec.TargetOpenCode {
-					t.Fatalf("unexpected set project target payload: %+v", payload)
-				}
-				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.SetProjectTargetData]{
-					Code: httpapibiz.CodeOK,
-					Data: httpapibiz.SetProjectTargetData{ProjectPath: payload.ProjectPath},
-				}), nil
 			case "/api/v1/skills/demo/candidates":
 				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.SkillCandidateListData]{
 					Code: httpapibiz.CodeOK,
@@ -182,7 +169,7 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 		t.Fatalf("unexpected repo data: %+v", repos)
 	}
 
-	skills, err := client.ListSkills(ctx, []string{"main"}, spec.TargetOpenCode)
+	skills, err := client.ListSkills(ctx, []string{"main"})
 	if err != nil {
 		t.Fatalf("ListSkills returned error: %v", err)
 	}
@@ -190,7 +177,7 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 		t.Fatalf("unexpected skills: %+v", skills)
 	}
 
-	searchResults, err := client.SearchRemoteSkills(ctx, "demo", spec.TargetOpenCode, 5)
+	searchResults, err := client.SearchRemoteSkills(ctx, "demo", 5)
 	if err != nil {
 		t.Fatalf("SearchRemoteSkills returned error: %v", err)
 	}
@@ -204,17 +191,6 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 	}
 	if projectStatus.Item == nil || len(projectStatus.Item.Items) != 1 {
 		t.Fatalf("unexpected project status payload: %+v", projectStatus)
-	}
-
-	projectTarget, err := client.SetProjectTarget(ctx, httpapibiz.SetProjectTargetRequest{
-		ProjectPath: "/tmp/project",
-		Target:      spec.TargetOpenCode,
-	})
-	if err != nil {
-		t.Fatalf("SetProjectTarget returned error: %v", err)
-	}
-	if projectTarget.ProjectPath != "/tmp/project" {
-		t.Fatalf("unexpected project target response: %+v", projectTarget)
 	}
 
 	candidates, err := client.FindSkillCandidates(ctx, "demo")
@@ -237,7 +213,6 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 		ProjectPath: "/tmp/project",
 		SkillID:     "demo",
 		Repository:  "main",
-		Target:      spec.TargetOpenCode,
 	})
 	if err != nil {
 		t.Fatalf("UseSkill returned error: %v", err)

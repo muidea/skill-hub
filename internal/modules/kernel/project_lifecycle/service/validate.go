@@ -185,7 +185,7 @@ func (p *ProjectLifecycle) validateOneProjectSkill(projectPath string, projectSt
 	}
 
 	if opts.Fix {
-		result, err := RepairSkillFrontmatter(skillID, skillMd, "")
+		result, err := RepairSkillFrontmatter(skillID, skillMd)
 		if err != nil {
 			item.Valid = false
 			item.Errors = append(item.Errors, err.Error())

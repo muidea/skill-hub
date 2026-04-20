@@ -34,20 +34,13 @@ def initialized_project(isolated_env, command_runner):
 @pytest.fixture
 def project_with_target(initialized_project, command_runner):
     """
-    返回已设置目标的项目目录
+    返回标准项目目录。fixture 名称保留给旧测试复用。
     
     这个fixture会：
     1. 初始化项目
-    2. 设置目标为 open_code
-    3. 返回项目目录路径
+    2. 返回项目目录路径
     """
-    # 设置项目目标
-    result = command_runner.run("set-target open_code", cwd=initialized_project)
-    
-    if not result.success:
-        pytest.fail(f"设置项目目标失败: {result.stderr}")
-    
-    print(f"✅ 项目目标已设置为: open_code")
+    print("✅ 标准项目工作区已初始化")
     return initialized_project
 
 @pytest.fixture

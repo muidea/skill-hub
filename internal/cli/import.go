@@ -22,8 +22,6 @@ var importCmd = &cobra.Command{
 使用 --dry-run 可预览将要执行的登记、修复和归档动作。`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		target, _ := cmd.Flags().GetString("target")
-		_ = target
 		opts := projectlifecycleservice.ImportOptions{
 			Archive:        mustGetBoolFlag(cmd, "archive"),
 			Force:          mustGetBoolFlag(cmd, "force"),
@@ -36,7 +34,6 @@ var importCmd = &cobra.Command{
 }
 
 func init() {
-	importCmd.Flags().String("target", "open_code", targetFlagUsage)
 	importCmd.Flags().Bool("archive", false, "验证通过后归档到默认仓库")
 	importCmd.Flags().Bool("force", false, "批量流程中跳过交互确认（当前导入流程默认不覆盖源技能内容）")
 	importCmd.Flags().Bool("dry-run", false, "演习模式，仅输出将要执行的操作")
@@ -77,7 +74,7 @@ func runImport(skillsDir string, opts projectlifecycleservice.ImportOptions) err
 		if err := CheckInitDependency(); err != nil {
 			return err
 		}
-		ctx, err := RequireInitAndWorkspace(cwd, "")
+		ctx, err := RequireInitAndWorkspace(cwd)
 		if err != nil {
 			return err
 		}

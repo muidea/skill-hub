@@ -142,9 +142,6 @@ class TestUseOnlyUpdatesState:
         result = self.cmd.run("init", cwd=str(self.project_dir))
         assert result.success, f"init failed: {result.stderr}"
 
-        result = self.cmd.run("set-target", ["open_code"], cwd=str(self.project_dir))
-        assert result.success, f"set-target failed: {result.stderr}"
-
         skill_id = "e2e-use-state-skill"
         result = self.cmd.run(
             "create", [skill_id], cwd=str(self.project_dir), input_text="\n"

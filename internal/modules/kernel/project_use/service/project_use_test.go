@@ -43,7 +43,7 @@ func TestProjectUse_EnableSkill(t *testing.T) {
 		t.Fatalf("mkdir project dir: %v", err)
 	}
 
-	result, err := New().EnableSkill(projectDir, "demo-skill", "main", spec.TargetOpenCode, map[string]string{"env": "test"})
+	result, err := New().EnableSkill(projectDir, "demo-skill", "main", map[string]string{"env": "test"})
 	if err != nil {
 		t.Fatalf("EnableSkill returned error: %v", err)
 	}
