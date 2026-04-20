@@ -122,6 +122,53 @@ func TestCreateReleaseNotesBetweenTwoReleaseTags(t *testing.T) {
 	}
 }
 
+func TestCreateReleasePushesCurrentBranchBeforeTag(t *testing.T) {
+	tmpDir := t.TempDir()
+	remoteDir := filepath.Join(tmpDir, "remote.git")
+	seedDir := filepath.Join(tmpDir, "seed")
+	releaseDir := filepath.Join(tmpDir, "release")
+
+	runCmd(t, tmpDir, "git", "init", "--bare", "--initial-branch", "master", remoteDir)
+
+	if err := os.MkdirAll(seedDir, 0755); err != nil {
+		t.Fatalf("mkdir seed repo: %v", err)
+	}
+	runCmd(t, seedDir, "git", "init", "--initial-branch", "master")
+	runCmd(t, seedDir, "git", "config", "user.name", "Test User")
+	runCmd(t, seedDir, "git", "config", "user.email", "test@example.com")
+	writeFile(t, filepath.Join(seedDir, "README.md"), "initial\n")
+	runCmd(t, seedDir, "git", "add", "README.md")
+	runCmd(t, seedDir, "git", "commit", "-m", "chore: initial release")
+	runCmd(t, seedDir, "git", "tag", "v0.1.0")
+	runCmd(t, seedDir, "git", "remote", "add", "origin", remoteDir)
+	runCmd(t, seedDir, "git", "push", "origin", "master")
+	runCmd(t, seedDir, "git", "push", "origin", "v0.1.0")
+
+	runCmd(t, tmpDir, "git", "clone", remoteDir, releaseDir)
+	runCmd(t, releaseDir, "git", "config", "user.name", "Test User")
+	runCmd(t, releaseDir, "git", "config", "user.email", "test@example.com")
+	scriptPath := copyReleaseScript(t, releaseDir)
+
+	writeFile(t, filepath.Join(releaseDir, "fix.txt"), "release fix\n")
+	runCmd(t, releaseDir, "git", "add", "fix.txt")
+	runCmd(t, releaseDir, "git", "commit", "-m", "fix(release): push branch before tag")
+	localHead := strings.TrimSpace(runCmdOutput(t, releaseDir, "git", "rev-parse", "HEAD"))
+
+	fakeBin := createFakeMake(t, tmpDir)
+	env := append(os.Environ(), "LC_ALL=C", "PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	runCmdEnv(t, releaseDir, env, "bash", scriptPath, "--yes", "--version", "0.2.0")
+
+	remoteHead := firstField(t, runCmdOutput(t, releaseDir, "git", "ls-remote", "origin", "refs/heads/master"))
+	if remoteHead != localHead {
+		t.Fatalf("remote master was not pushed before release: got %s want %s", remoteHead, localHead)
+	}
+
+	tagHead := firstField(t, runCmdOutput(t, releaseDir, "git", "ls-remote", "origin", "refs/tags/v0.2.0^{}"))
+	if tagHead != localHead {
+		t.Fatalf("remote release tag points to %s, want %s", tagHead, localHead)
+	}
+}
+
 func copyReleaseScript(t *testing.T, repoDir string) string {
 	t.Helper()
 
@@ -155,10 +202,90 @@ func runCmd(t *testing.T, dir string, name string, args ...string) {
 	}
 }
 
+func runCmdEnv(t *testing.T, dir string, env []string, name string, args ...string) {
+	t.Helper()
+
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Env = env
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s %v failed: %v\n%s", name, args, err, string(output))
+	}
+}
+
+func runCmdOutput(t *testing.T, dir string, name string, args ...string) string {
+	t.Helper()
+
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s %v failed: %v\n%s", name, args, err, string(output))
+	}
+	return string(output)
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("write file %s: %v", path, err)
 	}
+}
+
+func createFakeMake(t *testing.T, dir string) string {
+	t.Helper()
+
+	fakeBin := filepath.Join(dir, "fake-bin")
+	if err := os.MkdirAll(fakeBin, 0755); err != nil {
+		t.Fatalf("mkdir fake bin: %v", err)
+	}
+
+	makePath := filepath.Join(fakeBin, "make")
+	makeScript := `#!/usr/bin/env bash
+set -euo pipefail
+
+case "${1:-}" in
+    test)
+        exit 0
+        ;;
+    clean)
+        rm -rf bin
+        ;;
+    build)
+        version="dev"
+        for arg in "$@"; do
+            case "$arg" in
+                VERSION=*) version="${arg#VERSION=}" ;;
+            esac
+        done
+        mkdir -p bin
+        cat > bin/skill-hub <<EOF
+#!/usr/bin/env bash
+echo "skill-hub version $version (commit: test, built: now)"
+EOF
+        chmod +x bin/skill-hub
+        ;;
+    *)
+        echo "unexpected fake make command: $*" >&2
+        exit 1
+        ;;
+esac
+`
+	if err := os.WriteFile(makePath, []byte(makeScript), 0755); err != nil {
+		t.Fatalf("write fake make: %v", err)
+	}
+	return fakeBin
+}
+
+func firstField(t *testing.T, value string) string {
+	t.Helper()
+
+	fields := strings.Fields(value)
+	if len(fields) == 0 {
+		t.Fatalf("expected command output to contain at least one field, got %q", value)
+	}
+	return fields[0]
 }

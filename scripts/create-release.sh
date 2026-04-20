@@ -270,6 +270,30 @@ previous_release_tag_for_ref() {
     git describe --tags --abbrev=0 --match 'v[0-9]*' "$ref" 2>/dev/null || true
 }
 
+push_current_branch_to_remote() {
+    local branch="$1"
+    local local_head
+    local remote_head
+
+    if [ -z "$branch" ]; then
+        echo -e "${RED}错误: 当前处于 detached HEAD，无法同步发布分支${NC}"
+        exit 1
+    fi
+
+    git push origin "HEAD:refs/heads/$branch"
+
+    local_head="$(git rev-parse HEAD)"
+    remote_head="$(git ls-remote origin "refs/heads/$branch" | awk '{print $1}')"
+    if [ "$remote_head" != "$local_head" ]; then
+        echo -e "${RED}错误: 远端分支 origin/$branch 未同步到当前提交${NC}"
+        echo "本地 HEAD: $local_head"
+        echo "远端 HEAD: ${remote_head:-未找到}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}远端分支 origin/$branch 已同步到当前提交${NC}"
+}
+
 while [ $# -gt 0 ]; do
     case "$1" in
         --version|-v)
@@ -458,6 +482,8 @@ fi
 mkdir -p dist
 cp "$NOTES_FILE" "dist/release-notes-v$VERSION.md"
 echo "发布说明已生成: dist/release-notes-v$VERSION.md"
+
+run_step "同步当前分支到远程仓库..." push_current_branch_to_remote "$CURRENT_BRANCH"
 
 echo -e "\n${GREEN}创建 git 标签 v$VERSION...${NC}"
 git tag -a "v$VERSION" -F "$NOTES_FILE"
