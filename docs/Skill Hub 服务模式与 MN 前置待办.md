@@ -47,7 +47,7 @@
 - 已完成：HTTP API 包装错误按 `pkg/errors` 稳定错误码返回，并映射到 4xx/5xx 状态
 - 已完成：默认 loopback 监听下增加 Host header loopback 校验，降低本地服务被非本机 Host 访问的风险
 - 已完成：Web UI/API 增加基础安全响应头；默认 loopback 监听下拒绝非 loopback Origin/Referer 或 cross-site Fetch Metadata 的写请求
-- 已完成：`serve --secret-key` 写权限配置；未配置时服务只读，配置后修改类 API 校验 `X-Skill-Hub-Secret-Key`；当前阶段 Web UI 管理端不开放密钥输入，CLI bridge 通过环境变量传递
+- 已完成：`serve --secret-key` 远端推送保护；未配置时仅禁止默认仓库 push 到远端，仓库拉取/同步与项目本地操作继续可用，配置后默认仓库 push API 校验 `X-Skill-Hub-Secret-Key`；当前阶段 Web UI 管理端不开放密钥输入，CLI bridge 通过环境变量传递
 - 已完成：Web UI 页面级 e2e 回归，覆盖技能目录页真实技能总数、管理端仓库表单、项目工作流入口、管理端不暴露 secretKey 写入入口和页面初始读取 API
 - 已完成：hubclient 保留服务端 `code/message`，CLI bridge 不再把 `READ_ONLY` / `UNAUTHORIZED` 退化为 `SYSTEM_ERROR`；Web UI 管理端对只读与密钥错误显示更明确文案
 - 已完成：Web UI 技能目录总数改为使用 `/api/v1/skills` 的 `data.total`，避免固定或前端推断值

@@ -97,11 +97,11 @@ var serveStatusCmd = &cobra.Command{
 func init() {
 	serveCmd.Flags().StringVar(&serveHost, "host", "127.0.0.1", "监听地址")
 	serveCmd.Flags().IntVar(&servePort, "port", 5525, "监听端口")
-	serveCmd.Flags().StringVar(&serveSecretKey, "secret-key", "", "写操作密钥，未配置时为只读模式")
+	serveCmd.Flags().StringVar(&serveSecretKey, "secret-key", "", "远端推送密钥，未配置时禁止远端推送")
 	serveCmd.Flags().BoolVar(&serveOpenBrowser, "open-browser", false, "启动后自动打开浏览器")
 	serveRegisterCmd.Flags().StringVar(&serveRegisterHost, "host", "127.0.0.1", "监听地址")
 	serveRegisterCmd.Flags().IntVar(&serveRegisterPort, "port", 5525, "监听端口")
-	serveRegisterCmd.Flags().StringVar(&serveRegisterSecretKey, "secret-key", "", "写操作密钥，未配置时为只读模式")
+	serveRegisterCmd.Flags().StringVar(&serveRegisterSecretKey, "secret-key", "", "远端推送密钥，未配置时禁止远端推送")
 	serveCmd.AddCommand(serveRegisterCmd)
 	serveCmd.AddCommand(serveRemoveCmd)
 	serveCmd.AddCommand(serveStartCmd)
@@ -116,9 +116,9 @@ func runServe() error {
 	url := fmt.Sprintf("http://%s:%d", serveHost, servePort)
 	fmt.Printf("skill-hub service listening on %s\n", url)
 	if strings.TrimSpace(serveSecretKey) == "" {
-		fmt.Println("serve write access: read-only (未配置 secretKey)")
+		fmt.Println("serve remote push: blocked (未配置 secretKey)")
 	} else {
-		fmt.Println("serve write access: secretKey enabled")
+		fmt.Println("serve remote push: secretKey enabled")
 	}
 	fmt.Println("输入 q 并回车可停止服务")
 

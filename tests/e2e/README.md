@@ -50,7 +50,7 @@ Based on the business scenarios defined in the repo test documents and current C
    - Web UI homepage availability
    - Web UI page-level structure checks for the catalog total, admin repo form, project workflow controls, and no admin secretKey write entry
    - CLI bridge for `repo list` / `repo list --json` / `list` / `status`
-   - CLI bridge preserves service error codes for read-only write attempts
+   - CLI bridge preserves service error codes for remote-push protection errors
    - CLI bridge write path for `use` / `apply` / `feedback`
    - CLI bridge lifecycle path for `register` / `import --fix-frontmatter --archive`
    - CLI bridge duplicate-management path for `dedupe` / `sync-copies`

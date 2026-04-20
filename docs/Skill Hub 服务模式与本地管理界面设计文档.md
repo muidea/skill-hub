@@ -449,9 +449,9 @@ SKILL_HUB_DISABLE_SERVICE_BRIDGE=1
 - 默认 loopback 监听下，修改类 HTTP 方法会拒绝非 loopback `Origin` / `Referer`，并拒绝 `Sec-Fetch-Site: cross-site`
 - 显式绑定到非 loopback 地址时保留远程访问兼容性，不强制套用本地浏览器来源校验
 - 响应统一增加基础安全响应头：`Content-Security-Policy`、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy`
-- 修改类 API 使用 `secretKey` 控制写权限：未配置 `--secret-key` 时服务按只读模式运行，读取类 `GET` 接口和 Web UI 可访问，`POST` / `DELETE` 等写操作返回 `READ_ONLY`
-- 配置 `--secret-key` 后，修改类 API 必须携带 `X-Skill-Hub-Secret-Key`；当前阶段 Web UI 管理端不开放写入密钥能力，只展示只读或密钥错误，CLI bridge 通过 `SKILL_HUB_SERVICE_SECRET_KEY` 传递
-- `serve status` 只显示 `write=read-only` 或 `write=secret-key`，不输出密钥明文
+- 远端推送 API 使用 `secretKey` 控制：未配置 `--secret-key` 时，读取、项目本地写入和仓库拉取/同步可继续使用，`POST /api/v1/skill-repository/push` 返回 `READ_ONLY`
+- 配置 `--secret-key` 后，默认仓库推送 API 必须携带 `X-Skill-Hub-Secret-Key`；当前阶段 Web UI 管理端不开放写入密钥能力，只展示只读或密钥错误，CLI bridge 通过 `SKILL_HUB_SERVICE_SECRET_KEY` 传递
+- `serve status` 只显示 `push=blocked` 或 `push=secret-key`，不输出密钥明文
 - 不在 Web 页面显示 `git_token`
 - 修改类接口仅面向本地访问场景设计
 
@@ -501,7 +501,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 
 - `skill-hub serve` 可启动本地 HTTP 服务与 Web UI
 - `skill-hub serve register/start/stop/status/remove` 可管理本地命名服务实例
-- `skill-hub serve --secret-key` 可开启写操作密钥；未配置时服务只读
+- `skill-hub serve --secret-key` 可开启远端推送密钥；未配置时仅禁止默认仓库 push 到远端
 - Web UI 支持仓库管理、技能查看、项目查看与项目操作
 - CLI 在服务可用时会优先通过服务桥接执行 `repo/list/status/use/apply/feedback/pull/push` 以及项目技能生命周期命令
 - 服务不可用时，上述命令仍会回退到本地逻辑
@@ -540,7 +540,7 @@ Web 展示“当前机器本地工作区里管理的 skill”的真相源为 `st
 - Web UI 页面级结构回归，覆盖技能目录页真实技能总数、管理端仓库表单、项目工作流入口、管理端不暴露 secretKey 写入入口和页面初始读取 API
 - CLI bridge 的 `repo list` / `list` / `status`
 - CLI bridge 的 `use -> apply -> feedback -> push --dry-run --json` 完整写操作链路
-- 未配置 `secretKey` 时修改类 API 返回只读错误，配置后修改类 API 要求 `X-Skill-Hub-Secret-Key`
+- 未配置 `secretKey` 时默认仓库 push API 返回只读错误，配置后该 API 要求 `X-Skill-Hub-Secret-Key`
 - CLI bridge 保留 `READ_ONLY` 等服务端错误码，不退化为 `SYSTEM_ERROR`
 - `serve register -> start -> status -> stop -> remove` 的服务实例管理链路
 
@@ -599,8 +599,8 @@ http://127.0.0.1:5525
 - 默认 loopback 监听会拒绝非 loopback Host header，并通过 service mode e2e 覆盖
 - 默认 loopback 监听会拒绝跨站写请求，并通过 service mode e2e 覆盖
 - 响应安全头通过 server handler 单测与 service mode e2e 覆盖
-- 写权限只读模式和 `secretKey` 校验通过 server handler 单测、hubclient 单测与 service mode e2e 覆盖
-- hubclient 错误码保留通过单测覆盖，CLI bridge 只读错误展示通过 service mode e2e 覆盖
+- 远端推送保护和 `secretKey` 校验通过 server handler 单测、hubclient 单测与 service mode e2e 覆盖
+- hubclient 错误码保留通过单测覆盖，CLI bridge 推送保护错误展示通过 service mode e2e 覆盖
 
 ---
 

@@ -102,7 +102,7 @@
 **选项**:
 - `--host <value>`: 监听地址，默认 `127.0.0.1`
 - `--port <value>`: 监听端口，默认 `5525`
-- `--secret-key <value>`: 修改类 API 的写操作密钥；未配置时服务保持只读模式
+- `--secret-key <value>`: 远端推送密钥；未配置时禁止将本地仓库推送至远端，但不影响仓库拉取/同步和项目本地操作
 - `--open-browser`: 启动后尝试打开浏览器
 
 **功能描述**:
@@ -119,7 +119,7 @@
 - `serve register/start/stop/status/remove` 用于管理命名服务实例
 - 服务实例注册表保存在 `~/.skill-hub/services.json`
 - `serve start` 会后台启动当前 `skill-hub` 可执行文件，并记录 `pid` 与日志文件路径
-- `serve register` 会保存 `secret_key` 用于后续 `serve start`，但 `serve status` 只显示 `write=read-only` 或 `write=secret-key`，不输出密钥明文
+- `serve register` 会保存 `secret_key` 用于后续 `serve start`，但 `serve status` 只显示 `push=blocked` 或 `push=secret-key`，不输出密钥明文
 - `serve status` 会输出服务地址与运行状态，其中：
   - `running` 表示已记录 `pid` 且进程仍存活
   - `stopped` 表示当前未记录运行中进程
@@ -128,8 +128,8 @@
 - 当服务绑定在 loopback 地址（默认 `127.0.0.1` 或 `localhost`）时，HTTP server 会拒绝非 loopback Host header；显式绑定到非 loopback 地址时保留已有远程访问兼容行为
 - 当服务绑定在 loopback 地址时，修改类 HTTP 方法会拒绝非 loopback `Origin` / `Referer`，并拒绝 `Sec-Fetch-Site: cross-site`；CLI bridge 不携带浏览器来源头，继续保持兼容
 - 服务响应会设置基础安全响应头，包括 `Content-Security-Policy`、`X-Frame-Options`、`X-Content-Type-Options` 与 `Referrer-Policy`
-- 修改类 API 需要写权限：未配置 `secretKey` 时返回 `READ_ONLY`；配置后请求必须携带 `X-Skill-Hub-Secret-Key`。当前阶段 Web UI 管理端不开放写入密钥能力，只展示只读或密钥错误；CLI bridge 可通过 `SKILL_HUB_SERVICE_SECRET_KEY` 传递该值
-- CLI bridge 会保留服务端返回的 `code/message`，因此只读或密钥错误会显示为 `READ_ONLY` / `UNAUTHORIZED`，不会被泛化成 `SYSTEM_ERROR`
+- 仅远端推送 API 需要 `secretKey`：未配置 `secretKey` 时，`POST /api/v1/skill-repository/push` 返回 `READ_ONLY`；配置后该请求必须携带 `X-Skill-Hub-Secret-Key`。当前阶段 Web UI 管理端不开放写入密钥能力，只展示只读或密钥错误；CLI bridge 可通过 `SKILL_HUB_SERVICE_SECRET_KEY` 传递该值
+- CLI bridge 会保留服务端返回的 `code/message`，因此远端推送被禁止或密钥错误会显示为 `READ_ONLY` / `UNAUTHORIZED`，不会被泛化成 `SYSTEM_ERROR`
 - 服务 API 会保留业务层 `pkg/errors` 稳定错误码；未找到类错误返回 `404`，权限类返回 `403`，网络或远端 Git 类返回 `502`，未实现返回 `501`，系统错误返回 `500`，其余输入或校验类错误返回 `400`
 
 当前 Web UI 支持：
@@ -755,6 +755,7 @@ skill-hub pull --check --json
 - `POST /api/v1/skill-repository/push` 必须携带 `confirm: true`。
 - 请求可携带 `expected_changed_files`；服务端执行前会重新检查默认仓库状态，若文件列表已变化则拒绝推送。
 - 无待推送变更时服务端拒绝推送。
+- 未配置 `serve --secret-key` 时该推送 API 返回 `READ_ONLY`；仓库拉取/同步类 API 不受该密钥限制。
 
 **关键行为**:
 1. 检查默认仓库是否有未提交的更改（Modified、Untracked、Deleted文件）
@@ -1065,8 +1066,8 @@ skill-hub repo sync --json
 
 - Web UI 可通过浏览器访问
 - CLI 中的部分命令会优先通过服务桥接执行
-- 写操作桥接到配置了 `secretKey` 的服务时，调用方需设置 `SKILL_HUB_SERVICE_SECRET_KEY=<secretKey>`；未配置 `secretKey` 的服务只承接读取类请求，修改类请求会返回只读错误
-- 当前阶段 Web UI 管理端不提供密钥输入或浏览器会话保存能力，写权限只通过后端配置和调用方显式携带 header / CLI bridge 环境变量获得
+- 远端推送桥接到配置了 `secretKey` 的服务时，调用方需设置 `SKILL_HUB_SERVICE_SECRET_KEY=<secretKey>`；未配置 `secretKey` 的服务允许读取、项目本地操作和仓库拉取/同步，但禁止默认仓库 push 到远端
+- 当前阶段 Web UI 管理端不提供密钥输入或浏览器会话保存能力，远端推送权限只通过后端配置和调用方显式携带 header / CLI bridge 环境变量获得
 
 当前已桥接的命令：
 
@@ -1124,8 +1125,9 @@ skill-hub repo sync --json
 | 1.19 | 2026-04-18 | 服务 API 包装错误保留 `pkg/errors` 稳定错误码并按错误类别映射 HTTP 状态 |
 | 1.20 | 2026-04-18 | `serve` 默认 loopback 监听下增加 Host header loopback 校验，并保留非 loopback 绑定兼容性 |
 | 1.21 | 2026-04-19 | Web UI/API 增加基础安全响应头，并在默认 loopback 监听下拒绝跨站写请求 |
-| 1.22 | 2026-04-19 | `serve` 增加 `--secret-key` 写权限配置；未配置时服务只读，配置后修改类 API 校验 `X-Skill-Hub-Secret-Key` |
+| 1.22 | 2026-04-19 | `serve` 增加 `--secret-key` 保护配置，后续收口为默认仓库远端推送保护 |
 | 1.23 | 2026-04-19 | CLI bridge 保留服务端错误码，Web UI 管理端增强只读与密钥错误提示 |
 | 1.24 | 2026-04-20 | Web UI 目录页技能总数改用服务端 `total`，管理端移除写入密钥入口 |
 | 1.25 | 2026-04-20 | 弱化 Skill `compatibility` 处理，列表/搜索/Web UI 不再按兼容性硬过滤 |
 | 1.26 | 2026-04-20 | `target` 降级为兼容输入，Web UI 不再展示目标选择，项目业务统一使用 `.agents/skills` |
+| 1.27 | 2026-04-20 | `serve --secret-key` 收口为远端推送保护，未配置时允许仓库拉取/同步，仅禁止默认仓库 push |

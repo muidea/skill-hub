@@ -219,10 +219,10 @@ class TestServiceMode:
             assert status_result.success, status_result.stderr
             assert "service-skill" in status_result.stdout
 
-            repo_sync_read_only = self.cmd.run("repo", ["sync", "main"], cwd=str(self.project_dir), env=bridge_env)
-            assert not repo_sync_read_only.success
-            assert "READ_ONLY" in repo_sync_read_only.stderr
-            assert "SYSTEM_ERROR" not in repo_sync_read_only.stderr
+            repo_sync_result = self.cmd.run("repo", ["sync", "main"], cwd=str(self.project_dir), env=bridge_env)
+            assert "READ_ONLY" not in repo_sync_result.stdout
+            assert "READ_ONLY" not in repo_sync_result.stderr
+            assert "SYSTEM_ERROR" not in repo_sync_result.stderr
 
             git_status_json = self.cmd.run("git", ["status", "--json"], cwd=str(self.project_dir), env=bridge_env)
             assert git_status_json.success, git_status_json.stderr
@@ -231,10 +231,11 @@ class TestServiceMode:
             assert "raw_status" in git_status_data
 
             git_sync_json = self.cmd.run("git", ["sync", "--json"], cwd=str(self.project_dir), env=bridge_env)
-            assert not git_sync_json.success
             git_sync_data = json.loads(git_sync_json.stdout)
             assert git_sync_data["command"] == "sync"
-            assert git_sync_data["status"] == "failed"
+            assert git_sync_data["status"] in {"synced", "failed"}
+            assert "READ_ONLY" not in git_sync_json.stdout
+            assert "READ_ONLY" not in git_sync_json.stderr
         finally:
             service.stop()
 
@@ -273,10 +274,10 @@ class TestServiceMode:
             bridge_env["SKILL_HUB_SERVICE_URL"] = service.base_url
             bridge_env["SKILL_HUB_SERVICE_SECRET_KEY"] = "write-secret"
             git_sync_json = self.cmd.run("git", ["sync", "--json"], cwd=str(self.project_dir), env=bridge_env)
-            assert not git_sync_json.success
             git_sync_data = json.loads(git_sync_json.stdout)
             assert git_sync_data["command"] == "sync"
-            assert git_sync_data["status"] == "failed"
+            assert git_sync_data["status"] in {"synced", "failed"}
+            assert "READ_ONLY" not in git_sync_json.stdout
         finally:
             service.stop()
 
@@ -366,7 +367,7 @@ class TestServiceMode:
             env=self.service_env,
         )
         assert register_result.success, register_result.stderr
-        assert "写权限: secret-key" in register_result.stdout
+        assert "远端推送: secret-key" in register_result.stdout
 
         start_result = self.cmd.run(
             "serve",
@@ -387,7 +388,7 @@ class TestServiceMode:
             assert status_result.success, status_result.stderr
             assert "managed\trunning" in status_result.stdout
             assert f"http://127.0.0.1:{port}" in status_result.stdout
-            assert "write=secret-key" in status_result.stdout
+            assert "push=secret-key" in status_result.stdout
 
             health = urllib.request.urlopen(f"http://127.0.0.1:{port}/api/v1/health", timeout=2).read().decode("utf-8")
             assert '"status":"ok"' in health

@@ -289,15 +289,15 @@ func TestClientPreservesAPIErrorCode(t *testing.T) {
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return jsonResponse(http.StatusForbidden, httpapibiz.Response[map[string]string]{
 				Code:    httpapibiz.CodeReadOnly,
-				Message: "serve 未配置 secretKey，当前为只读模式",
+				Message: "serve 未配置 secretKey，禁止将本地仓库推送至远端",
 				Data:    map[string]string{},
 			}), nil
 		}),
 	}
 
-	err := client.SyncRepo(context.Background(), "main")
+	_, err := client.PushSkillRepositoryChanges(context.Background(), httpapibiz.PushSkillRepositoryRequest{Confirm: true})
 	if err == nil {
-		t.Fatal("expected SyncRepo to return error")
+		t.Fatal("expected PushSkillRepositoryChanges to return error")
 	}
 	if got := apperrors.Code(err); got != apperrors.ErrorCode(httpapibiz.CodeReadOnly) {
 		t.Fatalf("expected READ_ONLY code, got %q from %v", got, err)

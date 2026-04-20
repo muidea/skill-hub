@@ -141,7 +141,7 @@ func TestSecurityHeaders(t *testing.T) {
 }
 
 func TestWriteAccessGuardAllowsReadWithoutSecret(t *testing.T) {
-	handler := writeAccessGuard(okHandler(), "")
+	handler := remotePushGuard(okHandler(), "")
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/api/v1/health", nil)
 	rec := httptest.NewRecorder()
 
@@ -152,9 +152,21 @@ func TestWriteAccessGuardAllowsReadWithoutSecret(t *testing.T) {
 	}
 }
 
-func TestWriteAccessGuardRejectsWriteWhenSecretNotConfigured(t *testing.T) {
-	handler := writeAccessGuard(okHandler(), "")
+func TestRemotePushGuardAllowsSyncWithoutSecret(t *testing.T) {
+	handler := remotePushGuard(okHandler(), "")
 	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/api/v1/repos/main/sync", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestRemotePushGuardRejectsPushWhenSecretNotConfigured(t *testing.T) {
+	handler := remotePushGuard(okHandler(), "")
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/api/v1/skill-repository/push", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -163,13 +175,25 @@ func TestWriteAccessGuardRejectsWriteWhenSecretNotConfigured(t *testing.T) {
 		t.Fatalf("expected 403, got %d", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), httpapibiz.CodeReadOnly) {
-		t.Fatalf("expected read-only response, got %q", rec.Body.String())
+		t.Fatalf("expected remote-push protected response, got %q", rec.Body.String())
 	}
 }
 
-func TestWriteAccessGuardRequiresSecretForWrite(t *testing.T) {
-	handler := writeAccessGuard(okHandler(), "write-secret")
+func TestRemotePushGuardAllowsNonPushWriteWithoutSecretHeader(t *testing.T) {
+	handler := remotePushGuard(okHandler(), "write-secret")
 	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/api/v1/repos/main/sync", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestRemotePushGuardRequiresSecretForPush(t *testing.T) {
+	handler := remotePushGuard(okHandler(), "write-secret")
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/api/v1/skill-repository/push", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -179,9 +203,9 @@ func TestWriteAccessGuardRequiresSecretForWrite(t *testing.T) {
 	}
 }
 
-func TestWriteAccessGuardAllowsWriteWithSecret(t *testing.T) {
-	handler := writeAccessGuard(okHandler(), "write-secret")
-	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/api/v1/repos/main/sync", nil)
+func TestRemotePushGuardAllowsPushWithSecret(t *testing.T) {
+	handler := remotePushGuard(okHandler(), "write-secret")
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/api/v1/skill-repository/push", nil)
 	req.Header.Set(httpapibiz.SecretKeyHeader, "write-secret")
 	rec := httptest.NewRecorder()
 

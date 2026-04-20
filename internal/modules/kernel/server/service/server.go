@@ -58,17 +58,17 @@ func (s *Server) Run(ctx context.Context, cfg Config) error {
 }
 
 func secureLocalHandler(next http.Handler, bindHost, secretKey string) http.Handler {
-	return securityHeaders(localOnlyHostGuard(localOnlyBrowserGuard(writeAccessGuard(next, secretKey), bindHost), bindHost))
+	return securityHeaders(localOnlyHostGuard(localOnlyBrowserGuard(remotePushGuard(next, secretKey), bindHost), bindHost))
 }
 
-func writeAccessGuard(next http.Handler, secretKey string) http.Handler {
+func remotePushGuard(next http.Handler, secretKey string) http.Handler {
 	secretKey = strings.TrimSpace(secretKey)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") && isUnsafeMethod(r.Method) {
+		if requiresRemotePushAuth(r) {
 			if secretKey == "" {
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
 				w.WriteHeader(http.StatusForbidden)
-				_, _ = fmt.Fprintf(w, `{"code":%q,"message":%q}`, httpapibiz.CodeReadOnly, "serve 未配置 secretKey，当前为只读模式")
+				_, _ = fmt.Fprintf(w, `{"code":%q,"message":%q}`, httpapibiz.CodeReadOnly, "serve 未配置 secretKey，禁止将本地仓库推送至远端")
 				return
 			}
 			if r.Header.Get(httpapibiz.SecretKeyHeader) != secretKey {
@@ -80,6 +80,10 @@ func writeAccessGuard(next http.Handler, secretKey string) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func requiresRemotePushAuth(r *http.Request) bool {
+	return r.Method == http.MethodPost && r.URL.Path == "/api/v1/skill-repository/push"
 }
 
 func localOnlyHostGuard(next http.Handler, bindHost string) http.Handler {

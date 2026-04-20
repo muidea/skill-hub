@@ -167,8 +167,8 @@ func TestRunServeStatus(t *testing.T) {
 	if !strings.Contains(output, "running-svc\trunning") {
 		t.Fatalf("expected running service in output, got %q", output)
 	}
-	if !strings.Contains(output, "write=read-only") {
-		t.Fatalf("expected read-only write access marker, got %q", output)
+	if !strings.Contains(output, "push=blocked") {
+		t.Fatalf("expected blocked remote push marker, got %q", output)
 	}
 	if !strings.Contains(output, "stopped-svc\tstale") {
 		t.Fatalf("expected stale service in output, got %q", output)

@@ -81,7 +81,7 @@ func runServeRegister(name, host string, port int, secretKey string) error {
 
 	fmt.Printf("✅ 服务 '%s' 已%s\n", name, action)
 	fmt.Printf("   地址: http://%s:%d\n", host, port)
-	fmt.Printf("   写权限: %s\n", serveWriteAccessLabel(entry.SecretKey))
+	fmt.Printf("   远端推送: %s\n", serveRemotePushLabel(entry.SecretKey))
 	return nil
 }
 
@@ -305,7 +305,7 @@ func renderServeStatus(entry serveRegistration) {
 		}
 	}
 
-	fmt.Printf("%s\t%s\t%s\tpid=%d\twrite=%s\n", entry.Name, status, fmt.Sprintf("http://%s:%d", entry.Host, entry.Port), entry.PID, serveWriteAccessLabel(entry.SecretKey))
+	fmt.Printf("%s\t%s\t%s\tpid=%d\tpush=%s\n", entry.Name, status, fmt.Sprintf("http://%s:%d", entry.Host, entry.Port), entry.PID, serveRemotePushLabel(entry.SecretKey))
 	if entry.LogFile != "" {
 		fmt.Printf("  log: %s\n", entry.LogFile)
 	}
@@ -443,9 +443,9 @@ func defaultServeWaitUntilReady(entry serveRegistration, pid int) error {
 	return lastErr
 }
 
-func serveWriteAccessLabel(secretKey string) string {
+func serveRemotePushLabel(secretKey string) string {
 	if strings.TrimSpace(secretKey) == "" {
-		return "read-only"
+		return "blocked"
 	}
 	return "secret-key"
 }
