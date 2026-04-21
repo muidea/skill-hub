@@ -38,6 +38,8 @@ GITHUB_API="https://api.github.com/repos/$REPO_OWNER/$REPO_NAME"
 # 默认版本（最新）
 VERSION="${1:-latest}"
 UPDATED_SERVE_COUNT=0
+INSTALLED_AGENT_SKILLS_COUNT=0
+AGENT_SKILLS_TARGET=""
 
     echo "skill-hub 安装助手"
     echo "====================="
@@ -239,6 +241,139 @@ update_registered_serve_instances() {
 
     if [ "$failed" -ne 0 ]; then
         return 1
+    fi
+    return 0
+}
+
+install_agent_skills() {
+    local source_dir="${1:-agent-skills}"
+    local enabled="${SKILL_HUB_INSTALL_AGENT_SKILLS:-1}"
+    local primary_dir
+
+    case "$enabled" in
+        0|false|False|FALSE|no|No|NO|off|Off|OFF)
+            echo "  ⏭️  已跳过全局 agent skills 安装（SKILL_HUB_INSTALL_AGENT_SKILLS=$enabled）"
+            return 0
+            ;;
+    esac
+
+    if [ ! -d "$source_dir" ]; then
+        echo "  ⚠️  Release 包中未包含 agent-skills，跳过全局 agent skills 安装"
+        return 0
+    fi
+
+    primary_dir="${SKILL_HUB_AGENT_SKILLS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/skill-hub/agent-skills}"
+    AGENT_SKILLS_TARGET="$primary_dir"
+
+    echo "  安装到 skill-hub 通用目录: $primary_dir"
+    install_agent_skills_to_dir "$source_dir" "$primary_dir" "skill-hub"
+
+    install_detected_agent_skill_mirrors "$source_dir" "$primary_dir"
+}
+
+is_agent_mirror_disabled() {
+    case "$1" in
+        0|false|False|FALSE|no|No|NO|off|Off|OFF)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+install_agent_skill_mirror() {
+    local source_dir="$1"
+    local primary_dir="$2"
+    local label="$3"
+    local target_dir="$4"
+
+    if [ "$target_dir" = "$primary_dir" ]; then
+        echo "  ✅ $label skills 目录与通用目录相同，跳过重复镜像"
+        return 0
+    fi
+
+    echo "  镜像到 $label 全局目录: $target_dir"
+    install_agent_skills_to_dir "$source_dir" "$target_dir" "$label"
+}
+
+install_detected_agent_skill_mirrors() {
+    local source_dir="$1"
+    local primary_dir="$2"
+    local codex_setting="${SKILL_HUB_INSTALL_CODEX_SKILLS:-auto}"
+    local opencode_setting="${SKILL_HUB_INSTALL_OPENCODE_SKILLS:-auto}"
+    local claude_setting="${SKILL_HUB_INSTALL_CLAUDE_SKILLS:-auto}"
+    local codex_home="${CODEX_HOME:-$HOME/.codex}"
+    local codex_dir="${CODEX_SKILLS_DIR:-$codex_home/skills}"
+    local opencode_home="${OPENCODE_HOME:-$HOME/.config/opencode}"
+    local opencode_dir="${OPENCODE_SKILLS_DIR:-$opencode_home/skills}"
+    local claude_dir="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+
+    if is_agent_mirror_disabled "$codex_setting"; then
+        echo "  ⏭️  已跳过 Codex skills 镜像（SKILL_HUB_INSTALL_CODEX_SKILLS=$codex_setting）"
+    elif [ "$codex_setting" != "auto" ] || command -v codex >/dev/null 2>&1 || [ -d "$codex_home" ]; then
+        install_agent_skill_mirror "$source_dir" "$primary_dir" "codex" "$codex_dir"
+    else
+        echo "  ⏭️  未检测到 Codex，跳过 Codex skills 镜像"
+    fi
+
+    if is_agent_mirror_disabled "$opencode_setting"; then
+        echo "  ⏭️  已跳过 OpenCode skills 镜像（SKILL_HUB_INSTALL_OPENCODE_SKILLS=$opencode_setting）"
+    elif [ "$opencode_setting" != "auto" ] || command -v opencode >/dev/null 2>&1 || [ -d "$opencode_home" ]; then
+        install_agent_skill_mirror "$source_dir" "$primary_dir" "opencode" "$opencode_dir"
+    else
+        echo "  ⏭️  未检测到 OpenCode，跳过 OpenCode skills 镜像"
+    fi
+
+    if is_agent_mirror_disabled "$claude_setting"; then
+        echo "  ⏭️  已跳过 Claude skills 镜像（SKILL_HUB_INSTALL_CLAUDE_SKILLS=$claude_setting）"
+    elif [ "$claude_setting" != "auto" ] || [ -d "$claude_dir" ]; then
+        install_agent_skill_mirror "$source_dir" "$primary_dir" "claude" "$claude_dir"
+    else
+        echo "  ⏭️  未检测到 Claude skills 目录，跳过 Claude skills 镜像"
+    fi
+}
+
+install_agent_skills_to_dir() {
+    local source_dir="$1"
+    local target_dir="$2"
+    local label="$3"
+    local skill_dir
+    local skill_name
+    local dest_dir
+    local tmp_dir
+    local failed=0
+    local copied=0
+
+    if ! mkdir -p "$target_dir"; then
+        echo "  ⚠️  无法创建 agent skills 目录: $target_dir"
+        echo "      可稍后手动复制: cp -R $source_dir/skill-hub-* \"$target_dir/\""
+        return 0
+    fi
+
+    for skill_dir in "$source_dir"/skill-hub-*; do
+        [ -d "$skill_dir" ] || continue
+        [ -f "$skill_dir/SKILL.md" ] || continue
+
+        skill_name="$(basename "$skill_dir")"
+        dest_dir="$target_dir/$skill_name"
+        tmp_dir="$target_dir/.${skill_name}.new.$$"
+
+        rm -rf "$tmp_dir"
+        if mkdir -p "$tmp_dir" && cp -R "$skill_dir"/. "$tmp_dir"/ && rm -rf "$dest_dir" && mv "$tmp_dir" "$dest_dir"; then
+            INSTALLED_AGENT_SKILLS_COUNT=$((INSTALLED_AGENT_SKILLS_COUNT + 1))
+            copied=$((copied + 1))
+            echo "  ✅ [$label] $skill_name -> $dest_dir"
+        else
+            failed=1
+            rm -rf "$tmp_dir"
+            echo "  ⚠️  [$label] $skill_name 安装失败"
+        fi
+    done
+
+    if [ "$copied" -eq 0 ]; then
+        echo "  ⚠️  未发现可安装的 skill-hub agent skills"
+    fi
+    if [ "$failed" -ne 0 ]; then
+        echo "  ⚠️  部分 agent skills 安装失败；skill-hub 二进制安装不受影响"
     fi
     return 0
 }
@@ -547,6 +682,10 @@ main() {
                 echo "  ⚠️  Fish 补全生成失败"
             fi
         fi
+
+        echo ""
+        echo "🔧 安装全局 Agent Skills（用于提升 agent 调度稳定性）..."
+        install_agent_skills "agent-skills"
         
     else
         rm -f "$install_tmp"
@@ -658,6 +797,11 @@ main() {
     fi
     echo "• ✅ 文件解压: 找到可执行文件 $ACTUAL_BINARY"
     echo "• ✅ 安装完成: 已安装到 $install_path"
+    if [ "$INSTALLED_AGENT_SKILLS_COUNT" -gt 0 ]; then
+        echo "• ✅ Agent Skills: 已安装 $INSTALLED_AGENT_SKILLS_COUNT 个到 $AGENT_SKILLS_TARGET"
+    else
+        echo "• ⚠️  Agent Skills: 未安装或已跳过"
+    fi
     echo "• ✅ serve更新: 已重启 $UPDATED_SERVE_COUNT 个运行中的已注册实例"
     echo ""
     echo "🗑️  清理提示:"

@@ -108,6 +108,7 @@ release-all: clean
 	GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-linux-amd64/skill-hub ./application/skill-hub/cmd
 	cp README.md dist/tmp-linux-amd64/
 	cp LICENSE dist/tmp-linux-amd64/
+	cp -R agent-skills dist/tmp-linux-amd64/
 	cd dist/tmp-linux-amd64 && tar -czf ../skill-hub-linux-amd64.tar.gz .
 	cd dist && sha256sum skill-hub-linux-amd64.tar.gz > skill-hub-linux-amd64.sha256
 	rm -rf dist/tmp-linux-amd64
@@ -119,6 +120,7 @@ release-all: clean
 	GOOS=linux GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-linux-arm64/skill-hub ./application/skill-hub/cmd
 	cp README.md dist/tmp-linux-arm64/
 	cp LICENSE dist/tmp-linux-arm64/
+	cp -R agent-skills dist/tmp-linux-arm64/
 	cd dist/tmp-linux-arm64 && tar -czf ../skill-hub-linux-arm64.tar.gz .
 	cd dist && sha256sum skill-hub-linux-arm64.tar.gz > skill-hub-linux-arm64.sha256
 	rm -rf dist/tmp-linux-arm64
@@ -130,6 +132,7 @@ release-all: clean
 	GOOS=darwin GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-darwin-amd64/skill-hub ./application/skill-hub/cmd
 	cp README.md dist/tmp-darwin-amd64/
 	cp LICENSE dist/tmp-darwin-amd64/
+	cp -R agent-skills dist/tmp-darwin-amd64/
 	cd dist/tmp-darwin-amd64 && tar -czf ../skill-hub-darwin-amd64.tar.gz .
 	cd dist && sha256sum skill-hub-darwin-amd64.tar.gz > skill-hub-darwin-amd64.sha256
 	rm -rf dist/tmp-darwin-amd64
@@ -141,6 +144,7 @@ release-all: clean
 	GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-darwin-arm64/skill-hub ./application/skill-hub/cmd
 	cp README.md dist/tmp-darwin-arm64/
 	cp LICENSE dist/tmp-darwin-arm64/
+	cp -R agent-skills dist/tmp-darwin-arm64/
 	cd dist/tmp-darwin-arm64 && tar -czf ../skill-hub-darwin-arm64.tar.gz .
 	cd dist && sha256sum skill-hub-darwin-arm64.tar.gz > skill-hub-darwin-arm64.sha256
 	rm -rf dist/tmp-darwin-arm64
@@ -152,6 +156,7 @@ release-all: clean
 	GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-windows-amd64/skill-hub.exe ./application/skill-hub/cmd
 	cp README.md dist/tmp-windows-amd64/
 	cp LICENSE dist/tmp-windows-amd64/
+	cp -R agent-skills dist/tmp-windows-amd64/
 	cd dist/tmp-windows-amd64 && tar -czf ../skill-hub-windows-amd64.tar.gz .
 	cd dist && sha256sum skill-hub-windows-amd64.tar.gz > skill-hub-windows-amd64.sha256
 	rm -rf dist/tmp-windows-amd64
@@ -163,6 +168,7 @@ release-all: clean
 	GOOS=windows GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/tmp-windows-arm64/skill-hub.exe ./application/skill-hub/cmd
 	cp README.md dist/tmp-windows-arm64/
 	cp LICENSE dist/tmp-windows-arm64/
+	cp -R agent-skills dist/tmp-windows-arm64/
 	cd dist/tmp-windows-arm64 && tar -czf ../skill-hub-windows-arm64.tar.gz .
 	cd dist && sha256sum skill-hub-windows-arm64.tar.gz > skill-hub-windows-arm64.sha256
 	rm -rf dist/tmp-windows-arm64

@@ -126,6 +126,8 @@ go build -o bin/skill-hub ./application/skill-hub/cmd
 curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
 ```
 
+安装脚本会同时安装 release 内置的 `skill-hub-*` workflow skills 到工具无关目录 `${XDG_DATA_HOME:-$HOME/.local/share}/skill-hub/agent-skills`，并检测当前系统中已安装或已有配置目录的 agent，再同步镜像到对应全局 skills 目录，让 agent 在创建或使用 skill 时优先采用 skill-hub 工作流。可通过 `SKILL_HUB_INSTALL_AGENT_SKILLS=0` 跳过全局安装，通过 `SKILL_HUB_AGENT_SKILLS_DIR=/path/to/skills` 指定通用目录；Codex、OpenCode、Claude 镜像分别可用 `SKILL_HUB_INSTALL_CODEX_SKILLS=0`、`SKILL_HUB_INSTALL_OPENCODE_SKILLS=0`、`SKILL_HUB_INSTALL_CLAUDE_SKILLS=0` 关闭，也可通过 `CODEX_SKILLS_DIR`、`OPENCODE_SKILLS_DIR`、`CLAUDE_SKILLS_DIR` 指定目标目录。
+
 ### 基本使用
 
 安装完成后，按照以下工作流程开始使用：
@@ -144,10 +146,12 @@ skill-hub repo add personal https://github.com/yourname/skills.git
 # 3. 设置默认归档仓库
 skill-hub repo default main
 
-# 4. 启用技能
+# 4. 先查看和搜索可用技能，再选择合适的技能启用
+skill-hub list
+skill-hub search git
 skill-hub use git-expert
 
-# 5. 应用技能到项目
+# 5. 应用已启用技能到项目
 skill-hub apply
 ```
 

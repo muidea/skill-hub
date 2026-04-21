@@ -4,6 +4,28 @@
 
 本文档定义了 skill-hub CLI 工具的所有命令规范，旨在统一各设计文档中的命令定义，消除冲突和歧义。
 
+## 安装脚本约定
+
+一键安装脚本安装二进制、Shell 补全和 release 内置 agent workflow skills。Agent workflow skills 的主安装目录是工具无关路径：
+
+```bash
+${XDG_DATA_HOME:-$HOME/.local/share}/skill-hub/agent-skills
+```
+
+安装脚本会检测当前系统中已安装或已有配置目录的 agent，再同步镜像到对应全局 skills 目录。当前支持的自动检测镜像包括 Codex 与 OpenCode；Claude 仅在 `~/.claude/skills` 已存在或用户显式指定 `CLAUDE_SKILLS_DIR` / `SKILL_HUB_INSTALL_CLAUDE_SKILLS=1` 时镜像。Codex 默认目录示例：
+
+```bash
+${CODEX_HOME:-$HOME/.codex}/skills
+```
+
+OpenCode 默认目录示例：
+
+```bash
+${OPENCODE_HOME:-$HOME/.config/opencode}/skills
+```
+
+可通过 `SKILL_HUB_INSTALL_AGENT_SKILLS=0` 跳过所有 agent skills 安装，通过 `SKILL_HUB_AGENT_SKILLS_DIR=/path/to/skills` 覆盖工具无关目录。Codex、OpenCode、Claude 镜像分别可用 `SKILL_HUB_INSTALL_CODEX_SKILLS=0`、`SKILL_HUB_INSTALL_OPENCODE_SKILLS=0`、`SKILL_HUB_INSTALL_CLAUDE_SKILLS=0` 关闭，也可用 `CODEX_SKILLS_DIR`、`OPENCODE_SKILLS_DIR`、`CLAUDE_SKILLS_DIR` 覆盖目标目录。安装脚本只覆盖 release 内置的 `skill-hub-*` workflow skills，不扫描或删除其他用户 skill。
+
 ## 名词说明
 
 * **项目**：需要启用和管理 Skill 的代码工作区。
@@ -520,6 +542,8 @@ skill-hub validate --all --links --json
 
 将技能标记为在当前项目中使用。此命令仅更新 `state.json` 中的技能记录，不直接修改项目文件，不写入 target。需要通过 `apply` 命令进行物理分发。
 
+使用前应先通过 `list` 和/或 `search` 检查是否存在适合当前项目和任务的已管理技能。只有当候选技能明确匹配时才执行 `use`；如果没有合适技能，应继续当前任务或创建新技能，不应猜测无关技能 ID。
+
 当前实现补充：
 
 - 当本地服务模式可用时，CLI 会优先通过服务桥接执行
@@ -533,7 +557,9 @@ skill-hub validate --all --links --json
 
 **示例**:
 ```bash
-# 启用 git-expert 技能
+# 先发现候选技能，再启用明确匹配的技能
+skill-hub list
+skill-hub search git
 skill-hub use git-expert
 
 ```

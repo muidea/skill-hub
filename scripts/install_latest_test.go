@@ -76,6 +76,65 @@ func TestInstallLatestRestartsRegisteredServeInstances(t *testing.T) {
 	}
 }
 
+func TestInstallLatestInstallsBundledAgentSkills(t *testing.T) {
+	contentBytes, err := os.ReadFile("install-latest.sh")
+	if err != nil {
+		t.Fatalf("read install script: %v", err)
+	}
+
+	content := string(contentBytes)
+	if !strings.Contains(content, "install_agent_skills()") {
+		t.Fatalf("installer should define bundled agent skills installer")
+	}
+
+	installBlock := sectionBetween(t, content, "install_agent_skills()", "# 主函数")
+	for _, expected := range []string{
+		"SKILL_HUB_INSTALL_AGENT_SKILLS",
+		"SKILL_HUB_INSTALL_CODEX_SKILLS",
+		"SKILL_HUB_INSTALL_OPENCODE_SKILLS",
+		"SKILL_HUB_INSTALL_CLAUDE_SKILLS",
+		"SKILL_HUB_AGENT_SKILLS_DIR",
+		"CODEX_SKILLS_DIR",
+		"OPENCODE_SKILLS_DIR",
+		"CLAUDE_SKILLS_DIR",
+		`${XDG_DATA_HOME:-$HOME/.local/share}/skill-hub/agent-skills`,
+		`${CODEX_HOME:-$HOME/.codex}`,
+		`$codex_home/skills`,
+		`${OPENCODE_HOME:-$HOME/.config/opencode}`,
+		`$opencode_home/skills`,
+		`$HOME/.claude/skills`,
+		"skill-hub-*",
+		"SKILL.md",
+	} {
+		if !strings.Contains(installBlock, expected) {
+			t.Fatalf("agent skills installer should contain %q", expected)
+		}
+	}
+
+	postInstallBlock := sectionBetween(t, content, "安装 Shell 补全", "# 验证安装和使用说明")
+	if !strings.Contains(postInstallBlock, `install_agent_skills "agent-skills"`) {
+		t.Fatalf("installer should install bundled agent skills after installing the binary")
+	}
+	if !strings.Contains(installBlock, "command -v codex") || !strings.Contains(installBlock, "command -v opencode") {
+		t.Fatalf("installer should detect installed agents before mirroring skills")
+	}
+	if !strings.Contains(content, "Agent Skills") {
+		t.Fatalf("install summary should report agent skills installation")
+	}
+}
+
+func TestReleasePackagesIncludeAgentSkills(t *testing.T) {
+	contentBytes, err := os.ReadFile("../Makefile")
+	if err != nil {
+		t.Fatalf("read Makefile: %v", err)
+	}
+
+	content := string(contentBytes)
+	if got := strings.Count(content, "cp -R agent-skills"); got != 6 {
+		t.Fatalf("release packages should copy agent-skills for all six platforms, got %d", got)
+	}
+}
+
 func sectionBetween(t *testing.T, content, start, end string) string {
 	t.Helper()
 
