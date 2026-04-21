@@ -156,6 +156,8 @@ skill-hub apply
 # 1. 从当前项目创建新技能模板
 skill-hub create my-new-skill
 
+# 生成的 SKILL.md 默认使用中文定义，并包含 Formatter 段
+
 # 2. 在 feedback 前校验本地新建 skill
 skill-hub validate my-new-skill
 
