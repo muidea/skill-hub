@@ -43,6 +43,39 @@ func TestInstallLatestHandlesRunningServeBinary(t *testing.T) {
 	}
 }
 
+func TestInstallLatestRestartsRegisteredServeInstances(t *testing.T) {
+	contentBytes, err := os.ReadFile("install-latest.sh")
+	if err != nil {
+		t.Fatalf("read install script: %v", err)
+	}
+
+	content := string(contentBytes)
+	if !strings.Contains(content, "update_registered_serve_instances()") {
+		t.Fatalf("installer should define registered serve updater")
+	}
+
+	updateBlock := sectionBetween(t, content, "update_registered_serve_instances()", "# 主函数")
+	for _, expected := range []string{
+		"serve status",
+		"awk -F '\\t' '$2==\"running\"{print $1}'",
+		"serve stop \"$service_name\"",
+		"serve start \"$service_name\"",
+		"UPDATED_SERVE_COUNT",
+	} {
+		if !strings.Contains(updateBlock, expected) {
+			t.Fatalf("serve updater should contain %q", expected)
+		}
+	}
+
+	postVerifyBlock := sectionBetween(t, content, "✅ 安装验证成功！", "# 清理提示和总结")
+	if !strings.Contains(postVerifyBlock, "update_registered_serve_instances \"$install_path\"") {
+		t.Fatalf("installer should update registered serve instances after verifying the installed binary")
+	}
+	if !strings.Contains(content, "serve更新") {
+		t.Fatalf("install summary should report serve update result")
+	}
+}
+
 func sectionBetween(t *testing.T, content, start, end string) string {
 	t.Helper()
 

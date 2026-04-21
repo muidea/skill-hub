@@ -37,6 +37,7 @@ GITHUB_API="https://api.github.com/repos/$REPO_OWNER/$REPO_NAME"
 
 # 默认版本（最新）
 VERSION="${1:-latest}"
+UPDATED_SERVE_COUNT=0
 
     echo "skill-hub 安装助手"
     echo "====================="
@@ -197,6 +198,49 @@ extract_file() {
             return 1
             ;;
     esac
+}
+
+update_registered_serve_instances() {
+    local install_path="$1"
+    local status_output
+    local running_services
+    local service_name
+    local failed=0
+
+    if [[ ! -x "$install_path" ]]; then
+        echo "  ⚠️  未找到已安装的 skill-hub，跳过 serve 实例更新"
+        return 0
+    fi
+
+    if ! status_output=$("$install_path" serve status 2>&1); then
+        echo "  ⚠️  读取 serve 注册表失败"
+        echo "$status_output"
+        return 1
+    fi
+
+    running_services=$(printf '%s\n' "$status_output" | awk -F '\t' '$2=="running"{print $1}')
+    if [ -z "$running_services" ]; then
+        echo "  ✅ 未发现运行中的已注册 serve 实例"
+        return 0
+    fi
+
+    while IFS= read -r service_name; do
+        [ -n "$service_name" ] || continue
+
+        echo "  重启 serve 实例: $service_name"
+        if "$install_path" serve stop "$service_name" && "$install_path" serve start "$service_name"; then
+            UPDATED_SERVE_COUNT=$((UPDATED_SERVE_COUNT + 1))
+            echo "  ✅ $service_name 已更新到新版"
+        else
+            failed=1
+            echo "  ✗ $service_name 更新失败"
+        fi
+    done <<< "$running_services"
+
+    if [ "$failed" -ne 0 ]; then
+        return 1
+    fi
+    return 0
 }
 
 # 主函数
@@ -594,6 +638,14 @@ main() {
     echo "  3. 列出可用技能: $install_name list"
     echo "  4. 使用技能: $install_name use <skill-name>"
     echo "  5. 技能应用: $install_name apply"
+
+    echo ""
+    echo "🔁 更新已注册 serve 实例..."
+    if ! update_registered_serve_instances "$install_path"; then
+        echo "✗ serve 实例更新失败"
+        echo "请检查服务日志，或手动执行: $install_name serve stop <name> && $install_name serve start <name>"
+        exit 1
+    fi
     
     # 清理提示和总结
     echo ""
@@ -606,6 +658,7 @@ main() {
     fi
     echo "• ✅ 文件解压: 找到可执行文件 $ACTUAL_BINARY"
     echo "• ✅ 安装完成: 已安装到 $install_path"
+    echo "• ✅ serve更新: 已重启 $UPDATED_SERVE_COUNT 个运行中的已注册实例"
     echo ""
     echo "🗑️  清理提示:"
     echo "临时文件保存在: $TEMP_DIR"
