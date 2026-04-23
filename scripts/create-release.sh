@@ -134,7 +134,7 @@ tracked_release_notes_doc_for_version() {
         *)
             echo -e "${RED}错误: 发现多个 v$version 发布说明文档:${NC}" >&2
             printf "  %s\n" "${matches[@]}" >&2
-            exit 1
+            return 2
             ;;
     esac
 }
@@ -174,10 +174,15 @@ generate_release_notes() {
     local commit_range="$3"
     local output_file="$4"
     local tracked_notes_doc
+    local tracked_notes_status=0
 
-    if tracked_notes_doc="$(tracked_release_notes_doc_for_version "$version")"; then
+    tracked_notes_doc="$(tracked_release_notes_doc_for_version "$version")" || tracked_notes_status=$?
+    if [ "$tracked_notes_status" -eq 0 ]; then
         cp "$tracked_notes_doc" "$output_file"
         return
+    fi
+    if [ "$tracked_notes_status" -ne 1 ]; then
+        exit "$tracked_notes_status"
     fi
 
     local breaking_items=""

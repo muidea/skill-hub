@@ -164,6 +164,43 @@ func TestCreateReleaseNotesPreferTrackedVersionDocument(t *testing.T) {
 	}
 }
 
+func TestCreateReleaseNotesFailsOnMultipleTrackedVersionDocuments(t *testing.T) {
+	repoDir := t.TempDir()
+	scriptPath := copyReleaseScript(t, repoDir)
+
+	runCmd(t, repoDir, "git", "init")
+	runCmd(t, repoDir, "git", "config", "user.name", "Test User")
+	runCmd(t, repoDir, "git", "config", "user.email", "test@example.com")
+
+	writeFile(t, filepath.Join(repoDir, "README.md"), "initial\n")
+	runCmd(t, repoDir, "git", "add", "README.md")
+	runCmd(t, repoDir, "git", "commit", "-m", "chore: initial release baseline")
+	runCmd(t, repoDir, "git", "tag", "v0.1.0")
+
+	if err := os.MkdirAll(filepath.Join(repoDir, "docs"), 0755); err != nil {
+		t.Fatalf("mkdir docs: %v", err)
+	}
+	writeFile(t, filepath.Join(repoDir, "docs", "release-notes-v0.2.0-first.md"), "first\n")
+	writeFile(t, filepath.Join(repoDir, "docs", "release-notes-v0.2.0-second.md"), "second\n")
+	runCmd(t, repoDir, "git", "add", "docs/release-notes-v0.2.0-first.md", "docs/release-notes-v0.2.0-second.md")
+	runCmd(t, repoDir, "git", "commit", "-m", "docs: add duplicate release notes")
+
+	outputPath := filepath.Join(repoDir, "release-notes.md")
+	cmd := exec.Command("bash", scriptPath, "--notes-only", "--yes", "--version", "0.2.0", "--from", "v0.1.0", "--output", outputPath)
+	cmd.Dir = repoDir
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected duplicate tracked release notes to fail, output:\n%s", string(output))
+	}
+
+	notesOutput := string(output)
+	if !strings.Contains(notesOutput, "release-notes-v0.2.0-first.md") ||
+		!strings.Contains(notesOutput, "release-notes-v0.2.0-second.md") {
+		t.Fatalf("expected duplicate release note paths in output, got:\n%s", notesOutput)
+	}
+}
+
 func TestCreateReleasePushesCurrentBranchBeforeTag(t *testing.T) {
 	tmpDir := t.TempDir()
 	remoteDir := filepath.Join(tmpDir, "remote.git")
