@@ -41,11 +41,28 @@ jobs:
           echo "Generated files in dist/:"
           ls -la dist/
 
-      - name: Extract release notes from annotated tag
+      - name: Resolve release notes
         run: |
-          git tag -l "${{ steps.get_version.outputs.TAG_NAME }}" --format='%(contents)' > release-notes.md
-          if [ ! -s release-notes.md ]; then
-            echo "Release ${{ steps.get_version.outputs.TAG_NAME }}" > release-notes.md
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          TAG_NAME="${{ steps.get_version.outputs.TAG_NAME }}"
+
+          shopt -s nullglob
+          tracked_notes=(docs/release-notes-v"${VERSION}"-*.md)
+
+          if [ "${#tracked_notes[@]}" -gt 1 ]; then
+            echo "Multiple tracked release note documents found for ${TAG_NAME}:"
+            printf '  %s\n' "${tracked_notes[@]}"
+            exit 1
+          fi
+
+          if [ "${#tracked_notes[@]}" -eq 1 ]; then
+            cp "${tracked_notes[0]}" release-notes.md
+            echo "Using tracked release notes: ${tracked_notes[0]}"
+          else
+            git tag -l "${TAG_NAME}" --format='%(contents)' > release-notes.md
+            if [ ! -s release-notes.md ]; then
+              echo "Release ${TAG_NAME}" > release-notes.md
+            fi
           fi
 
       - name: Create GitHub Release
