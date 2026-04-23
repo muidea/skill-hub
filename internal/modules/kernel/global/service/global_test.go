@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -304,17 +303,4 @@ func writeRepoSkill(t *testing.T, homeDir, repoName, skillID, content string) {
 	if err := os.WriteFile(filepath.Join(repoSkillDir, "SKILL.md"), []byte(content), 0644); err != nil {
 		t.Fatalf("write repo skill: %v", err)
 	}
-}
-
-func readGlobalStateForTest(t *testing.T, homeDir string) State {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join(homeDir, "global-state.json"))
-	if err != nil {
-		t.Fatalf("read global-state: %v", err)
-	}
-	var state State
-	if err := json.Unmarshal(data, &state); err != nil {
-		t.Fatalf("unmarshal global-state: %v", err)
-	}
-	return state
 }
