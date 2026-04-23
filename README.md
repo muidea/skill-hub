@@ -370,6 +370,7 @@ skill-hub prune
   - 贡献指南和代码审查
   - 性能优化和安全考虑
 - **[v0.8.0 全局技能管理发布说明](docs/release-notes-v0.8.0-global-skill-management.md)** - `--global` 功能范围、验证结果和后续 lint 收口记录
+- **[v0.8.1 发布说明流水线收口](docs/release-notes-v0.8.1-release-notes-pipeline.md)** - tracked release notes、发布脚本和 GitHub Release workflow 收口记录
 
 ## 📋 其他信息
 
