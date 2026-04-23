@@ -122,6 +122,48 @@ func TestCreateReleaseNotesBetweenTwoReleaseTags(t *testing.T) {
 	}
 }
 
+func TestCreateReleaseNotesPreferTrackedVersionDocument(t *testing.T) {
+	repoDir := t.TempDir()
+	scriptPath := copyReleaseScript(t, repoDir)
+
+	runCmd(t, repoDir, "git", "init")
+	runCmd(t, repoDir, "git", "config", "user.name", "Test User")
+	runCmd(t, repoDir, "git", "config", "user.email", "test@example.com")
+
+	writeFile(t, filepath.Join(repoDir, "README.md"), "initial\n")
+	runCmd(t, repoDir, "git", "add", "README.md")
+	runCmd(t, repoDir, "git", "commit", "-m", "chore: initial release baseline")
+	runCmd(t, repoDir, "git", "tag", "v0.1.0")
+
+	writeFile(t, filepath.Join(repoDir, "feature.txt"), "feature\n")
+	runCmd(t, repoDir, "git", "add", "feature.txt")
+	runCmd(t, repoDir, "git", "commit", "-m", "feat(global): add managed skill release flow")
+
+	curatedNotes := "# v0.2.0 Managed Skill Release\n\nCurated release notes from docs.\n"
+	if err := os.MkdirAll(filepath.Join(repoDir, "docs"), 0755); err != nil {
+		t.Fatalf("mkdir docs: %v", err)
+	}
+	writeFile(t, filepath.Join(repoDir, "docs", "release-notes-v0.2.0-managed-skills.md"), curatedNotes)
+	runCmd(t, repoDir, "git", "add", "docs/release-notes-v0.2.0-managed-skills.md")
+	runCmd(t, repoDir, "git", "commit", "-m", "docs: add managed skill release notes")
+
+	outputPath := filepath.Join(repoDir, "release-notes.md")
+	runCmd(t, repoDir, "bash", scriptPath, "--notes-only", "--yes", "--version", "0.2.0", "--from", "v0.1.0", "--output", outputPath)
+
+	notesContent, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("read notes: %v", err)
+	}
+
+	notes := string(notesContent)
+	if notes != curatedNotes {
+		t.Fatalf("expected tracked release note document, got: %s", notes)
+	}
+	if strings.Contains(notes, "add managed skill release flow") {
+		t.Fatalf("notes should use the tracked document instead of generated commit subjects: %s", notes)
+	}
+}
+
 func TestCreateReleasePushesCurrentBranchBeforeTag(t *testing.T) {
 	tmpDir := t.TempDir()
 	remoteDir := filepath.Join(tmpDir, "remote.git")

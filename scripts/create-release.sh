@@ -113,6 +113,32 @@ is_breaking_commit() {
     return 1
 }
 
+tracked_release_notes_doc_for_version() {
+    local version="$1"
+    local matches=()
+    local path
+
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        matches+=("$path")
+    done < <(git ls-files "docs/release-notes-v${version}-*.md")
+
+    case "${#matches[@]}" in
+        0)
+            return 1
+            ;;
+        1)
+            printf "%s\n" "${matches[0]}"
+            return 0
+            ;;
+        *)
+            echo -e "${RED}错误: 发现多个 v$version 发布说明文档:${NC}" >&2
+            printf "  %s\n" "${matches[@]}" >&2
+            exit 1
+            ;;
+    esac
+}
+
 next_version() {
     local last_version="$1"
     local bump="$2"
@@ -147,6 +173,12 @@ generate_release_notes() {
     local last_tag="$2"
     local commit_range="$3"
     local output_file="$4"
+    local tracked_notes_doc
+
+    if tracked_notes_doc="$(tracked_release_notes_doc_for_version "$version")"; then
+        cp "$tracked_notes_doc" "$output_file"
+        return
+    fi
 
     local breaking_items=""
     local feat_items=""
