@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	globalservice "github.com/muidea/skill-hub/internal/modules/kernel/global/service"
 	projectstatusservice "github.com/muidea/skill-hub/internal/modules/kernel/project_status/service"
 	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
@@ -32,6 +33,11 @@ var statusCmd = &cobra.Command{
 		}
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		jsonOutput, _ := cmd.Flags().GetBool("json")
+		global, _ := cmd.Flags().GetBool("global")
+		agents, _ := cmd.Flags().GetStringArray("agent")
+		if global {
+			return runStatusGlobal(skillID, agents, jsonOutput)
+		}
 		return runStatus(skillID, verbose, jsonOutput)
 	},
 }
@@ -39,6 +45,34 @@ var statusCmd = &cobra.Command{
 func init() {
 	statusCmd.Flags().Bool("verbose", false, "显示详细差异信息")
 	statusCmd.Flags().Bool("json", false, "以JSON格式输出状态，便于CI和自动化脚本处理")
+	statusCmd.Flags().Bool("global", false, "检查本机全局技能状态")
+	statusCmd.Flags().StringArray("agent", nil, "限制检查的 agent，可重复使用: codex, opencode, claude")
+}
+
+func runStatusGlobal(skillID string, agents []string, jsonOutput bool) error {
+	if client, ok := hubClientIfAvailable(); ok {
+		data, err := client.GetGlobalStatus(context.Background(), skillID, agents)
+		if err == nil && data.Item != nil {
+			if jsonOutput {
+				return writeJSON(data.Item)
+			}
+			renderGlobalStatusSummary(data.Item)
+			return nil
+		}
+	}
+
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+	summary, err := globalservice.New().Inspect(skillID, agents)
+	if err != nil {
+		return err
+	}
+	if jsonOutput {
+		return writeJSON(summary)
+	}
+	renderGlobalStatusSummary(summary)
+	return nil
 }
 
 func runStatus(skillID string, verbose bool, jsonOutputOpt ...bool) error {
@@ -167,6 +201,82 @@ func renderProjectStatusSummary(summary *projectstatusservice.ProjectStatusSumma
 	fmt.Println("⚠️  Modified: 本地有未反馈的修改")
 	fmt.Println("🔄 Outdated: 仓库版本领先于本地")
 	fmt.Println("❌ Missing: 技能已启用但本地文件缺失")
+}
+
+func renderGlobalStatusSummary(summary *globalservice.StatusSummary) {
+	fmt.Println("检查本机全局技能状态...")
+	if summary == nil {
+		fmt.Println("ℹ️  未返回状态")
+		return
+	}
+	fmt.Printf("全局镜像目录: %s\n", summary.GlobalPath)
+	if len(summary.Agents) == 0 {
+		fmt.Println("ℹ️  未检测到可用 agent")
+	} else {
+		fmt.Println("\n=== Agent 检测 ===")
+		for _, agent := range summary.Agents {
+			state := "detected"
+			if agent.Configured {
+				state = "configured"
+			} else if !agent.Detected {
+				state = "not_detected"
+			}
+			fmt.Printf("%-8s %-14s %s\n", agent.Name, state, agent.SkillsDir)
+		}
+	}
+
+	if len(summary.Items) == 0 {
+		fmt.Println("\nℹ️  当前未启用任何全局技能")
+		fmt.Println("使用 'skill-hub use <skill-id> --global --agent <agent>' 启用全局技能")
+		return
+	}
+
+	fmt.Printf("\n全局启用技能数: %d\n", summary.SkillCount)
+	fmt.Println("\n=== 全局技能状态 ===")
+	maxIDLength := 2
+	for _, item := range summary.Items {
+		if len(item.SkillID) > maxIDLength {
+			maxIDLength = len(item.SkillID)
+		}
+	}
+	fmt.Printf("%-*s %-10s 状态\n", maxIDLength, "ID", "Agent")
+	fmt.Println(strings.Repeat("-", maxIDLength+1+10+1+12))
+	for _, item := range summary.Items {
+		fmt.Printf("%-*s %-10s %s %s\n", maxIDLength, item.SkillID, item.Agent, globalStatusSymbol(item.Status), item.Status)
+		if item.Message != "" {
+			fmt.Printf("%-*s %-10s   %s\n", maxIDLength, "", "", item.Message)
+		}
+	}
+	if len(summary.Orphaned) > 0 {
+		fmt.Println("\n=== 孤儿托管目录 ===")
+		for _, item := range summary.Orphaned {
+			fmt.Printf("⚠️  %s -> %s: %s\n", item.SkillID, item.Agent, item.TargetPath)
+		}
+	}
+
+	fmt.Println("\n说明:")
+	fmt.Println("✅ ok: Skill-Hub 状态、来源仓库与 agent 全局目录一致")
+	fmt.Println("➕ not_applied: 已全局启用但尚未写入 agent 目录")
+	fmt.Println("⚠️  modified/conflict/orphaned: 需要人工确认后处理")
+	fmt.Println("🔄 stale: 来源仓库已变化，可运行 'skill-hub apply --global' 刷新")
+	fmt.Println("❌ missing_agent_dir: agent skills 目录不存在，apply --global 会尝试创建")
+}
+
+func globalStatusSymbol(status string) string {
+	switch status {
+	case globalservice.StatusOK:
+		return "✅"
+	case globalservice.StatusNotApplied:
+		return "➕"
+	case globalservice.StatusStale:
+		return "🔄"
+	case globalservice.StatusMissingAgentDir:
+		return "❌"
+	case globalservice.StatusModified, globalservice.StatusConflict, globalservice.StatusOrphaned:
+		return "⚠️"
+	default:
+		return "❓"
+	}
 }
 
 func showSkillDetails(item projectstatusservice.SkillStatusItem) {

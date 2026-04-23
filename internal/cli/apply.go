@@ -9,18 +9,32 @@ import (
 	"github.com/spf13/cobra"
 
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
+	globalservice "github.com/muidea/skill-hub/internal/modules/kernel/global/service"
 	projectapplyservice "github.com/muidea/skill-hub/internal/modules/kernel/project_apply/service"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/utils"
 )
 
 var applyCmd = &cobra.Command{
-	Use:   "apply",
+	Use:   "apply [id]",
 	Short: "应用技能到项目",
 	Long:  `根据 state.json 中的启用记录，将技能物理分发到当前项目的标准 .agents/skills 目录。`,
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		force, _ := cmd.Flags().GetBool("force")
+		global, _ := cmd.Flags().GetBool("global")
+		agents, _ := cmd.Flags().GetStringArray("agent")
+		if global {
+			skillID := ""
+			if len(args) > 0 {
+				skillID = args[0]
+			}
+			return runApplyGlobal(skillID, agents, dryRun, force)
+		}
+		if len(args) > 0 {
+			return errors.NewWithCode("apply", errors.ErrInvalidInput, "项目级 apply 不接受技能 ID；如需刷新全局单个技能，请使用 --global")
+		}
 		return runApply(dryRun, force)
 	},
 }
@@ -28,6 +42,43 @@ var applyCmd = &cobra.Command{
 func init() {
 	applyCmd.Flags().Bool("dry-run", false, "演习模式，仅显示将要执行的变更，不实际修改文件")
 	applyCmd.Flags().Bool("force", false, "强制应用，即使检测到冲突也继续执行")
+	applyCmd.Flags().Bool("global", false, "应用本机全局启用的技能")
+	applyCmd.Flags().StringArray("agent", nil, "限制全局应用的 agent，可重复使用: codex, opencode, claude")
+	_ = applyCmd.RegisterFlagCompletionFunc("agent", completeAgentNames)
+}
+
+func runApplyGlobal(skillID string, agents []string, dryRun bool, force bool) error {
+	if client, ok := hubClientIfAvailable(); ok {
+		return runApplyGlobalViaService(client, skillID, agents, dryRun, force)
+	}
+
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+	result, err := globalservice.New().Apply(skillID, agents, dryRun, force)
+	if err != nil {
+		return errors.Wrap(err, "应用全局技能失败")
+	}
+	renderGlobalApplyResult(result)
+	return nil
+}
+
+type serviceGlobalApplyClient interface {
+	ApplyGlobal(ctx context.Context, req httpapibiz.ApplyGlobalRequest) (*httpapibiz.ApplyGlobalData, error)
+}
+
+func runApplyGlobalViaService(client serviceGlobalApplyClient, skillID string, agents []string, dryRun bool, force bool) error {
+	resp, err := client.ApplyGlobal(context.Background(), httpapibiz.ApplyGlobalRequest{
+		SkillID: skillID,
+		Agents:  agents,
+		DryRun:  dryRun,
+		Force:   force,
+	})
+	if err != nil {
+		return errors.Wrap(err, "通过服务应用全局技能失败")
+	}
+	renderGlobalApplyResult(resp.Item)
+	return nil
 }
 
 func runApply(dryRun bool, force bool) error {
@@ -183,5 +234,45 @@ func renderApplyResult(result *projectapplyservice.ApplyResult) {
 		fmt.Println("\n✅ 演习完成，未实际修改文件")
 	} else {
 		fmt.Println("\n✅ 所有技能应用完成")
+	}
+}
+
+func renderGlobalApplyResult(result *globalservice.ApplyResult) {
+	fmt.Println("正在刷新本机全局技能...")
+	if result == nil {
+		fmt.Println("ℹ️  未返回应用结果")
+		return
+	}
+	fmt.Printf("全局镜像目录: %s\n", result.GlobalPath)
+	if result.DryRun {
+		fmt.Println("\n=== 演习模式 (dry-run) ===")
+	}
+	if len(result.Items) == 0 {
+		fmt.Println("ℹ️  当前未启用任何全局技能")
+		fmt.Println("使用 'skill-hub use <skill-id> --global --agent <agent>' 启用全局技能")
+		return
+	}
+	for _, item := range result.Items {
+		target := item.Agent
+		if target == "" {
+			target = "unknown"
+		}
+		switch item.Status {
+		case globalservice.StatusPlanned:
+			fmt.Printf("[计划] %s -> %s: %s\n", item.SkillID, target, item.TargetPath)
+		case globalservice.StatusApplied:
+			fmt.Printf("✓ 已刷新 %s -> %s\n", item.SkillID, target)
+		case globalservice.StatusConflict:
+			fmt.Printf("⚠️  冲突 %s -> %s: %s\n", item.SkillID, target, item.Message)
+		case globalservice.StatusError:
+			fmt.Printf("❌ 失败 %s -> %s: %s\n", item.SkillID, target, item.Message)
+		default:
+			fmt.Printf("ℹ️  %s -> %s: %s %s\n", item.SkillID, target, item.Status, item.Message)
+		}
+	}
+	if result.DryRun {
+		fmt.Println("\n✅ 演习完成，未实际修改文件")
+	} else {
+		fmt.Println("\n✅ 全局技能刷新完成")
 	}
 }

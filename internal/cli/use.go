@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
+	globalservice "github.com/muidea/skill-hub/internal/modules/kernel/global/service"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
 	"github.com/spf13/cobra"
@@ -22,12 +23,126 @@ var useCmd = &cobra.Command{
 如果项目工作区里首次使用技能，也会同步在state.json里完成项目工作区信息刷新`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		global, _ := cmd.Flags().GetBool("global")
+		agents, _ := cmd.Flags().GetStringArray("agent")
+		if global {
+			return runUseGlobal(args[0], agents)
+		}
 		return runUse(args[0])
 	},
 }
 
 func init() {
+	useCmd.Flags().Bool("global", false, "将技能标记为本机全局使用")
+	useCmd.Flags().StringArray("agent", nil, "指定全局应用的 agent，可重复使用: codex, opencode, claude")
+	_ = useCmd.RegisterFlagCompletionFunc("agent", completeAgentNames)
 	useCmd.ValidArgsFunction = completeSkillIDs
+}
+
+func runUseGlobal(skillID string, agents []string) error {
+	if client, ok := hubClientIfAvailable(); ok {
+		return runUseGlobalViaService(client, skillID, agents)
+	}
+
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+
+	repoManager, err := newRepositoryManager()
+	if err != nil {
+		return errors.Wrap(err, "创建多仓库管理器失败")
+	}
+
+	skills, err := repoManager.FindSkill(skillID)
+	if err != nil {
+		return errors.Wrap(err, "查找技能失败")
+	}
+	if len(skills) == 0 {
+		return errors.SkillNotFound("runUseGlobal", skillID)
+	}
+
+	selectedSkill, err := chooseSkillCandidate(skills)
+	if err != nil {
+		return err
+	}
+
+	fullSkill, err := repoManager.LoadSkill(skillID, selectedSkill.Repository)
+	if err != nil {
+		return errors.Wrap(err, "加载技能详情失败")
+	}
+
+	fmt.Printf("全局启用技能: %s (%s)\n", fullSkill.Name, skillID)
+	fmt.Printf("来源仓库: %s\n", fullSkill.Repository)
+	fmt.Printf("描述: %s\n", fullSkill.Description)
+	if len(fullSkill.Tags) > 0 {
+		fmt.Printf("标签: %s\n", strings.Join(fullSkill.Tags, ", "))
+	}
+
+	variables, err := promptSkillVariables(fullSkill)
+	if err != nil {
+		return err
+	}
+
+	result, err := globalservice.New().EnableSkill(skillID, selectedSkill.Repository, agents, variables)
+	if err != nil {
+		return errors.Wrap(err, "保存全局技能状态失败")
+	}
+
+	fmt.Printf("\n✅ 技能 '%s' 已成功标记为本机全局使用！\n", result.SkillID)
+	fmt.Printf("目标 agent: %s\n", strings.Join(result.Agents, ", "))
+	fmt.Println("使用 'skill-hub apply --global' 刷新本机 agent 全局 skills 目录")
+	return nil
+}
+
+func runUseGlobalViaService(client serviceUseClient, skillID string, agents []string) error {
+	candidates, err := client.FindSkillCandidates(context.Background(), skillID)
+	if err != nil {
+		return errors.Wrap(err, "通过服务查找技能失败")
+	}
+	if len(candidates) == 0 {
+		return errors.SkillNotFound("runUseGlobalViaService", skillID)
+	}
+
+	selectedSkill, err := chooseSkillCandidate(candidates)
+	if err != nil {
+		return err
+	}
+
+	fullSkill, err := client.GetSkillDetail(context.Background(), skillID, selectedSkill.Repository)
+	if err != nil {
+		return errors.Wrap(err, "通过服务加载技能详情失败")
+	}
+
+	fmt.Printf("全局启用技能: %s (%s)\n", fullSkill.Name, skillID)
+	fmt.Printf("来源仓库: %s\n", fullSkill.Repository)
+	fmt.Printf("描述: %s\n", fullSkill.Description)
+	if len(fullSkill.Tags) > 0 {
+		fmt.Printf("标签: %s\n", strings.Join(fullSkill.Tags, ", "))
+	}
+
+	variables, err := promptSkillVariables(fullSkill)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.UseGlobalSkill(context.Background(), httpapibiz.UseGlobalSkillRequest{
+		SkillID:    skillID,
+		Repository: selectedSkill.Repository,
+		Agents:     agents,
+		Variables:  variables,
+	})
+	if err != nil {
+		return errors.Wrap(err, "通过服务启用全局技能失败")
+	}
+	if resp.Item == nil {
+		fmt.Printf("\n✅ 技能 '%s' 已成功标记为本机全局使用！\n", skillID)
+		return nil
+	}
+
+	fmt.Printf("\n✅ 技能 '%s' 已成功标记为本机全局使用！\n", resp.Item.SkillID)
+	fmt.Printf("目标 agent: %s\n", strings.Join(resp.Item.Agents, ", "))
+	fmt.Println("使用 'skill-hub apply --global' 刷新本机 agent 全局 skills 目录")
+	return nil
 }
 
 func runUse(skillID string) error {
@@ -170,6 +285,7 @@ type serviceUseClient interface {
 	GetSkillDetail(ctx context.Context, skillID, repoName string) (*spec.Skill, error)
 	GetProjectStatus(ctx context.Context, projectPath, skillID string) (*httpapibiz.ProjectStatusData, error)
 	UseSkill(ctx context.Context, req httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error)
+	UseGlobalSkill(ctx context.Context, req httpapibiz.UseGlobalSkillRequest) (*httpapibiz.UseGlobalSkillData, error)
 }
 
 func chooseSkillCandidate(skills []spec.SkillMetadata) (spec.SkillMetadata, error) {

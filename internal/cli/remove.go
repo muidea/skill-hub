@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	globalservice "github.com/muidea/skill-hub/internal/modules/kernel/global/service"
 	projectstatusservice "github.com/muidea/skill-hub/internal/modules/kernel/project_status/service"
 	"github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
@@ -26,8 +28,43 @@ var removeCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeEnabledSkillIDsForCwd,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		global, _ := cmd.Flags().GetBool("global")
+		agents, _ := cmd.Flags().GetStringArray("agent")
+		force, _ := cmd.Flags().GetBool("force")
+		if global {
+			return runRemoveGlobal(args[0], agents, force)
+		}
 		return runRemove(args[0])
 	},
+}
+
+func init() {
+	removeCmd.Flags().Bool("global", false, "从本机全局状态和 agent 全局目录移除技能")
+	removeCmd.Flags().StringArray("agent", nil, "限制移除的 agent，可重复使用: codex, opencode, claude")
+	removeCmd.Flags().Bool("force", false, "强制移除全局冲突目录")
+}
+
+func runRemoveGlobal(skillID string, agents []string, force bool) error {
+	if client, ok := hubClientIfAvailable(); ok {
+		fmt.Printf("正在从本机全局移除技能: %s\n", skillID)
+		resp, err := client.RemoveGlobalSkill(context.Background(), skillID, agents, force)
+		if err != nil {
+			return errors.Wrap(err, "通过服务移除全局技能失败")
+		}
+		renderGlobalRemoveResult(resp.Item)
+		return nil
+	}
+
+	if err := CheckInitDependency(); err != nil {
+		return err
+	}
+	fmt.Printf("正在从本机全局移除技能: %s\n", skillID)
+	result, err := globalservice.New().Remove(skillID, agents, force)
+	if err != nil {
+		return errors.Wrap(err, "移除全局技能失败")
+	}
+	renderGlobalRemoveResult(result)
+	return nil
 }
 
 func runRemove(skillID string) error {
@@ -76,6 +113,28 @@ func runRemove(skillID string) error {
 	fmt.Println("使用 'skill-hub status' 检查当前状态")
 
 	return nil
+}
+
+func renderGlobalRemoveResult(result *globalservice.RemoveResult) {
+	if result == nil {
+		fmt.Println("ℹ️  未返回移除结果")
+		return
+	}
+	for _, item := range result.Items {
+		switch item.Status {
+		case globalservice.StatusRemoved:
+			fmt.Printf("✓ 已移除 %s -> %s\n", item.SkillID, item.Agent)
+		case globalservice.StatusNotApplied, globalservice.StatusMissingAgentDir:
+			fmt.Printf("ℹ️  %s -> %s: %s\n", item.SkillID, item.Agent, item.Message)
+		case globalservice.StatusConflict:
+			fmt.Printf("⚠️  冲突 %s -> %s: %s\n", item.SkillID, item.Agent, item.Message)
+		case globalservice.StatusError:
+			fmt.Printf("❌ 失败 %s -> %s: %s\n", item.SkillID, item.Agent, item.Message)
+		default:
+			fmt.Printf("ℹ️  %s -> %s: %s\n", item.SkillID, item.Agent, item.Status)
+		}
+	}
+	fmt.Println("\n✅ 全局技能移除流程完成")
 }
 
 func inspectRemovalStatus(projectPath, skillID string) (*projectstatusservice.SkillStatusItem, error) {

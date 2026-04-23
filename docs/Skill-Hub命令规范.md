@@ -32,6 +32,8 @@ ${OPENCODE_HOME:-$HOME/.config/opencode}/skills
 
 * **工作区**：项目所属的工作目录。项目本地 Skill 统一使用 `.agents/skills/` 目录；历史 target 参数不再决定工作区结构。
 
+* **本机全局工作区**：`~/.skill-hub/global/skills/` 目录，以及当前机器已配置 agent 使用的全局 skills 目录。全局期望状态保存在 `~/.skill-hub/global-state.json`，实际 agent 目录通过 `.skill-hub-manifest.json` 标记 Skill-Hub 托管副本。
+
 * **本地仓库**：skill-hub使用的本地配置目录，采用多仓库架构，支持管理多个Git仓库。默认仓库为归档仓库，所有通过`feedback`命令修改的技能都会归档到默认仓库。
 
 * **多仓库架构**：skill-hub支持同时管理多个技能仓库，如个人仓库、社区仓库、官方仓库等。每个仓库可以独立启用、禁用、同步。
@@ -73,17 +75,23 @@ ${OPENCODE_HOME:-$HOME/.config/opencode}/skills
 | `validate` | 验证技能合规性 | `skill-hub validate <id> [--fix] [--links] [--json]` 或 `skill-hub validate --all [--fix] [--links] [--json]` |
 | `use` | 使用本地仓库里的指定技能 | `skill-hub use <id>` |
 
+补充：`use` / `remove` 支持 `--global [--agent codex|opencode|claude]`，用于本机全局 agent skills 目录；`list` 仍只表示本地仓库中的可用 skill 清单，不存在项目或全局 scope。
+
 
 ### 3.4. 技能状态
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `status` | 检查技能状态 | `skill-hub status [id] [--verbose] [--json]` |
 
+补充：`status --global [--agent codex|opencode|claude] [--json]` 会检查全局期望状态与当前机器实际 agent skills 目录是否一致。
+
 ### 3.5. 项目工作区-本地仓库交互
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `apply` | 应用技能到项目 | `skill-hub apply [--dry-run] [--force]` |
 | `feedback` | 将项目工作区技能修改内容更新至到本地仓库 | `skill-hub feedback <id> [--dry-run] [--force] [--json]` 或 `skill-hub feedback --all [--dry-run] [--force] [--json]` |
+
+补充：`apply [id] --global [--agent codex|opencode|claude] [--dry-run] [--force]` 会按 `global-state.json` 刷新本机 agent 全局 skills 目录。默认不覆盖没有 `.skill-hub-manifest.json` 的同名目录；`--force` 会先创建备份再覆盖。
 
 ### 3.6. 多仓库管理
 | 命令 | 功能描述 | 语法 |
@@ -461,7 +469,7 @@ skill-hub audit . --canonical .agents/skills --project-root "$PWD"
 
 ### 4.6 remove - 移除项目技能
 
-**语法**: `skill-hub remove <id>`
+**语法**: `skill-hub remove <id> [--global] [--agent codex|opencode|claude] [--force]`
 
 **参数**:
 - `id` (必需): 要移除的技能标识符。
@@ -479,10 +487,15 @@ skill-hub audit . --canonical .agents/skills --project-root "$PWD"
 
 **安全机制**: 如果检测到本地有未反馈的修改，会弹出警告并要求确认。
 
+使用 `--global` 时，命令不要求当前目录是项目工作区，而是从 `~/.skill-hub/global-state.json` 中移除对应 agent 的全局期望状态，并删除带有 `.skill-hub-manifest.json` 的 agent 全局 skill 目录。默认不会删除没有 Skill-Hub manifest 的同名目录；`--force` 才允许强制删除冲突目录。
+
 **示例**:
 ```bash
 # 移除 git-expert 技能
 skill-hub remove git-expert
+
+# 从 Codex 全局目录移除 git-expert
+skill-hub remove git-expert --global --agent codex
 ```
 
 ### 4.7 validate - 验证技能合规性
@@ -533,7 +546,7 @@ skill-hub validate --all --links --json
 
 ### 4.8 use - 使用技能
 
-**语法**: `skill-hub use <id>`
+**语法**: `skill-hub use <id> [--global] [--agent codex|opencode|claude]`
 
 **参数**:
 - `id` (必需): 要启用的技能标识符。
@@ -541,6 +554,8 @@ skill-hub validate --all --links --json
 **功能描述**:
 
 将技能标记为在当前项目中使用。此命令仅更新 `state.json` 中的技能记录，不直接修改项目文件，不写入 target。需要通过 `apply` 命令进行物理分发。
+
+使用 `--global` 时，命令会将技能写入 `~/.skill-hub/global-state.json`，表示用户希望该 skill 对指定 agent 在本机全局有效。未传 `--agent` 时会根据当前机器已检测到或已配置的 agent 目录选择目标；显式传入 `--agent` 可重复指定。
 
 使用前应先通过 `list` 和/或 `search` 检查是否存在适合当前项目和任务的已管理技能。只有当候选技能明确匹配时才执行 `use`；如果没有合适技能，应继续当前任务或创建新技能，不应猜测无关技能 ID。
 
@@ -562,11 +577,14 @@ skill-hub list
 skill-hub search git
 skill-hub use git-expert
 
+# 启用为本机全局 Codex skill
+skill-hub use git-expert --global --agent codex
+
 ```
 
 ### 4.9 status - 检查技能状态
 
-**语法**: `skill-hub status [id] [--verbose] [--json]`
+**语法**: `skill-hub status [id] [--verbose] [--json] [--global] [--agent codex|opencode|claude]`
 
 **参数**:
 - `id` (可选): 特定技能的标识符。如未提供，检查所有技能。
@@ -574,6 +592,8 @@ skill-hub use git-expert
 **选项**:
 - `--verbose`: 显示详细差异信息。
 - `--json`: 以机器可读 JSON 输出状态摘要，字段包含 `skill_id`、`status`、`local_version`、`repo_version`、`local_path`、`repo_path`、`source_repository` 等。
+- `--global`: 检查本机全局期望状态与实际 agent skills 目录是否一致。
+- `--agent`: 限制全局检查的 agent，可重复使用。仅在 `--global` 下生效。
 
 **功能描述**:
 
@@ -583,9 +603,19 @@ skill-hub use git-expert
 - `Outdated`: 仓库版本领先于本地
 - `Missing`: 技能已启用但本地文件缺失
 
+使用 `--global` 时，状态语义切换为全局一致性检查：
+- `ok`: `global-state.json`、来源仓库与 agent 全局目录一致
+- `not_applied`: 已全局启用但尚未写入 agent 目录
+- `modified`: agent 目录中的 Skill-Hub 托管副本被手动修改
+- `stale`: 来源仓库内容已变化，agent 目录需要刷新
+- `conflict`: agent 目录存在同名但非 Skill-Hub 托管目录
+- `orphaned`: agent 目录存在 Skill-Hub manifest，但全局状态已不再记录
+- `missing_agent_dir`: agent skills 目录不存在
+
 当前实现补充：
 
 - 当本地服务模式可用时，CLI 会优先通过服务桥接执行
+- 当显式指定的全局 skill 尚未启用，或 `--agent` 与该 skill 的全局启用目标不匹配时，返回 `SKILL_NOT_FOUND`，不再输出空状态摘要
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
@@ -604,24 +634,33 @@ skill-hub status --verbose
 
 # 输出机器可读状态
 skill-hub status --json
+
+# 检查本机全局技能一致性
+skill-hub status --global
+skill-hub status git-expert --global --agent codex
 ```
 
 ### 4.10 apply - 应用技能到项目工作区
 
-**语法**: `skill-hub apply [--dry-run] [--force]`
+**语法**: `skill-hub apply [id] [--dry-run] [--force] [--global] [--agent codex|opencode|claude]`
 
 **选项**:
 - `--dry-run`: 演习模式，仅显示将要执行的变更，不实际修改文件。
 - `--force`: 强制应用，即使检测到冲突也继续执行。
+- `--global`: 按 `global-state.json` 刷新本机 agent 全局 skills 目录。
+- `--agent`: 限制全局刷新的 agent，可重复使用。仅在 `--global` 下生效。
 
 **功能描述**:
 
 根据 `state.json` 中的启用记录，将技能物理分发到标准项目工作区 `.agents/skills/<id>/`。历史 target 不参与分发路径选择。
 
+使用 `--global` 时，命令会从来源仓库刷新 `~/.skill-hub/global/skills/<id>/` 镜像，再同步到目标 agent 全局 skills 目录。写入 agent 目录时会生成 `.skill-hub-manifest.json`；同名目录存在但没有 manifest 时默认报告 `conflict`，不会覆盖，除非用户显式提供 `--force`。`--force` 覆盖前会创建 `*.skill-hub-backup.<timestamp>` 备份。
+
 当前实现补充：
 
 - 当本地服务模式可用时，CLI 会优先通过服务桥接执行
 - 服务端负责实际适配器调用和项目文件分发
+- 当显式指定的全局 skill 尚未启用，或 `--agent` 与该 skill 的全局启用目标不匹配时，返回 `SKILL_NOT_FOUND`，不会静默跳过刷新
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
 
@@ -634,6 +673,11 @@ skill-hub apply
 
 # 演习模式查看将要进行的变更
 skill-hub apply --dry-run
+
+# 预览和刷新本机全局技能
+skill-hub apply --global --dry-run
+skill-hub apply --global
+skill-hub apply git-expert --global --agent codex
 ```
 
 ### 4.11 feedback - 将项目工作区里技能修改更新至本地仓库
@@ -1110,6 +1154,7 @@ skill-hub repo sync --json
 - `validate`
 - `audit`
 - `apply`
+- `remove --global`
 - `feedback`
 - `pull`
 - `push`
@@ -1121,7 +1166,7 @@ skill-hub repo sync --json
 
 - `init`
 - `create`
-- `remove`
+- `remove` 的项目模式
 - `prune`
 - `git` 的交互式或非 JSON 子命令
 
@@ -1157,3 +1202,4 @@ skill-hub repo sync --json
 | 1.25 | 2026-04-20 | 弱化 Skill `compatibility` 处理，列表/搜索/Web UI 不再按兼容性硬过滤 |
 | 1.26 | 2026-04-20 | `target` 降级为兼容输入，Web UI 不再展示目标选择，项目业务统一使用 `.agents/skills` |
 | 1.27 | 2026-04-20 | `serve --secret-key` 收口为远端推送保护，未配置时允许仓库拉取/同步，仅禁止默认仓库 push |
+| 1.28 | 2026-04-23 | 增加 `use/apply/status/remove --global` 本机全局技能状态、agent 目录检查刷新、服务桥接和 manifest 冲突保护 |

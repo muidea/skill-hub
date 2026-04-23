@@ -2,6 +2,7 @@ package biz
 
 import (
 	"github.com/muidea/skill-hub/internal/config"
+	globalservice "github.com/muidea/skill-hub/internal/modules/kernel/global/service"
 	projectapplyservice "github.com/muidea/skill-hub/internal/modules/kernel/project_apply/service"
 	projectfeedbackservice "github.com/muidea/skill-hub/internal/modules/kernel/project_feedback/service"
 	projectinventoryservice "github.com/muidea/skill-hub/internal/modules/kernel/project_inventory/service"
@@ -126,6 +127,17 @@ type UseSkillData struct {
 	Item *projectuseservice.UseResult `json:"item"`
 }
 
+type UseGlobalSkillRequest struct {
+	SkillID    string            `json:"skill_id"`
+	Repository string            `json:"repository,omitempty"`
+	Agents     []string          `json:"agents,omitempty"`
+	Variables  map[string]string `json:"variables,omitempty"`
+}
+
+type UseGlobalSkillData struct {
+	Item *globalservice.UseResult `json:"item"`
+}
+
 type RegisterSkillRequest struct {
 	ProjectPath  string `json:"project_path"`
 	SkillID      string `json:"skill_id"`
@@ -195,6 +207,25 @@ type ApplyProjectRequest struct {
 
 type ApplyProjectData struct {
 	Item *projectapplyservice.ApplyResult `json:"item"`
+}
+
+type GlobalStatusData struct {
+	Item *globalservice.StatusSummary `json:"item"`
+}
+
+type ApplyGlobalRequest struct {
+	SkillID string   `json:"skill_id,omitempty"`
+	Agents  []string `json:"agents,omitempty"`
+	DryRun  bool     `json:"dry_run"`
+	Force   bool     `json:"force"`
+}
+
+type ApplyGlobalData struct {
+	Item *globalservice.ApplyResult `json:"item"`
+}
+
+type RemoveGlobalSkillData struct {
+	Item *globalservice.RemoveResult `json:"item"`
 }
 
 type FeedbackRequest struct {

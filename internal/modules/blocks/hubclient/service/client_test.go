@@ -10,6 +10,7 @@ import (
 
 	"github.com/muidea/skill-hub/internal/config"
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
+	globalservice "github.com/muidea/skill-hub/internal/modules/kernel/global/service"
 	projectapplyservice "github.com/muidea/skill-hub/internal/modules/kernel/project_apply/service"
 	projectfeedbackservice "github.com/muidea/skill-hub/internal/modules/kernel/project_feedback/service"
 	projectstatusservice "github.com/muidea/skill-hub/internal/modules/kernel/project_status/service"
@@ -121,6 +122,17 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 						},
 					},
 				}), nil
+			case "/api/v1/global-skills/use":
+				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.UseGlobalSkillData]{
+					Code: httpapibiz.CodeOK,
+					Data: httpapibiz.UseGlobalSkillData{
+						Item: &globalservice.UseResult{
+							SkillID:    "demo",
+							Repository: "main",
+							Agents:     []string{"codex"},
+						},
+					},
+				}), nil
 			case "/api/v1/project-apply":
 				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.ApplyProjectData]{
 					Code: httpapibiz.CodeOK,
@@ -130,6 +142,57 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 							DryRun:      true,
 							Items: []projectapplyservice.ApplyResultItem{
 								{SkillID: "demo", Status: "planned", Variables: 1},
+							},
+						},
+					},
+				}), nil
+			case "/api/v1/global-status":
+				if got := req.URL.Query().Get("skill_id"); got != "demo" {
+					t.Fatalf("expected global status skill_id demo, got %q", got)
+				}
+				if got := req.URL.Query().Get("agent"); got != "codex" {
+					t.Fatalf("expected global status agent codex, got %q", got)
+				}
+				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.GlobalStatusData]{
+					Code: httpapibiz.CodeOK,
+					Data: httpapibiz.GlobalStatusData{
+						Item: &globalservice.StatusSummary{
+							Scope:      "global",
+							SkillCount: 1,
+							Items: []globalservice.StatusItem{
+								{SkillID: "demo", Agent: "codex", Status: globalservice.StatusOK},
+							},
+						},
+					},
+				}), nil
+			case "/api/v1/global-apply":
+				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.ApplyGlobalData]{
+					Code: httpapibiz.CodeOK,
+					Data: httpapibiz.ApplyGlobalData{
+						Item: &globalservice.ApplyResult{
+							Scope:  "global",
+							DryRun: true,
+							Items: []globalservice.StatusItem{
+								{SkillID: "demo", Agent: "codex", Status: globalservice.StatusPlanned},
+							},
+						},
+					},
+				}), nil
+			case "/api/v1/global-skills/demo":
+				if got := req.URL.Query().Get("agent"); got != "codex" {
+					t.Fatalf("expected remove global agent codex, got %q", got)
+				}
+				if got := req.URL.Query().Get("force"); got != "true" {
+					t.Fatalf("expected remove global force true, got %q", got)
+				}
+				return jsonResponse(http.StatusOK, httpapibiz.Response[httpapibiz.RemoveGlobalSkillData]{
+					Code: httpapibiz.CodeOK,
+					Data: httpapibiz.RemoveGlobalSkillData{
+						Item: &globalservice.RemoveResult{
+							Scope:   "global",
+							SkillID: "demo",
+							Items: []globalservice.StatusItem{
+								{SkillID: "demo", Agent: "codex", Status: globalservice.StatusRemoved},
 							},
 						},
 					},
@@ -221,6 +284,18 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 		t.Fatalf("unexpected use response: %+v", useResp)
 	}
 
+	useGlobalResp, err := client.UseGlobalSkill(ctx, httpapibiz.UseGlobalSkillRequest{
+		SkillID:    "demo",
+		Repository: "main",
+		Agents:     []string{"codex"},
+	})
+	if err != nil {
+		t.Fatalf("UseGlobalSkill returned error: %v", err)
+	}
+	if useGlobalResp.Item == nil || len(useGlobalResp.Item.Agents) != 1 || useGlobalResp.Item.Agents[0] != "codex" {
+		t.Fatalf("unexpected use global response: %+v", useGlobalResp)
+	}
+
 	applyResp, err := client.ApplyProject(ctx, httpapibiz.ApplyProjectRequest{
 		ProjectPath: "/tmp/project",
 		DryRun:      true,
@@ -230,6 +305,34 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 	}
 	if applyResp.Item == nil || len(applyResp.Item.Items) != 1 || applyResp.Item.Items[0].Status != "planned" {
 		t.Fatalf("unexpected apply response: %+v", applyResp)
+	}
+
+	globalStatus, err := client.GetGlobalStatus(ctx, "demo", []string{"codex"})
+	if err != nil {
+		t.Fatalf("GetGlobalStatus returned error: %v", err)
+	}
+	if globalStatus.Item == nil || len(globalStatus.Item.Items) != 1 || globalStatus.Item.Items[0].Status != globalservice.StatusOK {
+		t.Fatalf("unexpected global status response: %+v", globalStatus)
+	}
+
+	globalApply, err := client.ApplyGlobal(ctx, httpapibiz.ApplyGlobalRequest{
+		SkillID: "demo",
+		Agents:  []string{"codex"},
+		DryRun:  true,
+	})
+	if err != nil {
+		t.Fatalf("ApplyGlobal returned error: %v", err)
+	}
+	if globalApply.Item == nil || len(globalApply.Item.Items) != 1 || globalApply.Item.Items[0].Status != globalservice.StatusPlanned {
+		t.Fatalf("unexpected global apply response: %+v", globalApply)
+	}
+
+	globalRemove, err := client.RemoveGlobalSkill(ctx, "demo", []string{"codex"}, true)
+	if err != nil {
+		t.Fatalf("RemoveGlobalSkill returned error: %v", err)
+	}
+	if globalRemove.Item == nil || len(globalRemove.Item.Items) != 1 || globalRemove.Item.Items[0].Status != globalservice.StatusRemoved {
+		t.Fatalf("unexpected global remove response: %+v", globalRemove)
 	}
 
 	feedbackPreview, err := client.PreviewFeedback(ctx, httpapibiz.FeedbackRequest{

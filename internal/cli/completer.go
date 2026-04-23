@@ -147,6 +147,10 @@ func completeServeNames(cmd *cobra.Command, args []string, toComplete string) ([
 	return filterPrefix(names, toComplete), shellCompNoFile
 }
 
+func completeAgentNames(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return filterPrefix([]string{"codex", "opencode", "claude"}, toComplete), shellCompNoFile
+}
+
 func readSkillCompletionCache(key string) []string {
 	skillCompletionCache.mu.Lock()
 	defer skillCompletionCache.mu.Unlock()

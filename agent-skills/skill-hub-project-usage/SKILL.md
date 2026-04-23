@@ -1,11 +1,11 @@
 ---
 name: skill-hub-project-usage
-description: "Use when helping an application or business project consume skills already managed by skill-hub. Guides agents through initializing the project, syncing repositories, listing/searching managed skills before use, selecting a suitable skill only when one exists, enabling skills with use, applying them to .agents/skills, checking status, and feeding project-local improvements back to the local skill repository without pushing remotely unless explicitly requested."
+description: "Use when helping an application or business project consume skills already managed by skill-hub, or when enabling managed skills globally on this machine for Codex, OpenCode, or Claude. Guides agents through initializing the project when needed, syncing repositories, listing/searching managed skills before use, selecting a suitable skill only when one exists, enabling skills with use or use --global, applying them to .agents/skills or agent global skills directories, checking status, and feeding project-local improvements back to the local skill repository without pushing remotely unless explicitly requested."
 compatibility: "Designed for Claude Code, Cursor, OpenCode, and other AI coding assistants using skill-hub"
 metadata:
   author: skill-hub Team
   tags: skill-hub,project-usage,skills,apply,use
-  version: 1.0.1
+  version: 1.0.2
 ---
 
 # Skill Hub Project Usage
@@ -20,6 +20,10 @@ This is a consumer workflow. If the task is to create or maintain the reusable s
 - `use` records selected skills in project state.
 - `apply` copies enabled skills into the project workspace.
 - `status` shows whether project skill copies match the repository versions.
+- `use --global` records selected skills in `~/.skill-hub/global-state.json`.
+- `apply --global` refreshes `~/.skill-hub/global/skills/` and configured agent global skills directories.
+- `status --global` checks global desired state, source repository content, target agent directories, and `.skill-hub-manifest.json`.
+- `remove --global` removes global desired state and only deletes Skill-Hub managed global skill directories unless `--force` is explicit.
 - `feedback` can archive project-local improvements back to the local default skill repository.
 - `push` is the only remote publication step and must be explicit.
 - Discovery comes before selection: run `list` and/or `search` before `use`, and only run `use` after confirming a suitable managed skill exists.
@@ -66,6 +70,47 @@ Use dry-run if the user wants to preview file changes:
 skill-hub apply --dry-run
 ```
 
+## Machine-Global Usage Flow
+
+Use global mode when the user wants a managed skill available to an agent outside one project workspace.
+
+Discover first:
+
+```bash
+skill-hub list
+skill-hub search <keyword>
+```
+
+Enable globally only after selecting a suitable managed skill:
+
+```bash
+skill-hub use <skill-id> --global --agent codex
+```
+
+Inspect and preview before writing agent global directories:
+
+```bash
+skill-hub status --global
+skill-hub status <skill-id> --global --agent codex
+skill-hub apply --global --dry-run
+```
+
+Apply after preview:
+
+```bash
+skill-hub apply --global
+```
+
+Remove global usage when requested:
+
+```bash
+skill-hub remove <skill-id> --global --agent codex
+```
+
+Use `--agent codex`, `--agent opencode`, or `--agent claude` to scope global operations. If no agent is specified, skill-hub uses detected or configured agents. If `status --global <skill-id>` or `apply <skill-id> --global` reports `SKILL_NOT_FOUND`, the skill is not globally enabled for the requested agent; do not treat an empty result as success.
+
+Do not use `--force` unless the user explicitly accepts overwriting a same-name global skill directory that is not managed by Skill-Hub. `--force` creates a backup before replacing conflicts.
+
 ## Selecting Skills
 
 Before enabling anything, inspect available managed skills:
@@ -77,7 +122,7 @@ skill-hub search <keyword>
 
 Use `list` to see the available managed skill inventory. Use `search` with project, domain, language, framework, tool, or workflow keywords to narrow candidates.
 
-Only run `skill-hub use <skill-id>` when a listed or searched skill clearly matches the current task. If no suitable skill exists, tell the user that no managed skill matched and continue without `use`; do not guess an unrelated skill ID.
+Only run `skill-hub use <skill-id>` or `skill-hub use <skill-id> --global` when a listed or searched skill clearly matches the current task. If no suitable skill exists, tell the user that no managed skill matched and continue without `use`; do not guess an unrelated skill ID.
 
 When multiple repositories contain the same skill ID, choose based on project intent and repository source. Ask the user when the right repository is ambiguous.
 

@@ -735,6 +735,7 @@ type fakeServiceBridgeClient struct {
 	findSkillCandidatesFn   func(context.Context, string) ([]spec.SkillMetadata, error)
 	getSkillDetailFn        func(context.Context, string, string) (*spec.Skill, error)
 	useSkillFn              func(context.Context, httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error)
+	useGlobalSkillFn        func(context.Context, httpapibiz.UseGlobalSkillRequest) (*httpapibiz.UseGlobalSkillData, error)
 	registerSkillFn         func(context.Context, httpapibiz.RegisterSkillRequest) (*httpapibiz.RegisterSkillData, error)
 	importSkillsFn          func(context.Context, httpapibiz.ImportSkillsRequest) (*httpapibiz.ImportSkillsData, error)
 	dedupeSkillsFn          func(context.Context, httpapibiz.DedupeRequest) (*httpapibiz.DedupeData, error)
@@ -743,6 +744,9 @@ type fakeServiceBridgeClient struct {
 	validateProjectSkillsFn func(context.Context, httpapibiz.ValidateProjectSkillsRequest) (*httpapibiz.ValidateProjectSkillsData, error)
 	auditProjectSkillsFn    func(context.Context, httpapibiz.AuditProjectSkillsRequest) (*httpapibiz.AuditProjectSkillsData, error)
 	applyProjectFn          func(context.Context, httpapibiz.ApplyProjectRequest) (*httpapibiz.ApplyProjectData, error)
+	getGlobalStatusFn       func(context.Context, string, []string) (*httpapibiz.GlobalStatusData, error)
+	applyGlobalFn           func(context.Context, httpapibiz.ApplyGlobalRequest) (*httpapibiz.ApplyGlobalData, error)
+	removeGlobalSkillFn     func(context.Context, string, []string, bool) (*httpapibiz.RemoveGlobalSkillData, error)
 	previewFeedbackFn       func(context.Context, httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error)
 	applyFeedbackFn         func(context.Context, httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error)
 }
@@ -856,6 +860,12 @@ func (f *fakeServiceBridgeClient) UseSkill(ctx context.Context, req httpapibiz.U
 	}
 	return &httpapibiz.UseSkillData{}, nil
 }
+func (f *fakeServiceBridgeClient) UseGlobalSkill(ctx context.Context, req httpapibiz.UseGlobalSkillRequest) (*httpapibiz.UseGlobalSkillData, error) {
+	if f.useGlobalSkillFn != nil {
+		return f.useGlobalSkillFn(ctx, req)
+	}
+	return &httpapibiz.UseGlobalSkillData{}, nil
+}
 func (f *fakeServiceBridgeClient) RegisterSkill(ctx context.Context, req httpapibiz.RegisterSkillRequest) (*httpapibiz.RegisterSkillData, error) {
 	if f.registerSkillFn != nil {
 		return f.registerSkillFn(ctx, req)
@@ -903,6 +913,24 @@ func (f *fakeServiceBridgeClient) ApplyProject(ctx context.Context, req httpapib
 		return f.applyProjectFn(ctx, req)
 	}
 	return &httpapibiz.ApplyProjectData{}, nil
+}
+func (f *fakeServiceBridgeClient) GetGlobalStatus(ctx context.Context, skillID string, agents []string) (*httpapibiz.GlobalStatusData, error) {
+	if f.getGlobalStatusFn != nil {
+		return f.getGlobalStatusFn(ctx, skillID, agents)
+	}
+	return &httpapibiz.GlobalStatusData{}, nil
+}
+func (f *fakeServiceBridgeClient) ApplyGlobal(ctx context.Context, req httpapibiz.ApplyGlobalRequest) (*httpapibiz.ApplyGlobalData, error) {
+	if f.applyGlobalFn != nil {
+		return f.applyGlobalFn(ctx, req)
+	}
+	return &httpapibiz.ApplyGlobalData{}, nil
+}
+func (f *fakeServiceBridgeClient) RemoveGlobalSkill(ctx context.Context, skillID string, agents []string, force bool) (*httpapibiz.RemoveGlobalSkillData, error) {
+	if f.removeGlobalSkillFn != nil {
+		return f.removeGlobalSkillFn(ctx, skillID, agents, force)
+	}
+	return &httpapibiz.RemoveGlobalSkillData{}, nil
 }
 func (f *fakeServiceBridgeClient) PreviewFeedback(ctx context.Context, req httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error) {
 	if f.previewFeedbackFn != nil {

@@ -40,16 +40,19 @@ skill-hub serve remove local
 2. **项目本地工作区**：`<project>/.agents/skills/`
    承接当前项目实际使用的 skill 内容，是项目侧的工作目录。
 
-3. **来源仓库**
+3. **本机全局工作区**：`~/.skill-hub/global/skills/`
+   承接通过 `--global` 启用的本机级 skill 镜像。`apply --global` 会在此基础上刷新本机已配置的 agent 全局 skills 目录，例如 Codex、OpenCode、Claude。
+
+4. **来源仓库**
    指某个 skill 在 `use` 时选中的仓库。它决定 `apply` 的读取来源，以及 `status` 的上游对比基线。
 
-4. **默认仓库**
+5. **默认仓库**
    指当前配置中的默认仓库，同时也是归档仓库。`feedback` 只归档到默认仓库，`pull` / `push` 默认也只操作默认仓库。
 
-5. **多仓库管理**
+6. **多仓库管理**
    指 `~/.skill-hub/` 下多个本地仓库的配置、启停、默认仓库切换和同步能力。
 
-6. **服务实例**
+7. **服务实例**
    指 `skill-hub serve` 启动的本地服务。它托管 `~/.skill-hub/`，为 Web 管理和 CLI 复用提供统一执行入口。
 
 ## 项目结构
@@ -88,6 +91,8 @@ go build -o bin/skill-hub ./application/skill-hub/cmd
 - **技能管理**：查看、启用、禁用技能
 - **技能创建**：从当前项目创建新的技能模板
 - **已有技能登记**：将 `.agents/skills/<id>/SKILL.md` 中的存量技能登记到项目状态
+- **本机全局启用**：通过 `--global` 将技能按需应用到本机 agent 全局 skills 目录
+- **Agent 一致性检查**：根据当前机器实际配置的 Codex、OpenCode、Claude 全局目录检查、刷新 skill
 - **批量导入**：扫描 `.agents/skills/*/SKILL.md`，批量登记、修复、验证并可选归档
 - **重复检测与副本同步**：扫描嵌套项目中的同 ID 技能副本，报告冲突，并可从 canonical 目录同步副本
 - **本地验证**：校验项目本地 skill 是否符合规范，并可用 `--fix` 修复 legacy frontmatter
@@ -109,11 +114,12 @@ go build -o bin/skill-hub ./application/skill-hub/cmd
 
 其中：
 
-- `create` / `remove` 只作用于项目本地工作区，不参与服务化托管
+- `create` 只作用于项目本地工作区，不参与服务化托管；`remove` 默认移除项目技能，带 `--global` 时移除本机全局技能
 - `search` 面向远端能力；当本地 `serve` 实例可用时优先通过服务承接远端交互，不可用时回退到本地执行
 - `repo *` 面向 `~/.skill-hub/` 下的多仓库管理
 - `prune` 用于清理 `state.json` 中因项目目录移动、删除而残留的失效项目记录
 - `use` / `status` / `apply` / `feedback` / `pull` / `push` 都服务于项目工作流，但会依赖全局管理目录中的仓库与状态信息
+- `use --global` / `status --global` / `apply --global` / `remove --global` 服务于本机全局 agent skills 目录；`list` 始终表示仓库可用技能清单，不区分项目或全局作用域
 - `register` / `import` / `dedupe` / `sync-copies` / `lint --paths` / `validate` / `audit` / `pull` / `push` 在本地 `serve` 实例可用时会优先通过服务桥接执行；涉及项目路径的命令会把路径解析为绝对路径再交给服务端，避免 `serve` 进程工作目录不同导致误扫或误改
 
 ## 🚀 快速开始
@@ -154,6 +160,24 @@ skill-hub use git-expert
 # 5. 应用已启用技能到项目
 skill-hub apply
 ```
+
+#### 本机全局启用流程
+```bash
+# 将技能加入本机全局期望状态，可重复指定 agent
+skill-hub use git-expert --global --agent codex
+
+# 检查 Skill-Hub 期望状态与当前机器 agent 全局 skills 目录是否一致
+skill-hub status --global
+
+# 预览刷新动作
+skill-hub apply --global --dry-run
+
+# 刷新本机 agent 全局 skills 目录
+skill-hub apply --global
+```
+
+全局状态记录在 `~/.skill-hub/global-state.json`，表示用户希望哪些 skill 对哪些 agent 全局有效。实际写入的 agent 目录会包含 `.skill-hub-manifest.json`，用于区分 Skill-Hub 托管目录和用户手写目录；遇到同名但没有 manifest 的目录时默认报告冲突，只有显式 `--force` 才会备份并覆盖。
+当 `status --global <id>` 或 `apply <id> --global` 显式指定的技能尚未全局启用，或指定的 `--agent` 并未启用该技能时，命令会返回明确错误，避免把遗留空状态误判为已完成。
 
 #### 技能创建与验证流程
 ```bash
@@ -296,11 +320,11 @@ skill-hub prune
 | `sync-copies` | `--canonical <dir> [--scope <dir>] [--dry-run] [--no-backup] [--json]` | 从 canonical 目录同步同 ID 技能副本 |
 | `lint` | `[scope] --paths [--project-root <dir>] [--fix] [--dry-run] [--no-backup] [--json]` | 审计并可修复技能内容中的本机路径 |
 | `audit` | `[scope] [--output <file>] [--format markdown\|json] [--canonical <dir>] [--project-root <dir>]` | 生成技能刷新审计报告 |
-| `remove` | `<id>` | 移除项目技能 |
+| `remove` | `<id> [--global] [--agent codex\|opencode\|claude] [--force]` | 移除项目技能；`--global` 时移除本机全局技能 |
 | `validate` | `<id> [--fix] [--links] [--json]` 或 `--all [--fix] [--links] [--json]` | 验证项目工作区 skill 的合规性，可修复 legacy frontmatter 并检查本地 Markdown 链接 |
-| `use` | `<id>` | 使用指定技能，仅更新项目状态 |
-| `status` | `[id] [--verbose] [--json]` | 检查技能状态；`--json` 便于CI和脚本处理 |
-| `apply` | `[--dry-run] [--force]` | 应用技能到项目 |
+| `use` | `<id> [--global] [--agent codex\|opencode\|claude]` | 使用指定技能；`--global` 时写入本机全局期望状态 |
+| `status` | `[id] [--verbose] [--json] [--global] [--agent codex\|opencode\|claude]` | 检查项目或本机全局技能状态；`--json` 便于CI和脚本处理 |
+| `apply` | `[id] [--dry-run] [--force] [--global] [--agent codex\|opencode\|claude]` | 应用技能到项目；`--global` 时刷新本机 agent 全局 skills 目录 |
 | `feedback` | `<id> [--dry-run] [--force] [--json]` 或 `--all [--dry-run] [--force] [--json]` | 反馈单个或全部已登记技能修改到默认仓库 |
 | `prune` | `无` | 清理 state.json 中失效的项目记录 |
 | `pull` | `[--force] [--check] [--json]` | 拉取默认仓库的远程更新 |

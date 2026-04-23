@@ -9,6 +9,7 @@ import (
 
 	"github.com/muidea/skill-hub/internal/config"
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
+	globalservice "github.com/muidea/skill-hub/internal/modules/kernel/global/service"
 	projectapplymodule "github.com/muidea/skill-hub/internal/modules/kernel/project_apply"
 	projectfeedbackmodule "github.com/muidea/skill-hub/internal/modules/kernel/project_feedback"
 	projectinventorymodule "github.com/muidea/skill-hub/internal/modules/kernel/project_inventory"
@@ -25,6 +26,7 @@ type HTTPAPI struct {
 	useSvc       *projectusemodule.ProjectUse
 	applySvc     *projectapplymodule.ProjectApply
 	feedbackSvc  *projectfeedbackmodule.ProjectFeedback
+	globalSvc    *globalservice.Global
 }
 
 func New() *HTTPAPI {
@@ -35,6 +37,7 @@ func New() *HTTPAPI {
 		useSvc:       projectusemodule.New(),
 		applySvc:     projectapplymodule.New(),
 		feedbackSvc:  projectfeedbackmodule.New(),
+		globalSvc:    globalservice.New(),
 	}
 }
 
@@ -65,6 +68,10 @@ func (h *HTTPAPI) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/project-apply", h.handleApplyProject)
 	mux.HandleFunc("/api/v1/project-feedback/preview", h.handlePreviewFeedback)
 	mux.HandleFunc("/api/v1/project-feedback/apply", h.handleApplyFeedback)
+	mux.HandleFunc("/api/v1/global-status", h.handleGlobalStatus)
+	mux.HandleFunc("/api/v1/global-skills/use", h.handleUseGlobalSkill)
+	mux.HandleFunc("/api/v1/global-skills/", h.handleGlobalSkillActions)
+	mux.HandleFunc("/api/v1/global-apply", h.handleApplyGlobal)
 	return mux
 }
 
@@ -766,6 +773,104 @@ func (h *HTTPAPI) handleApplyProject(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *HTTPAPI) handleGlobalStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	skillID := strings.TrimSpace(r.URL.Query().Get("skill_id"))
+	agents := parseAgentQuery(r.URL.Query())
+	result, err := h.globalSvc.Inspect(skillID, agents)
+	if err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.GlobalStatusData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.GlobalStatusData{Item: result},
+	})
+}
+
+func (h *HTTPAPI) handleUseGlobalSkill(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.UseGlobalSkillRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+	if strings.TrimSpace(req.SkillID) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 skill_id")
+		return
+	}
+
+	result, err := h.globalSvc.EnableSkill(req.SkillID, req.Repository, req.Agents, req.Variables)
+	if err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.UseGlobalSkillData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.UseGlobalSkillData{Item: result},
+	})
+}
+
+func (h *HTTPAPI) handleApplyGlobal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	var req httpapibiz.ApplyGlobalRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_JSON", "请求体格式无效")
+		return
+	}
+
+	result, err := h.globalSvc.Apply(req.SkillID, req.Agents, req.DryRun, req.Force)
+	if err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.ApplyGlobalData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.ApplyGlobalData{Item: result},
+	})
+}
+
+func (h *HTTPAPI) handleGlobalSkillActions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
+		return
+	}
+
+	prefix := "/api/v1/global-skills/"
+	skillID, err := url.PathUnescape(strings.TrimPrefix(r.URL.Path, prefix))
+	if err != nil || strings.TrimSpace(skillID) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "缺少 skill_id")
+		return
+	}
+
+	force := strings.EqualFold(r.URL.Query().Get("force"), "true") || r.URL.Query().Get("force") == "1"
+	result, err := h.globalSvc.Remove(skillID, parseAgentQuery(r.URL.Query()), force)
+	if err != nil {
+		writeWrappedError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, httpapibiz.Response[httpapibiz.RemoveGlobalSkillData]{
+		Code: httpapibiz.CodeOK,
+		Data: httpapibiz.RemoveGlobalSkillData{Item: result},
+	})
+}
+
 func (h *HTTPAPI) handlePreviewFeedback(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "方法不支持")
@@ -843,6 +948,19 @@ func isSkillRepositoryChangeLine(line string) bool {
 		}
 	}
 	return false
+}
+
+func parseAgentQuery(values url.Values) []string {
+	var agents []string
+	for _, raw := range values["agent"] {
+		for _, part := range strings.Split(raw, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				agents = append(agents, part)
+			}
+		}
+	}
+	return agents
 }
 
 func sameStringSet(left, right []string) bool {

@@ -191,6 +191,76 @@ func TestHTTPAPI_UseSkillRequiresBodyFields(t *testing.T) {
 	}
 }
 
+func TestHTTPAPI_GlobalEndpoints(t *testing.T) {
+	config.ResetForTest()
+	defer config.ResetForTest()
+
+	homeDir := t.TempDir()
+	t.Setenv("SKILL_HUB_HOME", homeDir)
+	t.Setenv("CODEX_SKILLS_DIR", filepath.Join(homeDir, "codex", "skills"))
+
+	writeHTTPAPITestConfig(t, homeDir)
+	writeHTTPAPITestSkill(t, homeDir, "main", "demo-skill")
+
+	useReq := httptest.NewRequest(http.MethodPost, "/api/v1/global-skills/use", bytes.NewBufferString(`{"skill_id":"demo-skill","repository":"main","agents":["codex"]}`))
+	useRec := httptest.NewRecorder()
+	New().Handler().ServeHTTP(useRec, useReq)
+	if useRec.Code != http.StatusOK {
+		t.Fatalf("expected use global 200, got %d body=%s", useRec.Code, useRec.Body.String())
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/v1/global-status?skill_id=demo-skill&agent=codex", nil)
+	statusRec := httptest.NewRecorder()
+	New().Handler().ServeHTTP(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("expected global status 200, got %d body=%s", statusRec.Code, statusRec.Body.String())
+	}
+	var statusResp httpapibiz.Response[httpapibiz.GlobalStatusData]
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &statusResp); err != nil {
+		t.Fatalf("unmarshal global status: %v", err)
+	}
+	if statusResp.Data.Item == nil || len(statusResp.Data.Item.Items) != 1 {
+		t.Fatalf("unexpected global status payload: %+v", statusResp)
+	}
+
+	applyReq := httptest.NewRequest(http.MethodPost, "/api/v1/global-apply", bytes.NewBufferString(`{"skill_id":"demo-skill","agents":["codex"],"dry_run":true}`))
+	applyRec := httptest.NewRecorder()
+	New().Handler().ServeHTTP(applyRec, applyReq)
+	if applyRec.Code != http.StatusOK {
+		t.Fatalf("expected global apply 200, got %d body=%s", applyRec.Code, applyRec.Body.String())
+	}
+
+	removeReq := httptest.NewRequest(http.MethodDelete, "/api/v1/global-skills/demo-skill?agent=codex", nil)
+	removeRec := httptest.NewRecorder()
+	New().Handler().ServeHTTP(removeRec, removeReq)
+	if removeRec.Code != http.StatusOK {
+		t.Fatalf("expected global remove 200, got %d body=%s", removeRec.Code, removeRec.Body.String())
+	}
+}
+
+func TestHTTPAPI_GlobalExplicitUnknownSkillReturnsNotFound(t *testing.T) {
+	config.ResetForTest()
+	defer config.ResetForTest()
+
+	homeDir := t.TempDir()
+	t.Setenv("SKILL_HUB_HOME", homeDir)
+	writeHTTPAPITestConfig(t, homeDir)
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/v1/global-status?skill_id=missing-skill", nil)
+	statusRec := httptest.NewRecorder()
+	New().Handler().ServeHTTP(statusRec, statusReq)
+	if statusRec.Code != http.StatusNotFound {
+		t.Fatalf("expected global status 404, got %d body=%s", statusRec.Code, statusRec.Body.String())
+	}
+
+	applyReq := httptest.NewRequest(http.MethodPost, "/api/v1/global-apply", bytes.NewBufferString(`{"skill_id":"missing-skill","dry_run":true}`))
+	applyRec := httptest.NewRecorder()
+	New().Handler().ServeHTTP(applyRec, applyReq)
+	if applyRec.Code != http.StatusNotFound {
+		t.Fatalf("expected global apply 404, got %d body=%s", applyRec.Code, applyRec.Body.String())
+	}
+}
+
 func TestHTTPAPI_ApplyProjectRequiresPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/project-apply", bytes.NewBufferString(`{}`))
 	rec := httptest.NewRecorder()
@@ -253,5 +323,33 @@ func TestSkillRepositoryChangedFiles(t *testing.T) {
 	want := []string{"skills/one/SKILL.md", "skills/two/SKILL.md", "skills/old/SKILL.md"}
 	if !sameStringSet(files, want) {
 		t.Fatalf("files = %#v, want %#v", files, want)
+	}
+}
+
+func writeHTTPAPITestConfig(t *testing.T, homeDir string) {
+	t.Helper()
+	cfg := &config.Config{
+		MultiRepo: &config.MultiRepoConfig{
+			Enabled:     true,
+			DefaultRepo: "main",
+			Repositories: map[string]config.RepositoryConfig{
+				"main": {Name: "main", Enabled: true},
+			},
+		},
+	}
+	if err := config.SaveConfig(cfg); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+}
+
+func writeHTTPAPITestSkill(t *testing.T, homeDir, repoName, skillID string) {
+	t.Helper()
+	skillDir := filepath.Join(homeDir, "repositories", repoName, "skills", skillID)
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill dir: %v", err)
+	}
+	content := []byte("---\nname: Demo Skill\nversion: 1.0.0\n---\nHello\n")
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), content, 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
 	}
 }

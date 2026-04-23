@@ -203,6 +203,14 @@ func (c *Client) UseSkill(ctx context.Context, req httpapibiz.UseSkillRequest) (
 	return &data, nil
 }
 
+func (c *Client) UseGlobalSkill(ctx context.Context, req httpapibiz.UseGlobalSkillRequest) (*httpapibiz.UseGlobalSkillData, error) {
+	data, err := post[httpapibiz.UseGlobalSkillData](ctx, c, "/api/v1/global-skills/use", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
 func (c *Client) RegisterSkill(ctx context.Context, req httpapibiz.RegisterSkillRequest) (*httpapibiz.RegisterSkillData, error) {
 	data, err := post[httpapibiz.RegisterSkillData](ctx, c, "/api/v1/project-skills/register", req)
 	if err != nil {
@@ -261,6 +269,52 @@ func (c *Client) AuditProjectSkills(ctx context.Context, req httpapibiz.AuditPro
 
 func (c *Client) ApplyProject(ctx context.Context, req httpapibiz.ApplyProjectRequest) (*httpapibiz.ApplyProjectData, error) {
 	data, err := post[httpapibiz.ApplyProjectData](ctx, c, "/api/v1/project-apply", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) GetGlobalStatus(ctx context.Context, skillID string, agents []string) (*httpapibiz.GlobalStatusData, error) {
+	query := url.Values{}
+	if skillID != "" {
+		query.Set("skill_id", skillID)
+	}
+	if len(agents) > 0 {
+		query.Set("agent", strings.Join(agents, ","))
+	}
+	path := "/api/v1/global-status"
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	data, err := get[httpapibiz.GlobalStatusData](ctx, c, path)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) ApplyGlobal(ctx context.Context, req httpapibiz.ApplyGlobalRequest) (*httpapibiz.ApplyGlobalData, error) {
+	data, err := post[httpapibiz.ApplyGlobalData](ctx, c, "/api/v1/global-apply", req)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+func (c *Client) RemoveGlobalSkill(ctx context.Context, skillID string, agents []string, force bool) (*httpapibiz.RemoveGlobalSkillData, error) {
+	query := url.Values{}
+	if len(agents) > 0 {
+		query.Set("agent", strings.Join(agents, ","))
+	}
+	if force {
+		query.Set("force", "true")
+	}
+	path := "/api/v1/global-skills/" + url.PathEscape(skillID)
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	data, err := del[httpapibiz.RemoveGlobalSkillData](ctx, c, path)
 	if err != nil {
 		return nil, err
 	}

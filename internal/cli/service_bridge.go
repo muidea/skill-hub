@@ -34,6 +34,7 @@ type serviceBridgeClient interface {
 	FindSkillCandidates(ctx context.Context, skillID string) ([]spec.SkillMetadata, error)
 	GetSkillDetail(ctx context.Context, skillID, repoName string) (*spec.Skill, error)
 	UseSkill(ctx context.Context, req httpapibiz.UseSkillRequest) (*httpapibiz.UseSkillData, error)
+	UseGlobalSkill(ctx context.Context, req httpapibiz.UseGlobalSkillRequest) (*httpapibiz.UseGlobalSkillData, error)
 	RegisterSkill(ctx context.Context, req httpapibiz.RegisterSkillRequest) (*httpapibiz.RegisterSkillData, error)
 	ImportSkills(ctx context.Context, req httpapibiz.ImportSkillsRequest) (*httpapibiz.ImportSkillsData, error)
 	DedupeSkills(ctx context.Context, req httpapibiz.DedupeRequest) (*httpapibiz.DedupeData, error)
@@ -42,6 +43,9 @@ type serviceBridgeClient interface {
 	ValidateProjectSkills(ctx context.Context, req httpapibiz.ValidateProjectSkillsRequest) (*httpapibiz.ValidateProjectSkillsData, error)
 	AuditProjectSkills(ctx context.Context, req httpapibiz.AuditProjectSkillsRequest) (*httpapibiz.AuditProjectSkillsData, error)
 	ApplyProject(ctx context.Context, req httpapibiz.ApplyProjectRequest) (*httpapibiz.ApplyProjectData, error)
+	GetGlobalStatus(ctx context.Context, skillID string, agents []string) (*httpapibiz.GlobalStatusData, error)
+	ApplyGlobal(ctx context.Context, req httpapibiz.ApplyGlobalRequest) (*httpapibiz.ApplyGlobalData, error)
+	RemoveGlobalSkill(ctx context.Context, skillID string, agents []string, force bool) (*httpapibiz.RemoveGlobalSkillData, error)
 	PreviewFeedback(ctx context.Context, req httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error)
 	ApplyFeedback(ctx context.Context, req httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error)
 }
@@ -126,6 +130,10 @@ func (h *hubBridgeClient) UseSkill(ctx context.Context, req httpapibiz.UseSkillR
 	return h.client.Service().UseSkill(ctx, req)
 }
 
+func (h *hubBridgeClient) UseGlobalSkill(ctx context.Context, req httpapibiz.UseGlobalSkillRequest) (*httpapibiz.UseGlobalSkillData, error) {
+	return h.client.Service().UseGlobalSkill(ctx, req)
+}
+
 func (h *hubBridgeClient) RegisterSkill(ctx context.Context, req httpapibiz.RegisterSkillRequest) (*httpapibiz.RegisterSkillData, error) {
 	return h.client.Service().RegisterSkill(ctx, req)
 }
@@ -156,6 +164,18 @@ func (h *hubBridgeClient) AuditProjectSkills(ctx context.Context, req httpapibiz
 
 func (h *hubBridgeClient) ApplyProject(ctx context.Context, req httpapibiz.ApplyProjectRequest) (*httpapibiz.ApplyProjectData, error) {
 	return h.client.Service().ApplyProject(ctx, req)
+}
+
+func (h *hubBridgeClient) GetGlobalStatus(ctx context.Context, skillID string, agents []string) (*httpapibiz.GlobalStatusData, error) {
+	return h.client.Service().GetGlobalStatus(ctx, skillID, agents)
+}
+
+func (h *hubBridgeClient) ApplyGlobal(ctx context.Context, req httpapibiz.ApplyGlobalRequest) (*httpapibiz.ApplyGlobalData, error) {
+	return h.client.Service().ApplyGlobal(ctx, req)
+}
+
+func (h *hubBridgeClient) RemoveGlobalSkill(ctx context.Context, skillID string, agents []string, force bool) (*httpapibiz.RemoveGlobalSkillData, error) {
+	return h.client.Service().RemoveGlobalSkill(ctx, skillID, agents, force)
 }
 
 func (h *hubBridgeClient) PreviewFeedback(ctx context.Context, req httpapibiz.FeedbackRequest) (*httpapibiz.FeedbackPreviewData, error) {
