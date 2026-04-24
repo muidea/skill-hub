@@ -10,6 +10,7 @@ Release date: 2026-04-24
 
 - Removes the unused global service test helper that caused `staticcheck` `U1000`.
 - Adds a tracked `v0.8.0` global skill management release note under `docs/`.
+- Adds and updates the tracked `v0.8.1` release note so the patch release can publish a complete curated body.
 - Updates `scripts/create-release.sh` so `--notes-only`, dry-run, and tag creation prefer `docs/release-notes-v<version>-*.md` when exactly one matching document exists.
 - Keeps the previous commit-message-only release note generation path as the fallback when no tracked release note document exists.
 - Updates GitHub Release workflow to use the same tracked-document-first behavior.
@@ -28,7 +29,14 @@ e0df341 feat: prefer tracked release notes documents
 50a8257 fix: fail on duplicate tracked release notes
 ```
 
-The release note document commit itself is also included so future `v0.8.1` releases can publish this complete body without relying on terse tag annotations.
+The tracked `v0.8.1` release note document commits are also part of this release line:
+
+```text
+f0eaed5 docs: add v0.8.1 release notes
+2f95992 docs: update v0.8.1 release notes
+```
+
+These two commits keep the published `v0.8.1` body aligned with the actual post-`v0.8.0` follow-up scope instead of relying on terse tag annotations.
 
 ## Validation
 
