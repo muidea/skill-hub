@@ -1,6 +1,6 @@
 # v0.8.1 Release Notes Pipeline Follow-Up
 
-Release date: 2026-04-23
+Release date: 2026-04-24
 
 ## Summary
 
@@ -14,6 +14,7 @@ Release date: 2026-04-23
 - Keeps the previous commit-message-only release note generation path as the fallback when no tracked release note document exists.
 - Updates GitHub Release workflow to use the same tracked-document-first behavior.
 - Fails release note resolution when multiple tracked documents match the same version, preventing ambiguous release bodies.
+- Fixes the duplicate tracked release notes edge case so the local release script fails explicitly instead of silently falling back to generated notes.
 
 ## Commit Scope
 
@@ -24,6 +25,7 @@ b54329d test: remove unused global test helper
 9614ade docs: add global skill management release notes
 e0df341 feat: prefer tracked release notes documents
 0b3e53e ci: prefer tracked release notes for GitHub releases
+50a8257 fix: fail on duplicate tracked release notes
 ```
 
 The release note document commit itself is also included so future `v0.8.1` releases can publish this complete body without relying on terse tag annotations.
@@ -44,6 +46,7 @@ The GitHub workflow release note resolver has also been locally simulated for:
 
 - `v0.8.0`: tracked document is used.
 - `v9.9.9`: fallback release note body is generated when no tracked document exists.
+- duplicate `docs/release-notes-v0.2.0-*.md`: local release script exits with an explicit error and lists the conflicting files.
 
 ## Operational Notes
 
