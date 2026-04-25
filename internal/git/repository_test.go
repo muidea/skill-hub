@@ -2,6 +2,7 @@ package git
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -158,6 +159,112 @@ func TestRepositoryCheckRemoteUpdatesNoRemote(t *testing.T) {
 	}
 }
 
+func TestRepositoryPushUsesSystemGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git executable not available")
+	}
+
+	tmpDir := t.TempDir()
+	remoteDir := filepath.Join(tmpDir, "remote.git")
+	localDir := filepath.Join(tmpDir, "local")
+
+	runGitCommand(t, tmpDir, "init", "--bare", remoteDir)
+	runGitCommand(t, tmpDir, "init", "-b", "main", localDir)
+	runGitCommand(t, localDir, "config", "user.name", "tester")
+	runGitCommand(t, localDir, "config", "user.email", "tester@example.com")
+	runGitCommand(t, localDir, "remote", "add", "origin", remoteDir)
+
+	if err := os.WriteFile(filepath.Join(localDir, "README.md"), []byte("hello\n"), 0644); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+	runGitCommand(t, localDir, "add", "README.md")
+	runGitCommand(t, localDir, "commit", "-m", "initial commit")
+
+	repo, err := NewRepository(localDir)
+	if err != nil {
+		t.Fatalf("open local repo: %v", err)
+	}
+	if err := repo.Push(); err != nil {
+		t.Fatalf("Push error: %v", err)
+	}
+
+	runGitCommand(t, remoteDir, "rev-parse", "--verify", "refs/heads/main")
+}
+
+func TestRepositoryPullUsesSystemGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git executable not available")
+	}
+
+	tmpDir := t.TempDir()
+	remoteDir := filepath.Join(tmpDir, "remote.git")
+	seedDir := filepath.Join(tmpDir, "seed")
+	localDir := filepath.Join(tmpDir, "local")
+
+	runGitCommand(t, tmpDir, "init", "--bare", remoteDir)
+	runGitCommand(t, tmpDir, "init", "-b", "main", seedDir)
+	runGitCommand(t, seedDir, "config", "user.name", "tester")
+	runGitCommand(t, seedDir, "config", "user.email", "tester@example.com")
+	runGitCommand(t, seedDir, "remote", "add", "origin", remoteDir)
+	writeSystemGitCommit(t, seedDir, "README.md", "one\n", "initial commit")
+	runGitCommand(t, seedDir, "push", "origin", "main")
+
+	runGitCommand(t, tmpDir, "clone", "--branch", "main", remoteDir, localDir)
+	writeSystemGitCommit(t, seedDir, "README.md", "two\n", "update readme")
+	runGitCommand(t, seedDir, "push", "origin", "main")
+
+	repo, err := NewRepository(localDir)
+	if err != nil {
+		t.Fatalf("open local repo: %v", err)
+	}
+	if err := repo.Pull(); err != nil {
+		t.Fatalf("Pull error: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(localDir, "README.md"))
+	if err != nil {
+		t.Fatalf("read pulled file: %v", err)
+	}
+	if string(content) != "two\n" {
+		t.Fatalf("content = %q, want pulled update", string(content))
+	}
+}
+
+func TestPullUsesSystemGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git executable not available")
+	}
+
+	tmpDir := t.TempDir()
+	remoteDir := filepath.Join(tmpDir, "remote.git")
+	seedDir := filepath.Join(tmpDir, "seed")
+	localDir := filepath.Join(tmpDir, "local")
+
+	runGitCommand(t, tmpDir, "init", "--bare", remoteDir)
+	runGitCommand(t, tmpDir, "init", "-b", "main", seedDir)
+	runGitCommand(t, seedDir, "config", "user.name", "tester")
+	runGitCommand(t, seedDir, "config", "user.email", "tester@example.com")
+	runGitCommand(t, seedDir, "remote", "add", "origin", remoteDir)
+	writeSystemGitCommit(t, seedDir, "README.md", "one\n", "initial commit")
+	runGitCommand(t, seedDir, "push", "origin", "main")
+
+	runGitCommand(t, tmpDir, "clone", "--branch", "main", remoteDir, localDir)
+	writeSystemGitCommit(t, seedDir, "README.md", "two\n", "update readme")
+	runGitCommand(t, seedDir, "push", "origin", "main")
+
+	if err := Pull(localDir); err != nil {
+		t.Fatalf("Pull error: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(localDir, "README.md"))
+	if err != nil {
+		t.Fatalf("read pulled file: %v", err)
+	}
+	if string(content) != "two\n" {
+		t.Fatalf("content = %q, want pulled update", string(content))
+	}
+}
+
 func writeAndCommit(t *testing.T, worktree *gogit.Worktree, repoDir, content string) {
 	t.Helper()
 	filePath := filepath.Join(repoDir, "README.md")
@@ -176,4 +283,24 @@ func writeAndCommit(t *testing.T, worktree *gogit.Worktree, repoDir, content str
 	}); err != nil {
 		t.Fatalf("worktree commit: %v", err)
 	}
+}
+
+func runGitCommand(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %s: %v", args, string(output), err)
+	}
+	return string(output)
+}
+
+func writeSystemGitCommit(t *testing.T, dir, fileName, content, message string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, fileName), []byte(content), 0644); err != nil {
+		t.Fatalf("write %s: %v", fileName, err)
+	}
+	runGitCommand(t, dir, "add", fileName)
+	runGitCommand(t, dir, "commit", "-m", message)
 }

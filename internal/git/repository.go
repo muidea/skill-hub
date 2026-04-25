@@ -3,6 +3,7 @@ package git
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -219,34 +220,25 @@ func (r *Repository) Pull() error {
 		return fmt.Errorf("未设置远程仓库URL")
 	}
 
-	worktree, err := r.repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("获取工作树失败: %w", err)
-	}
-
-	auth, err := r.authMethod()
-	if err != nil {
-		return err
-	}
-
-	err = worktree.Pull(&git.PullOptions{
-		RemoteName:    r.remoteName,
-		Auth:          auth,
-		Progress:      os.Stdout,
-		ReferenceName: plumbing.NewBranchReferenceName("main"),
-		SingleBranch:  true,
-	})
-
-	if err == git.NoErrAlreadyUpToDate {
-		return nil // 已经是最新
+	cmd := exec.Command("git", "-C", r.path, "pull", "--ff-only", r.remoteName, "main")
+	output, err := cmd.CombinedOutput()
+	if len(output) > 0 {
+		fmt.Print(string(output))
 	}
 
 	if err != nil {
 		// 提供更详细的错误信息
+		outputText := strings.TrimSpace(string(output))
 		errMsg := fmt.Sprintf("拉取仓库失败: %v", err)
-		if strings.Contains(err.Error(), "SSH_AUTH_SOCK") {
+		if outputText != "" {
+			errMsg = fmt.Sprintf("拉取仓库失败: %s: %v", outputText, err)
+		}
+		diagnosticText := err.Error() + "\n" + outputText
+		if strings.Contains(diagnosticText, "SSH_AUTH_SOCK") {
 			errMsg += "\nSSH认证失败: 请确保SSH agent正在运行或使用HTTPS URL"
-		} else if strings.Contains(err.Error(), "authentication required") {
+		} else if strings.Contains(diagnosticText, "authentication required") ||
+			strings.Contains(diagnosticText, "Permission denied") ||
+			strings.Contains(diagnosticText, "unable to authenticate") {
 			errMsg += "\n认证失败: 请检查Git token配置或使用SSH key"
 		}
 		return fmt.Errorf("%s", errMsg)
@@ -271,16 +263,13 @@ func (r *Repository) CheckRemoteUpdates() (*RemoteUpdateStatus, error) {
 		return result, nil
 	}
 
-	auth, err := r.authMethod()
+	cmd := exec.Command("git", "-C", r.path, "fetch", r.remoteName, "main")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, err
-	}
-	err = r.repo.Fetch(&git.FetchOptions{
-		RemoteName: r.remoteName,
-		Auth:       auth,
-		Progress:   nil,
-	})
-	if err != nil && err != git.NoErrAlreadyUpToDate {
+		outputText := strings.TrimSpace(string(output))
+		if outputText != "" {
+			return nil, fmt.Errorf("检查远程更新失败: %s: %w", outputText, err)
+		}
 		return nil, fmt.Errorf("检查远程更新失败: %w", err)
 	}
 
@@ -381,22 +370,21 @@ func (r *Repository) Push() error {
 		return fmt.Errorf("未设置远程仓库URL")
 	}
 
-	// 根据URL类型选择认证方式
-	auth, err := r.authMethod()
-	if err != nil {
-		return err
+	cmd := exec.Command("git", "-C", r.path, "push", r.remoteName, "HEAD")
+	output, err := cmd.CombinedOutput()
+	if len(output) > 0 {
+		fmt.Print(string(output))
 	}
-
-	err = r.repo.Push(&git.PushOptions{
-		RemoteName: r.remoteName,
-		Auth:       auth,
-		Progress:   os.Stdout,
-	})
 
 	if err != nil {
 		// 提供更详细的错误信息
+		outputText := strings.TrimSpace(string(output))
 		errMsg := fmt.Sprintf("推送失败: %v", err)
-		if strings.Contains(err.Error(), "SSH_AUTH_SOCK") {
+		if outputText != "" {
+			errMsg = fmt.Sprintf("推送失败: %s: %v", outputText, err)
+		}
+		diagnosticText := err.Error() + "\n" + outputText
+		if strings.Contains(diagnosticText, "SSH_AUTH_SOCK") {
 			errMsg += "\nSSH认证失败: 请确保SSH agent正在运行或使用HTTPS URL"
 			if strings.HasPrefix(r.remoteURL, "git@") {
 				httpsURL := ConvertSSHToHTTPS(r.remoteURL)
@@ -404,9 +392,11 @@ func (r *Repository) Push() error {
 					errMsg += fmt.Sprintf("\n可以手动更新远程URL: git -C %s remote set-url origin %s", r.path, httpsURL)
 				}
 			}
-		} else if strings.Contains(err.Error(), "authentication required") {
+		} else if strings.Contains(diagnosticText, "authentication required") ||
+			strings.Contains(diagnosticText, "Permission denied") ||
+			strings.Contains(diagnosticText, "unable to authenticate") {
 			errMsg += "\n认证失败: 请检查Git token配置或使用SSH key"
-		} else if strings.Contains(err.Error(), "invalid auth method") {
+		} else if strings.Contains(diagnosticText, "invalid auth method") {
 			errMsg += "\n认证方法不匹配: 远程URL是SSH但使用了HTTP认证，或反之"
 			if strings.HasPrefix(r.remoteURL, "git@") {
 				errMsg += "\nSSH URL需要SSH认证，请确保SSH agent正在运行"

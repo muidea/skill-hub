@@ -3,6 +3,7 @@ package git
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
@@ -88,83 +89,31 @@ func IsGitRepo(dir string) bool {
 func Pull(dir string) error {
 	fmt.Printf("正在拉取更新: %s\n", dir)
 
-	// 打开仓库
-	repo, err := git.PlainOpen(dir)
+	cmd := exec.Command("git", "-C", dir, "pull", "--ff-only")
+	output, err := cmd.CombinedOutput()
+	if len(output) > 0 {
+		fmt.Print(string(output))
+	}
+
 	if err != nil {
-		return fmt.Errorf("打开仓库失败: %w", err)
-	}
-
-	// 获取工作树
-	w, err := repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("获取工作树失败: %w", err)
-	}
-
-	// 获取远程URL
-	remote, err := repo.Remote("origin")
-	var remoteURL string
-	if err == nil && remote != nil {
-		if urls := remote.Config().URLs; len(urls) > 0 {
-			remoteURL = urls[0]
-		}
-	}
-
-	// 配置拉取选项
-	options := &git.PullOptions{
-		RemoteName: "origin",
-		Progress:   os.Stdout,
-	}
-
-	// 执行拉取
-	err = w.Pull(options)
-	if err != nil && err != git.NoErrAlreadyUpToDate {
-		// 如果SSH拉取失败，尝试转换为HTTPS URL
-		if strings.Contains(err.Error(), "SSH_AUTH_SOCK") && remoteURL != "" && strings.HasPrefix(remoteURL, "git@") {
-			httpsURL := ConvertSSHToHTTPS(remoteURL)
-			if httpsURL != "" {
-				fmt.Printf("SSH拉取失败，尝试HTTPS URL: %s\n", httpsURL)
-
-				// 更新远程URL为HTTPS
-				if err := updateRemoteURL(repo, httpsURL); err != nil {
-					fmt.Printf("⚠️  更新远程URL失败: %v\n", err)
-				} else {
-					// 重试拉取
-					err = w.Pull(options)
-					if err == nil || err == git.NoErrAlreadyUpToDate {
-						fmt.Println("✅ 使用HTTPS URL拉取成功")
-						if err == git.NoErrAlreadyUpToDate {
-							fmt.Println("✅ 仓库已是最新")
-						} else {
-							fmt.Println("✅ 拉取完成")
-						}
-						return nil
-					}
-				}
-			}
-		}
-
 		// 提供更详细的错误信息
+		outputText := strings.TrimSpace(string(output))
 		errMsg := fmt.Sprintf("拉取失败: %v", err)
-		if strings.Contains(err.Error(), "SSH_AUTH_SOCK") {
+		if outputText != "" {
+			errMsg = fmt.Sprintf("拉取失败: %s: %v", outputText, err)
+		}
+		diagnosticText := err.Error() + "\n" + outputText
+		if strings.Contains(diagnosticText, "SSH_AUTH_SOCK") {
 			errMsg += "\nSSH认证失败: 请确保SSH agent正在运行或使用HTTPS URL"
-			if remoteURL != "" && strings.HasPrefix(remoteURL, "git@") {
-				httpsURL := ConvertSSHToHTTPS(remoteURL)
-				if httpsURL != "" {
-					errMsg += fmt.Sprintf("\n可以手动更新远程URL: git -C %s remote set-url origin %s", dir, httpsURL)
-				}
-			}
-		} else if strings.Contains(err.Error(), "authentication required") {
+		} else if strings.Contains(diagnosticText, "authentication required") ||
+			strings.Contains(diagnosticText, "Permission denied") ||
+			strings.Contains(diagnosticText, "unable to authenticate") {
 			errMsg += "\n认证失败: 请检查Git token配置或使用SSH key"
 		}
 		return fmt.Errorf("%s", errMsg)
 	}
 
-	if err == git.NoErrAlreadyUpToDate {
-		fmt.Println("✅ 仓库已是最新")
-	} else {
-		fmt.Println("✅ 拉取完成")
-	}
-
+	fmt.Println("✅ 拉取完成")
 	return nil
 }
 
