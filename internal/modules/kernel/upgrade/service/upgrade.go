@@ -492,13 +492,19 @@ func extractTarGz(archivePath, destDir string) error {
 }
 
 func secureJoin(root, name string) (string, error) {
+	if name == "" {
+		return "", errors.NewWithCodef("upgrade", errors.ErrValidation, "压缩包包含非法路径: %s", name)
+	}
 	cleanName := filepath.Clean(name)
-	if cleanName == "." || strings.HasPrefix(cleanName, "..") || filepath.IsAbs(cleanName) {
+	if cleanName == "." {
+		return filepath.Clean(root), nil
+	}
+	if filepath.IsAbs(cleanName) || cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
 		return "", errors.NewWithCodef("upgrade", errors.ErrValidation, "压缩包包含非法路径: %s", name)
 	}
 	target := filepath.Join(root, cleanName)
 	rel, err := filepath.Rel(root, target)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", errors.NewWithCodef("upgrade", errors.ErrValidation, "压缩包包含非法路径: %s", name)
 	}
 	return target, nil

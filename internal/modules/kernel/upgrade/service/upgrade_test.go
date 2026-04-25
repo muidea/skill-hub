@@ -170,6 +170,28 @@ func TestVerifySHA256FileChecksArchiveContent(t *testing.T) {
 	}
 }
 
+func TestSecureJoinAllowsCurrentDirectoryEntry(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "extract")
+	target, err := secureJoin(root, "./")
+	if err != nil {
+		t.Fatalf("secureJoin current directory: %v", err)
+	}
+	if target != filepath.Clean(root) {
+		t.Fatalf("target = %q, want %q", target, filepath.Clean(root))
+	}
+}
+
+func TestSecureJoinRejectsUnsafePaths(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "extract")
+	for _, name := range []string{"", "../skill-hub", "nested/../../skill-hub", filepath.Join("..", "skill-hub"), filepath.Join(root, "skill-hub")} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := secureJoin(root, name); err == nil {
+				t.Fatalf("secureJoin(%q) returned nil error", name)
+			}
+		})
+	}
+}
+
 func writeReleaseArchive(t *testing.T, archivePath string, version string) {
 	t.Helper()
 	file, err := os.Create(archivePath)
@@ -182,6 +204,14 @@ func writeReleaseArchive(t *testing.T, archivePath string, version string) {
 	defer gzWriter.Close()
 	tarWriter := tar.NewWriter(gzWriter)
 	defer tarWriter.Close()
+
+	if err := tarWriter.WriteHeader(&tar.Header{
+		Name:     "./",
+		Typeflag: tar.TypeDir,
+		Mode:     0755,
+	}); err != nil {
+		t.Fatalf("write current directory header: %v", err)
+	}
 
 	binary := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"skill-hub version %s (commit: test, built: now)\"; exit 0; fi\n", version)
 	if err := tarWriter.WriteHeader(&tar.Header{
