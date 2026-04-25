@@ -1,190 +1,32 @@
-# Agent Guidelines for skill-hub
+# Repository Guidelines
 
-This document provides guidelines for AI agents working on the skill-hub project.
+## Project Structure & Module Organization
 
-## Build Commands
+`application/skill-hub/cmd` is the main CLI entry point. Core command behavior lives in `internal/cli`, while service-oriented kernel modules live under `internal/modules/kernel/*`. Shared packages are in `pkg/`, Git and repository logic is in `internal/git` and `internal/multirepo`, and adapter code is in `internal/adapter`. Python end-to-end tests are in `tests/e2e`. Release scripts and their Go tests are in `scripts/`. Bundled agent workflow skills are stored in `agent-skills/`.
 
-### Basic Build & Test
-```bash
-make build        # Build binary to bin/skill-hub
-make test         # Run all Go tests
-make test-verbose # Tests with verbose output
-make lint         # Run linting (gofmt, go vet, staticcheck)
-make deps         # Update dependencies (go mod tidy)
-```
+## Build, Test, and Development Commands
 
-### Running Single Tests
-```bash
-go test ./internal/cli -v                   # Test specific package
-go test ./internal/cli -v -run TestLoadSkill # Test single function
-go test ./... -v -run "TestFeedback"        # Test with pattern matching
-go test ./pkg/errors -bench=.               # Run benchmarks
-go clean -testcache                          # Clear test cache
-```
+- `make build`: builds `bin/skill-hub` with version ldflags.
+- `make test`: runs all Go tests with `go test ./... --count 1`.
+- `make lint`: runs `gofmt`, `go vet`, and `staticcheck` when available.
+- `make test-pkg PKG=./internal/cli`: runs one Go package.
+- `~/codespace/venv/bin/python3 -m pytest -p no:rerunfailures tests/e2e -c tests/e2e/pytest.ini`: runs e2e tests in this environment.
+- `./scripts/create-release.sh --version X.Y.Z --from vA.B.C --yes`: the only supported release path.
 
-### End-to-End Testing (Python)
-```bash
-make test-e2e           # Run all e2e tests
-make test-e2e-scenario SCENARIO=1  # Specific scenario (1-5)
+If local caches under `$HOME` are read-only, set `GOCACHE`, `GOMODCACHE`, and `XDG_CACHE_HOME` to `/tmp` paths.
 
-# Run specific test file directly
-cd tests/e2e && python3 -m pytest test_feedback_version_upgrade.py -v
+## Coding Style & Naming Conventions
 
-# Run specific test method
-cd tests/e2e && python3 -m pytest test_feedback_version_upgrade.py::TestFeedbackVersionAutoUpgrade::test_01_auto_upgrade_patch_version -v
-```
+Use Go 1.24 and standard `gofmt` formatting. Keep packages lowercase and focused. Prefer clear exported names such as `ApplyResult` and unexported camelCase helpers. CLI flags use kebab-case, for example `--dry-run` and `--skip-agent-skills`. Use `pkg/errors` for stable error codes and contextual wrapping. Keep comments sparse and useful; exported Go symbols should have GoDoc when appropriate.
 
-## Code Style Guidelines
+## Testing Guidelines
 
-### Go Version & Toolchain
-- Go 1.24.0 with toolchain go1.24.11
-- Use Go modules, always run `go mod tidy` before committing
+Add table-driven Go tests beside the package under test, using `*_test.go` and descriptive `Test...` names. Use `t.TempDir()` for filesystem isolation. For CLI behavior, cover both direct CLI rendering and service/kernel logic when possible. E2e tests belong in `tests/e2e/test_*.py`; avoid relying on network unless the scenario explicitly requires it.
 
-### Import Organization (3 groups, separated by blank lines)
-```go
-import (
-    // Standard library
-    "fmt"
-    "os"
+## Commit & Pull Request Guidelines
 
-    // Third-party packages
-    "gopkg.in/yaml.v3"
-    "github.com/spf13/cobra"
+History follows Conventional Commit-style prefixes: `feat:`, `fix:`, `docs:`, `test:`, and `ci:`. Keep commits scoped and include docs/tests with behavior changes. Pull requests should describe the user-visible change, list validation commands, link issues when relevant, and include screenshots only for Web UI changes.
 
-    // Internal packages (skill-hub prefix)
-    "skill-hub/internal/config"
-    "skill-hub/pkg/errors"
-)
-```
+## Security & Release Notes
 
-### Naming Conventions
-| Type | Convention | Example |
-|------|-----------|---------|
-| Packages | lowercase, single-word | `engine`, `cli`, `state` |
-| Interfaces | `-er` suffix | `FileSystem`, `Manager`, `StateLoader` |
-| Methods/Variables | camelCase | `loadSkill`, `projectPath` |
-| Constants | PascalCase (exported), camelCase (internal) | `SkillStatusSynced`, `defaultTimeout` |
-| Error variables | Prefix `Err` | `ErrSkillNotFound`, `ErrConfigInvalid` |
-| Type parameters | Single uppercase | `T`, `K`, `V` |
-
-### Error Handling
-
-Use custom error package `pkg/errors`:
-```go
-// Define error codes in pkg/errors/errors.go
-const ErrSkillNotFound ErrorCode = "SKILL_NOT_FOUND"
-
-// Wrap errors with context
-func LoadSkill(id string) (*Skill, error) {
-    skill, err := findSkill(id)
-    if err != nil {
-        return nil, errors.Wrap(err, "LoadSkill: 查找技能失败")
-    }
-    return skill, nil
-}
-
-// Check errors early, return early
-func Process(path string) error {
-    if path == "" {
-        return errors.NewValidationError("path cannot be empty")
-    }
-    // ... continue processing
-}
-```
-
-### Logging
-- Use `log/slog` for structured logging (Go 1.21+)
-- Avoid the older `log` package
-- Use contextual logging: `logger.With("key", value)`
-
-### Testing Patterns
-```go
-// Table-driven tests with t.Run()
-func TestLoadSkill(t *testing.T) {
-    tests := []struct {
-        name    string
-        id      string
-        wantErr bool
-    }{
-        {"valid", "test-skill", false},
-        {"invalid", "", true},
-    }
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            dir := t.TempDir()  // Use t.TempDir() for temp directories
-            // Test implementation
-        })
-    }
-}
-```
-
-### Formatting & Documentation
-- Use `gofmt` for formatting (run `make lint`)
-- Line length: 80-100 characters
-- **NO COMMENTS** unless explicitly requested
-- Document exported functions with GoDoc comments
-
-### Comments Policy
-- **Do NOT add comments** unless explicitly asked by user
-- Chinese comments acceptable for business logic
-- English for technical details
-
-## Multi-Repository Architecture
-```
-~/.skill-hub/
-├── config.yaml          # Configuration
-├── state.json           # Project states
-└── repositories/main/skills/  # Archived skills
-```
-
-## Skill Structure
-```
-.agents/skills/{skill-id}/
-├── SKILL.md              # Required: skill definition with YAML frontmatter
-├── references/           # Optional: reference documents
-└── scripts/              # Optional: helper scripts
-```
-
-### SKILL.md Format
-```yaml
----
-name: skill-name
-description: Brief description
-metadata:
-  version: "1.0.0"
-  author: "author-name"
----
-# Skill content in Markdown
-```
-
-## Quality Assurance Checklist
-Before committing:
-1. `make test` - ensure tests pass
-2. `make lint` - check code style
-3. `make build` - ensure compilation succeeds
-
-## Project Structure
-```
-skill-hub/
-├── application/skill-hub/ # Main application entry
-├── application/skill-validate/ # Validation tool entry
-├── internal/             # Internal packages (cli, config, engine, state, multirepo)
-├── pkg/                  # Public packages (errors, spec, utils)
-├── tests/e2e/            # End-to-end tests (Python)
-└── .agents/              # Skill definitions
-```
-
-## Available Skills
-
-### go-refactor-pro
-Advanced Go refactoring skill. Use when:
-- Code has significant duplication (DRY violations)
-- Need to migrate to modern Go features (slog, generics, errors.Join)
-- Performance optimization needed
-
-Location: `.agents/skills/go-refactor-pro/SKILL.md`
-
-## Key Dependencies
-- `github.com/spf13/cobra` - CLI framework
-- `gopkg.in/yaml.v3` - YAML parsing
-- `github.com/go-git/go-git/v5` - Git operations
+Do not commit secrets or local `~/.skill-hub` state. Document user-facing release changes under `docs/release-notes-vX.Y.Z-*.md` before releasing. Never create release tags manually; use `./scripts/create-release.sh` so tests, build, notes, branch push, and tag push stay consistent.
