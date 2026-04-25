@@ -408,20 +408,6 @@ func (r *Repository) Push() error {
 	return nil
 }
 
-func (r *Repository) authMethod() (transport.AuthMethod, error) {
-	if strings.HasPrefix(r.remoteURL, "git@") || strings.Contains(r.remoteURL, "ssh://") {
-		auth, err := r.getSSHAuth()
-		if err != nil {
-			return nil, fmt.Errorf("SSH认证失败: %w", err)
-		}
-		return auth, nil
-	}
-	if !strings.HasPrefix(r.remoteURL, "http://") && !strings.HasPrefix(r.remoteURL, "https://") {
-		return nil, nil
-	}
-	return r.getAuth()
-}
-
 // Commit 提交更改
 func (r *Repository) Commit(message string) error {
 	worktree, err := r.repo.Worktree()

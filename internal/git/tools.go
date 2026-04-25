@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5"
-	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/muidea/skill-hub/pkg/logging"
 	"github.com/muidea/skill-hub/pkg/utils"
 )
@@ -130,17 +129,4 @@ func GetCurrentCommit(dir string) (string, error) {
 	}
 
 	return ref.Hash().String()[:8], nil // 返回短哈希
-}
-
-// updateRemoteURL 更新远程仓库URL
-func updateRemoteURL(repo *git.Repository, newURL string) error {
-	// 删除现有远程
-	_ = repo.DeleteRemote("origin")
-
-	// 添加新远程
-	_, err := repo.CreateRemote(&gitconfig.RemoteConfig{
-		Name: "origin",
-		URLs: []string{newURL},
-	})
-	return err
 }
