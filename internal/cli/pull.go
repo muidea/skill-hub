@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	gitpkg "github.com/muidea/skill-hub/internal/git"
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	"github.com/muidea/skill-hub/pkg/errors"
 )
@@ -30,7 +31,7 @@ var pullCmd = &cobra.Command{
 }
 
 func init() {
-	pullCmd.Flags().BoolVar(&pullForce, "force", false, "强制拉取，忽略本地未提交的修改")
+	pullCmd.Flags().BoolVar(&pullForce, "force", false, "远端有更新且默认仓库存在未提交更改时，先自动 stash 再拉取")
 	pullCmd.Flags().BoolVar(&pullCheck, "check", false, "检查模式，仅显示可用的更新，不实际执行拉取操作")
 	pullCmd.Flags().BoolVar(&pullJSON, "json", false, "以JSON格式输出拉取摘要")
 }
@@ -192,6 +193,9 @@ func shortCommit(hash string) string {
 
 func pullSyncDefaultRepository(client serviceBridgeClient, useService bool) (int, error) {
 	if useService {
+		if pullForce {
+			return 0, errors.NewWithCode("pullSyncDefaultRepository", errors.ErrInvalidInput, "服务模式暂不支持 pull --force；请停止服务后本地执行，或先提交/暂存默认仓库更改")
+		}
 		data, err := client.SyncSkillRepositoryAndRefresh(context.Background())
 		if err != nil {
 			return 0, err
@@ -199,7 +203,14 @@ func pullSyncDefaultRepository(client serviceBridgeClient, useService bool) (int
 		return data.SkillCount, nil
 	}
 
-	if err := syncSkillRepositoryAndRefresh(); err != nil {
+	repo, err := newSkillRepository()
+	if err != nil {
+		return 0, err
+	}
+	if err := repo.SyncWithOptions(gitpkg.SyncOptions{Force: pullForce}); err != nil {
+		return 0, err
+	}
+	if err := repo.UpdateRegistry(); err != nil {
 		return 0, err
 	}
 	return pullLocalSkillCount()

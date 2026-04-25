@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	gitpkg "github.com/muidea/skill-hub/internal/git"
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	"github.com/muidea/skill-hub/pkg/errors"
 )
@@ -34,7 +35,7 @@ var pushCmd = &cobra.Command{
 }
 
 func init() {
-	pushCmd.Flags().StringVarP(&pushMessage, "message", "m", "", "提交消息。如未提供，使用默认消息\"更新技能\"")
+	pushCmd.Flags().StringVarP(&pushMessage, "message", "m", "", "提交消息。如未提供，将根据待推送文件自动生成")
 	pushCmd.Flags().BoolVar(&pushForce, "force", false, "强制推送，跳过确认检查")
 	pushCmd.Flags().BoolVar(&pushDryRun, "dry-run", false, "演习模式，仅显示将要推送的更改，不实际执行")
 	pushCmd.Flags().BoolVar(&pushJSON, "json", false, "以JSON格式输出推送摘要")
@@ -105,7 +106,7 @@ func runPush() error {
 	// 确定提交消息
 	message := pushMessage
 	if message == "" {
-		message = "更新技能"
+		message = gitpkg.SuggestedCommitMessage(pushChangedFiles(changedLines))
 	}
 
 	fmt.Println("正在提交并推送默认仓库更改...")
@@ -136,10 +137,6 @@ func runPushStructured() (*pushSummary, error) {
 	}
 
 	message := pushMessage
-	if message == "" {
-		message = "更新技能"
-	}
-	summary.Message = message
 
 	client, useService := hubClientIfAvailable()
 	if !useService {
@@ -160,6 +157,10 @@ func runPushStructured() (*pushSummary, error) {
 	changedLines := pushChangedLines(status)
 	summary.HasChanges = len(changedLines) > 0
 	summary.ChangedFiles = pushChangedFiles(changedLines)
+	if message == "" {
+		message = gitpkg.SuggestedCommitMessage(summary.ChangedFiles)
+	}
+	summary.Message = message
 	if !summary.HasChanges {
 		summary.Status = "no_changes"
 		return summary, nil

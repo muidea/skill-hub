@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	gitpkg "github.com/muidea/skill-hub/internal/git"
 	"github.com/muidea/skill-hub/pkg/errors"
 )
 
@@ -210,14 +211,20 @@ func runGitCommit() error {
 		return err
 	}
 
+	status, err := skillRepositoryStatus()
+	if err != nil {
+		return err
+	}
+	defaultMessage := gitpkg.SuggestedCommitMessageFromStatus(status)
+
 	// 获取提交信息
-	fmt.Print("请输入提交信息: ")
+	fmt.Printf("请输入提交信息 [%s]: ", defaultMessage)
 	reader := bufio.NewReader(os.Stdin)
 	message, _ := reader.ReadString('\n')
 	message = strings.TrimSpace(message)
 
 	if message == "" {
-		message = "更新技能"
+		message = defaultMessage
 	}
 
 	return pushSkillRepositoryChanges(message)
@@ -235,7 +242,7 @@ func runGitPush() error {
 		return err
 	}
 
-	if strings.Contains(status, " M ") || strings.Contains(status, "?? ") {
+	if len(pushChangedLines(status)) > 0 {
 		fmt.Println("⚠️  检测到工作区存在未提交的更改（包含已跟踪文件修改或未跟踪文件）。")
 		fmt.Println("    - 选 Y: 先把当前更改一起提交并推送")
 		fmt.Println("    - 选 N: 仅推送已经存在的提交，保留本地未提交更改")

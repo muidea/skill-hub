@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,6 +32,15 @@ func NewSkillRepository() (*SkillRepository, error) {
 
 // Sync 同步技能仓库（拉取最新更改）
 func (sr *SkillRepository) Sync() error {
+	return sr.SyncWithOptions(SyncOptions{})
+}
+
+type SyncOptions struct {
+	Force bool
+}
+
+// SyncWithOptions 同步技能仓库（拉取最新更改）
+func (sr *SkillRepository) SyncWithOptions(opts SyncOptions) error {
 	fmt.Println("正在同步技能仓库...")
 
 	if !sr.repo.IsInitialized() {
@@ -43,10 +54,27 @@ func (sr *SkillRepository) Sync() error {
 	}
 
 	// 检查是否有未提交的更改
-	if strings.Contains(status, " M ") || strings.Contains(status, "?? ") {
+	hasChanges := hasRepositoryChanges(status)
+	if hasChanges {
 		fmt.Println("⚠️  检测到未提交的更改，建议先提交或暂存")
 		fmt.Println("   使用 'skill-hub git commit' 提交更改")
-		fmt.Println("   或使用 'skill-hub git stash' 暂存更改")
+		fmt.Printf("   或使用 'git -C %s stash push -u' 暂存更改\n", sr.repo.GetPath())
+
+		updates, err := sr.CheckUpdates()
+		if err != nil {
+			return fmt.Errorf("检查远程更新失败: %w", err)
+		}
+		if updates != nil && !updates.HasUpdates {
+			fmt.Println("✅ 远程仓库已是最新，保留本地未提交更改")
+			return nil
+		}
+
+		if !opts.Force {
+			return fmt.Errorf("默认仓库存在未提交更改，无法安全拉取远程更新；请先提交、暂存，或使用 --force 自动 stash 后再拉取")
+		}
+		if err := sr.stashLocalChanges(); err != nil {
+			return err
+		}
 	}
 
 	// 拉取最新更改
@@ -56,6 +84,49 @@ func (sr *SkillRepository) Sync() error {
 	}
 
 	fmt.Println("✅ 技能仓库同步完成")
+	return nil
+}
+
+func hasRepositoryChanges(status string) bool {
+	for _, line := range strings.Split(status, "\n") {
+		if isRepositoryChangeLine(line) {
+			return true
+		}
+	}
+	return false
+}
+
+func isRepositoryChangeLine(line string) bool {
+	if len(line) < 2 {
+		return false
+	}
+	if strings.HasPrefix(line, "?? ") {
+		return true
+	}
+	if len(line) < 3 || line[2] != ' ' {
+		return false
+	}
+	return isGitStatusCode(line[0]) || isGitStatusCode(line[1])
+}
+
+func isGitStatusCode(status byte) bool {
+	switch status {
+	case 'M', 'A', 'D', 'R', 'C', 'U', 'T':
+		return true
+	default:
+		return false
+	}
+}
+
+func (sr *SkillRepository) stashLocalChanges() error {
+	message := fmt.Sprintf("skill-hub pull auto-stash %s", time.Now().Format("20060102-150405"))
+	fmt.Printf("使用 git stash 暂存本地更改: %s\n", message)
+	output, err := exec.Command("git", "-C", sr.repo.GetPath(), "stash", "push", "-u", "-m", message).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("自动暂存本地更改失败: %s: %w", strings.TrimSpace(string(output)), err)
+	}
+	fmt.Println("✅ 本地更改已暂存，可使用以下命令查看:")
+	fmt.Printf("   git -C %s stash list\n", sr.repo.GetPath())
 	return nil
 }
 
@@ -75,13 +146,13 @@ func (sr *SkillRepository) PushChanges(message string) error {
 		return fmt.Errorf("获取仓库状态失败: %w", err)
 	}
 
-	if !strings.Contains(status, " M ") && !strings.Contains(status, "?? ") && !strings.Contains(status, " D ") {
+	if !hasRepositoryChanges(status) {
 		return fmt.Errorf("没有要推送的更改")
 	}
 
 	// 提交更改
 	if message == "" {
-		message = fmt.Sprintf("更新技能: %s", time.Now().Format("2006-01-02 15:04:05"))
+		message = SuggestedCommitMessageFromStatus(status)
 	}
 
 	fmt.Println("提交更改...")
@@ -97,6 +168,63 @@ func (sr *SkillRepository) PushChanges(message string) error {
 
 	fmt.Println("✅ 更改已推送到远程仓库")
 	return nil
+}
+
+func SuggestedCommitMessageFromStatus(status string) string {
+	return SuggestedCommitMessage(changedFilesFromStatus(status))
+}
+
+func SuggestedCommitMessage(changedFiles []string) string {
+	skillIDs := skillIDsFromChangedFiles(changedFiles)
+	if len(skillIDs) == 0 {
+		for _, file := range changedFiles {
+			if strings.TrimSpace(file) == "registry.json" {
+				return "更新技能索引"
+			}
+		}
+		return "更新技能仓库"
+	}
+	if len(skillIDs) == 1 {
+		return fmt.Sprintf("更新技能: %s", skillIDs[0])
+	}
+	if len(skillIDs) <= 3 {
+		return fmt.Sprintf("更新技能: %s", strings.Join(skillIDs, ", "))
+	}
+	return fmt.Sprintf("更新 %d 个技能: %s 等", len(skillIDs), strings.Join(skillIDs[:3], ", "))
+}
+
+func changedFilesFromStatus(status string) []string {
+	var files []string
+	for _, line := range strings.Split(status, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if !isRepositoryChangeLine(line) {
+			continue
+		}
+		if len(line) > 3 {
+			files = append(files, strings.TrimSpace(line[3:]))
+		} else {
+			files = append(files, strings.TrimSpace(line))
+		}
+	}
+	return files
+}
+
+func skillIDsFromChangedFiles(changedFiles []string) []string {
+	seen := map[string]bool{}
+	var ids []string
+	for _, file := range changedFiles {
+		parts := strings.Split(filepath.ToSlash(strings.TrimSpace(file)), "/")
+		if len(parts) < 2 || parts[0] != "skills" || parts[1] == "" {
+			continue
+		}
+		if seen[parts[1]] {
+			continue
+		}
+		seen[parts[1]] = true
+		ids = append(ids, parts[1])
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // CloneRemote 克隆远程技能仓库

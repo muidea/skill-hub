@@ -126,10 +126,6 @@ func cleanupTimestampedBackupDirs(basePath string) error {
 	return runtimeSvc.CleanupTimestampedBackupDirs(basePath)
 }
 
-func syncSkillRepositoryAndRefresh() error {
-	return runtimeSvc.SyncSkillRepositoryAndRefresh()
-}
-
 func checkSkillRepositoryUpdates() (*gitpkg.RemoteUpdateStatus, error) {
 	return runtimeSvc.CheckSkillRepositoryUpdates()
 }

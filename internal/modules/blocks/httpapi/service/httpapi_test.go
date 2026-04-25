@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/muidea/skill-hub/internal/config"
+	gitpkg "github.com/muidea/skill-hub/internal/git"
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	apperrors "github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/spec"
@@ -323,6 +324,13 @@ func TestSkillRepositoryChangedFiles(t *testing.T) {
 	want := []string{"skills/one/SKILL.md", "skills/two/SKILL.md", "skills/old/SKILL.md"}
 	if !sameStringSet(files, want) {
 		t.Fatalf("files = %#v, want %#v", files, want)
+	}
+}
+
+func TestPushSkillRepositoryPreviewSuggestsMessageFromChangedSkills(t *testing.T) {
+	changedFiles := []string{"skills/one/SKILL.md", "skills/two/references/a.md"}
+	if got, want := gitpkg.SuggestedCommitMessage(changedFiles), "更新技能: one, two"; got != want {
+		t.Fatalf("suggested message = %q, want %q", got, want)
 	}
 }
 

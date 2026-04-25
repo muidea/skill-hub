@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/muidea/skill-hub/internal/config"
+	gitpkg "github.com/muidea/skill-hub/internal/git"
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/blocks/httpapi/biz"
 	globalservice "github.com/muidea/skill-hub/internal/modules/kernel/global/service"
 	projectapplymodule "github.com/muidea/skill-hub/internal/modules/kernel/project_apply"
@@ -314,7 +315,7 @@ func (h *HTTPAPI) pushSkillRepositoryPreview() (httpapibiz.PushSkillRepositoryPr
 	preview := httpapibiz.PushSkillRepositoryPreviewData{
 		HasChanges:       len(changedFiles) > 0,
 		ChangedFiles:     changedFiles,
-		SuggestedMessage: "更新技能",
+		SuggestedMessage: gitpkg.SuggestedCommitMessage(changedFiles),
 		RawStatus:        status,
 	}
 	if defaultRepo, err := h.runtimeSvc.Service().DefaultRepository(); err == nil && defaultRepo != nil {

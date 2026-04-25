@@ -769,7 +769,7 @@ skill-hub prune
 **语法**: `skill-hub pull [--force] [--check] [--json]`
 
 **选项**:
-- `--force`: 强制拉取，忽略本地未提交的修改。
+- `--force`: 当远端有更新且默认仓库存在未提交更改时，先自动 `git stash push -u` 暂存本地更改，再执行拉取。
 - `--check`: 检查模式，仅显示可用的更新，不实际执行拉取操作。
 - `--json`: 输出机器可读拉取摘要。
 
@@ -777,7 +777,7 @@ skill-hub prune
 
 从默认仓库对应的远程拉取最新更改到本地仓库（`~/.skill-hub/repositories/<default>/`），并更新技能索引。此命令仅同步仓库层，不涉及项目工作目录的更新。
 
-`--check` 会执行不修改工作树的远端检查：有远端时通过 fetch 更新远端引用并比较 `main` 分支提交；无远端时返回 `no_remote`。JSON 输出中的 `status` 可能为 `no_remote`、`up_to_date`、`updates_available`、`ahead` 或 `divergent`，并包含 `ahead` / `behind` 计数。
+`--check` 会执行不修改工作树的远端检查：有远端时通过 fetch 更新远端引用并比较 `main` 分支提交；无远端时返回 `no_remote`。JSON 输出中的 `status` 可能为 `no_remote`、`up_to_date`、`updates_available`、`ahead` 或 `divergent`，并包含 `ahead` / `behind` 计数。若默认仓库存在未提交更改但远端已是最新，普通 `pull` 不应失败；若远端有更新，则要求用户先提交/暂存，或使用 `--force` 触发自动 stash。
 
 `git sync`、`git pull` 以及 `repo sync` 也遵循同样的索引刷新原则：仓库内容变化后会重建对应 repo 的 `registry.json`，默认仓库同时会刷新根目录兼容索引。
 
@@ -814,7 +814,7 @@ skill-hub pull --check --json
 **语法**: `skill-hub push [--message MESSAGE] [--force] [--dry-run] [--json]`
 
 **选项**:
-- `--message MESSAGE`, `-m MESSAGE`: 提交消息。如未提供，使用默认消息"更新技能"。
+- `--message MESSAGE`, `-m MESSAGE`: 提交消息。如未提供，根据待推送文件自动生成，例如 `更新技能: skill-a` 或 `更新技能: skill-a, skill-b`。
 - `--force`: 强制推送，跳过确认检查。
 - `--dry-run`: 演习模式，仅显示将要推送的更改，不实际执行。
 - `--json`: 输出机器可读推送摘要；实际写入推送时必须同时使用 `--force`，或使用 `--dry-run` 只预览。
@@ -837,7 +837,7 @@ skill-hub pull --check --json
 
 **关键行为**:
 1. 检查默认仓库是否有未提交的更改（Modified、Untracked、Deleted文件）
-2. 如有更改，自动提交（使用指定或默认消息）
+2. 如有更改，自动提交（优先使用指定消息；未指定时根据变更的 skill ID 自动生成消息）
 3. 将提交推送到远程仓库
 4. 如无更改可推送，提示"没有要推送的更改"
 

@@ -76,3 +76,94 @@ metadata:
 		t.Fatalf("registry skill id = %q, want indexed-skill", registry.Skills[0].ID)
 	}
 }
+
+func TestHasRepositoryChanges(t *testing.T) {
+	tests := []struct {
+		name   string
+		status string
+		want   bool
+	}{
+		{
+			name:   "clean status text",
+			status: "技能仓库状态:\n远程仓库: origin\n最新提交: abc123: msg\n工作区干净\n",
+			want:   false,
+		},
+		{
+			name:   "unstaged tracked file",
+			status: " M skills/demo/SKILL.md\n",
+			want:   true,
+		},
+		{
+			name:   "staged tracked file",
+			status: "M  skills/demo/SKILL.md\n",
+			want:   true,
+		},
+		{
+			name:   "mixed staged and unstaged file",
+			status: "MM registry.json\n",
+			want:   true,
+		},
+		{
+			name:   "untracked file",
+			status: "?? skills/demo/new.md\n",
+			want:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasRepositoryChanges(tt.status); got != tt.want {
+				t.Fatalf("hasRepositoryChanges() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSuggestedCommitMessage(t *testing.T) {
+	tests := []struct {
+		name  string
+		files []string
+		want  string
+	}{
+		{
+			name:  "single skill",
+			files: []string{"skills/demo-skill/SKILL.md", "registry.json"},
+			want:  "更新技能: demo-skill",
+		},
+		{
+			name:  "multiple skills sorted",
+			files: []string{"skills/zeta/SKILL.md", "skills/alpha/references/README.md"},
+			want:  "更新技能: alpha, zeta",
+		},
+		{
+			name:  "many skills",
+			files: []string{"skills/d/SKILL.md", "skills/a/SKILL.md", "skills/c/SKILL.md", "skills/b/SKILL.md"},
+			want:  "更新 4 个技能: a, b, c 等",
+		},
+		{
+			name:  "registry only",
+			files: []string{"registry.json"},
+			want:  "更新技能索引",
+		},
+		{
+			name:  "non skill repository file",
+			files: []string{"README.md"},
+			want:  "更新技能仓库",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SuggestedCommitMessage(tt.files); got != tt.want {
+				t.Fatalf("SuggestedCommitMessage() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSuggestedCommitMessageFromStatus(t *testing.T) {
+	status := "技能仓库状态:\n文件状态:\n M  skills/demo/SKILL.md\n?? skills/other/references/a.md\n"
+	if got, want := SuggestedCommitMessageFromStatus(status), "更新技能: demo, other"; got != want {
+		t.Fatalf("SuggestedCommitMessageFromStatus() = %q, want %q", got, want)
+	}
+}
