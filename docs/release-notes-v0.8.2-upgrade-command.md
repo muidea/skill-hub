@@ -14,3 +14,9 @@
 
 - 新增 upgrade service 单元测试，覆盖 latest release 检测、下载校验替换、dry-run 不写文件、archive sha256 校验。
 - 更新安装脚本测试，确保校验对象为 `.tar.gz` 发布包，而不是解压后的二进制。
+- 发布前验证已通过：
+  - `make lint`
+  - `go test ./... --count=1`
+  - `go build -o bin/skill-hub ./application/skill-hub/cmd`
+  - `skill-hub upgrade --version v0.8.1 --dry-run --json`
+  - `pytest -p no:rerunfailures tests/e2e`: 110 passed, 9 skipped
