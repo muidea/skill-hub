@@ -133,9 +133,8 @@ skill-hub serve
 - [安装和使用指南](INSTALLATION.md)
 - [命令规范](docs/Skill-Hub命令规范.md)
 - [开发指南](DEVELOPMENT.md)
-- [v0.8.0 全局技能管理发布说明](docs/release-notes-v0.8.0-global-skill-management.md)
-- [v0.8.1 发布说明流水线收口](docs/release-notes-v0.8.1-release-notes-pipeline.md)
-- [v0.8.2 upgrade 命令发布说明](docs/release-notes-v0.8.2-upgrade-command.md)
+
+历史版本变更请查看 [GitHub Releases](https://github.com/muidea/skill-hub/releases)。仓库内可能保留用于发布流程的版本说明文档，但 README 只维护长期有效的入口文档。
 
 ## 链接
 
