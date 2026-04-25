@@ -7,8 +7,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -26,6 +28,8 @@ const (
 	defaultRepoName  = "skill-hub"
 	defaultAPIBase   = "https://api.github.com"
 	defaultDownloads = "https://github.com"
+
+	defaultHTTPTimeout = 5 * time.Minute
 )
 
 type Options struct {
@@ -66,7 +70,7 @@ type Service struct {
 }
 
 func New() *Service {
-	return &Service{client: &http.Client{Timeout: 30 * time.Second}}
+	return &Service{client: &http.Client{Timeout: defaultHTTPTimeout}}
 }
 
 func NewWithHTTPClient(client *http.Client) *Service {
@@ -292,9 +296,23 @@ func (s *Service) downloadFile(ctx context.Context, url, output string) error {
 	}
 	defer file.Close()
 	if _, err := io.Copy(file, resp.Body); err != nil {
+		if isNetworkReadError(err) {
+			return errors.WrapWithCode(err, "upgrade", errors.ErrNetwork, "下载 Release 资产失败")
+		}
 		return errors.WrapWithCode(err, "upgrade", errors.ErrFileOperation, "写入下载文件失败")
 	}
 	return nil
+}
+
+func isNetworkReadError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if stderrors.Is(err, context.DeadlineExceeded) || stderrors.Is(err, context.Canceled) {
+		return true
+	}
+	var netErr net.Error
+	return stderrors.As(err, &netErr) && netErr.Timeout()
 }
 
 func releaseAssetNames(goos, goarch string) (string, string, error) {

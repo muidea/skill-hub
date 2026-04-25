@@ -13,6 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	apperrors "github.com/muidea/skill-hub/pkg/errors"
 )
 
 func TestCheckDetectsLatestRelease(t *testing.T) {
@@ -32,6 +35,13 @@ func TestCheckDetectsLatestRelease(t *testing.T) {
 	}
 	if !result.UpdateAvailable || result.TargetVersion != "0.9.0" || result.Status != "update_available" {
 		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+func TestNewUsesReleaseDownloadTimeout(t *testing.T) {
+	service := New()
+	if service.client.Timeout < 5*time.Minute {
+		t.Fatalf("default timeout is too short for release downloads: %s", service.client.Timeout)
 	}
 }
 
@@ -88,6 +98,25 @@ func TestUpgradeDownloadsVerifiesAndReplacesBinary(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "skill-hub version 0.9.0") {
 		t.Fatalf("installed binary was not replaced: %q", string(content))
+	}
+}
+
+func TestDownloadFileClassifiesBodyReadTimeoutAsNetwork(t *testing.T) {
+	client := fakeHTTPClient(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: 200,
+			Body:       timeoutReadCloser{},
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	output := filepath.Join(t.TempDir(), "asset.tar.gz")
+	err := NewWithHTTPClient(client).downloadFile(context.Background(), "https://example.test/asset.tar.gz", output)
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if !apperrors.IsCode(err, apperrors.ErrNetwork) {
+		t.Fatalf("expected network error, got %v", err)
 	}
 }
 
@@ -187,4 +216,14 @@ func bytesResponse(status int, body []byte) *http.Response {
 		Body:       io.NopCloser(bytes.NewReader(body)),
 		Header:     make(http.Header),
 	}
+}
+
+type timeoutReadCloser struct{}
+
+func (timeoutReadCloser) Read(_ []byte) (int, error) {
+	return 0, context.DeadlineExceeded
+}
+
+func (timeoutReadCloser) Close() error {
+	return nil
 }
