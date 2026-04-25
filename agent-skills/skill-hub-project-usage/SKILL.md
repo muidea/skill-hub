@@ -5,7 +5,7 @@ compatibility: "Designed for Claude Code, Cursor, OpenCode, and other AI coding 
 metadata:
   author: skill-hub Team
   tags: skill-hub,project-usage,skills,apply,use
-  version: 1.0.2
+  version: 1.0.3
 ---
 
 # Skill Hub Project Usage
@@ -62,6 +62,13 @@ Enable and apply only after selecting a suitable skill from `list` or `search` o
 skill-hub use <skill-id>
 skill-hub apply
 skill-hub status
+```
+
+Refresh one enabled project skill when `status <skill-id>` shows `Outdated`:
+
+```bash
+skill-hub apply <skill-id>
+skill-hub status <skill-id>
 ```
 
 Use dry-run if the user wants to preview file changes:

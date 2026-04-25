@@ -159,6 +159,9 @@ skill-hub use git-expert
 
 # 5. 应用已启用技能到项目
 skill-hub apply
+
+# 只刷新一个已启用技能，例如 status 显示 Outdated 时
+skill-hub apply git-expert
 ```
 
 #### 本机全局启用流程

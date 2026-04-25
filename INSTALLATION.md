@@ -248,6 +248,9 @@ skill-hub use golang-best-practices
 # 应用技能到项目
 skill-hub apply
 
+# 只刷新一个已启用技能，例如 status 显示 Outdated 时
+skill-hub apply golang-best-practices
+
 # 检查技能状态
 skill-hub status
 
@@ -402,6 +405,9 @@ skill-hub use git-expert
 
 # 应用技能到项目
 skill-hub apply
+
+# 只刷新一个已启用技能，例如 status 显示 Outdated 时
+skill-hub apply git-expert
 
 # 演习模式查看将要进行的变更
 skill-hub apply --dry-run

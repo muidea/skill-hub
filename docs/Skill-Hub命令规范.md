@@ -88,7 +88,7 @@ ${OPENCODE_HOME:-$HOME/.config/opencode}/skills
 ### 3.5. 项目工作区-本地仓库交互
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
-| `apply` | 应用技能到项目 | `skill-hub apply [--dry-run] [--force]` |
+| `apply` | 应用技能到项目 | `skill-hub apply [id] [--dry-run] [--force]` |
 | `feedback` | 将项目工作区技能修改内容更新至到本地仓库 | `skill-hub feedback <id> [--dry-run] [--force] [--json]` 或 `skill-hub feedback --all [--dry-run] [--force] [--json]` |
 
 补充：`apply [id] --global [--agent codex|opencode|claude] [--dry-run] [--force]` 会按 `global-state.json` 刷新本机 agent 全局 skills 目录。默认不覆盖没有 `.skill-hub-manifest.json` 的同名目录；`--force` 会先创建备份再覆盖。
@@ -652,7 +652,7 @@ skill-hub status git-expert --global --agent codex
 
 **功能描述**:
 
-根据 `state.json` 中的启用记录，将技能物理分发到标准项目工作区 `.agents/skills/<id>/`。历史 target 不参与分发路径选择。
+根据 `state.json` 中的启用记录，将技能物理分发到标准项目工作区 `.agents/skills/<id>/`。不传 `[id]` 时刷新当前项目所有已启用技能；传入 `[id]` 时只刷新该已启用技能，可用于把 `Outdated` 状态的项目本地 skill 更新到来源仓库版本。历史 target 不参与分发路径选择。
 
 使用 `--global` 时，命令会从来源仓库刷新 `~/.skill-hub/global/skills/<id>/` 镜像，再同步到目标 agent 全局 skills 目录。写入 agent 目录时会生成 `.skill-hub-manifest.json`；同名目录存在但没有 manifest 时默认报告 `conflict`，不会覆盖，除非用户显式提供 `--force`。`--force` 覆盖前会创建 `*.skill-hub-backup.<timestamp>` 备份。
 
@@ -660,6 +660,8 @@ skill-hub status git-expert --global --agent codex
 
 - 当本地服务模式可用时，CLI 会优先通过服务桥接执行
 - 服务端负责实际适配器调用和项目文件分发
+- 项目级 `apply <id>` 会在刷新成功后将项目状态中的版本和状态更新为仓库版本与 `Synced`
+- 项目级 `apply <id>` 显式指定未启用技能时返回 `SKILL_NOT_FOUND`
 - 当显式指定的全局 skill 尚未启用，或 `--agent` 与该 skill 的全局启用目标不匹配时，返回 `SKILL_NOT_FOUND`，不会静默跳过刷新
 
 该命令依赖`init`命令，如果检查本地仓库不存在，则提示需要先进行初始化
@@ -670,6 +672,9 @@ skill-hub status git-expert --global --agent codex
 ```bash
 # 应用启用技能到标准项目工作区
 skill-hub apply
+
+# 只刷新一个已启用项目技能，常用于修复 Outdated 状态
+skill-hub apply git-expert
 
 # 演习模式查看将要进行的变更
 skill-hub apply --dry-run

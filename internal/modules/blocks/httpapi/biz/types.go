@@ -201,6 +201,7 @@ type AuditProjectSkillsData struct {
 
 type ApplyProjectRequest struct {
 	ProjectPath string `json:"project_path"`
+	SkillID     string `json:"skill_id,omitempty"`
 	DryRun      bool   `json:"dry_run"`
 	Force       bool   `json:"force"`
 }

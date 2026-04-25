@@ -189,7 +189,7 @@ func (r *Runtime) EnableSkill(projectPath, skillID, repoName string, variables m
 }
 
 func (r *Runtime) ApplyProject(projectPath string, dryRun, force bool) (*projectapplyservice.ApplyResult, error) {
-	return r.projectApplySvc.Service().Apply(projectPath, dryRun, force)
+	return r.projectApplySvc.Service().Apply(projectPath, "", dryRun, force)
 }
 
 func (r *Runtime) PreviewFeedback(projectPath, skillID string) (*projectfeedbackservice.PreviewResult, error) {

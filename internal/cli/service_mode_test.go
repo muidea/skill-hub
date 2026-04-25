@@ -334,6 +334,9 @@ func TestRunApplyViaServiceWithoutLocalConfig(t *testing.T) {
 	projectDir := t.TempDir()
 	reset := stubServiceBridge(t, &fakeServiceBridgeClient{
 		applyProjectFn: func(ctx context.Context, req httpapibiz.ApplyProjectRequest) (*httpapibiz.ApplyProjectData, error) {
+			if req.SkillID != "demo-skill" {
+				t.Fatalf("SkillID = %q, want demo-skill", req.SkillID)
+			}
 			return &httpapibiz.ApplyProjectData{
 				Item: &projectapplyservice.ApplyResult{
 					ProjectPath: req.ProjectPath,
@@ -349,7 +352,7 @@ func TestRunApplyViaServiceWithoutLocalConfig(t *testing.T) {
 
 	output := withWorkingDir(t, projectDir, func() string {
 		return captureStdout(t, func() {
-			if err := runApply(true, false); err != nil {
+			if err := runApply("demo-skill", true, false); err != nil {
 				t.Fatalf("runApply returned error: %v", err)
 			}
 		})

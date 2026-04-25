@@ -9,6 +9,7 @@ import (
 	projectstatemodule "github.com/muidea/skill-hub/internal/modules/kernel/project_state"
 	repositorymodule "github.com/muidea/skill-hub/internal/modules/kernel/repository"
 	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
 )
 
@@ -39,7 +40,7 @@ func New() *ProjectApply {
 	}
 }
 
-func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResult, error) {
+func (p *ProjectApply) Apply(projectPath, skillID string, dryRun, force bool) (*ApplyResult, error) {
 	stateManager, err := p.projectStateSvc.Service().Manager()
 	if err != nil {
 		return nil, errors.Wrap(err, "Apply: 创建状态管理器失败")
@@ -53,6 +54,13 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 		return nil, errors.NewWithCode("Apply", errors.ErrProjectInvalid, "当前目录未在 skill-hub 中注册")
 	}
 	skills := projectState.Skills
+	if skillID != "" {
+		skillVars, ok := skills[skillID]
+		if !ok {
+			return nil, errors.NewWithCodef("Apply", errors.ErrSkillNotFound, "技能 %s 未在当前项目中启用", skillID)
+		}
+		skills = map[string]spec.SkillVars{skillID: skillVars}
+	}
 	if len(skills) == 0 {
 		return &ApplyResult{
 			ProjectPath: projectState.ProjectPath,
@@ -95,7 +103,8 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 			continue
 		}
 
-		if err := p.copyRepositorySkillToProject(projectState.ProjectPath, repoName, skillID); err != nil {
+		appliedVersion, err := p.copyRepositorySkillToProject(projectState.ProjectPath, repoName, skillID)
+		if err != nil {
 			item.Status = "error"
 			item.Message = err.Error()
 			result.Items = append(result.Items, item)
@@ -107,6 +116,19 @@ func (p *ProjectApply) Apply(projectPath string, dryRun, force bool) (*ApplyResu
 
 		item.Status = "applied"
 		result.Items = append(result.Items, item)
+
+		existing := projectState.Skills[skillID]
+		existing.Status = spec.SkillStatusSynced
+		if appliedVersion != "" {
+			existing.Version = appliedVersion
+		}
+		projectState.Skills[skillID] = existing
+	}
+
+	if !dryRun {
+		if err := stateManager.SaveProjectState(projectState); err != nil {
+			return nil, errors.Wrap(err, "Apply: 保存项目状态失败")
+		}
 	}
 
 	return result, nil
@@ -124,23 +146,32 @@ func (p *ProjectApply) resolveSourceRepository(skillVars spec.SkillVars) (string
 	return defaultRepo.Name, nil
 }
 
-func (p *ProjectApply) copyRepositorySkillToProject(projectPath, repoName, skillID string) error {
+func (p *ProjectApply) copyRepositorySkillToProject(projectPath, repoName, skillID string) (string, error) {
 	projectApplyCwdMu.Lock()
 	defer projectApplyCwdMu.Unlock()
 
 	repoPath, err := p.repositorySvc.Service().Path(repoName)
 	if err != nil {
-		return errors.Wrap(err, "copyRepositorySkillToProject: 获取仓库路径失败")
+		return "", errors.Wrap(err, "copyRepositorySkillToProject: 获取仓库路径失败")
 	}
 	srcDir := filepath.Join(repoPath, "skills", skillID)
-	if _, err := os.Stat(filepath.Join(srcDir, "SKILL.md")); err != nil {
+	skillMDPath := filepath.Join(srcDir, "SKILL.md")
+	if _, err := os.Stat(skillMDPath); err != nil {
 		if os.IsNotExist(err) {
-			return errors.NewWithCodef("copyRepositorySkillToProject", errors.ErrFileNotFound, "技能文件在仓库中不存在: %s", srcDir)
+			return "", errors.NewWithCodef("copyRepositorySkillToProject", errors.ErrFileNotFound, "技能文件在仓库中不存在: %s", srcDir)
 		}
-		return errors.Wrap(err, "copyRepositorySkillToProject: 检查仓库技能失败")
+		return "", errors.Wrap(err, "copyRepositorySkillToProject: 检查仓库技能失败")
 	}
+	content, err := os.ReadFile(skillMDPath)
+	if err != nil {
+		return "", errors.Wrap(err, "copyRepositorySkillToProject: 读取仓库技能失败")
+	}
+	version := skill.ExtractVersion(content)
 	dstDir := filepath.Join(projectPath, ".agents", "skills", skillID)
-	return syncSkillDirectory(srcDir, dstDir)
+	if err := syncSkillDirectory(srcDir, dstDir); err != nil {
+		return "", err
+	}
+	return version, nil
 }
 
 func syncSkillDirectory(srcDir, dstDir string) error {

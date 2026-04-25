@@ -5,7 +5,7 @@ compatibility: "Designed for Claude Code, Cursor, OpenCode, and other AI coding 
 metadata:
   author: skill-hub Team
   tags: skill-hub,skills,workflow,router
-  version: 1.1.3
+  version: 1.1.4
 ---
 
 # Skill Hub Workflow Router
@@ -78,6 +78,7 @@ skill-hub list
 skill-hub search <keyword>
 skill-hub use <skill-id>
 skill-hub apply
+skill-hub apply <skill-id>
 skill-hub status
 ```
 

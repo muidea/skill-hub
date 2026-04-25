@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -32,10 +31,11 @@ var applyCmd = &cobra.Command{
 			}
 			return runApplyGlobal(skillID, agents, dryRun, force)
 		}
+		skillID := ""
 		if len(args) > 0 {
-			return errors.NewWithCode("apply", errors.ErrInvalidInput, "项目级 apply 不接受技能 ID；如需刷新全局单个技能，请使用 --global")
+			skillID = args[0]
 		}
-		return runApply(dryRun, force)
+		return runApply(skillID, dryRun, force)
 	},
 }
 
@@ -81,9 +81,9 @@ func runApplyGlobalViaService(client serviceGlobalApplyClient, skillID string, a
 	return nil
 }
 
-func runApply(dryRun bool, force bool) error {
+func runApply(skillID string, dryRun bool, force bool) error {
 	if client, ok := hubClientIfAvailable(); ok {
-		return runApplyViaService(client, dryRun, force)
+		return runApplyViaService(client, skillID, dryRun, force)
 	}
 
 	ctx, err := RequireInitAndWorkspace("")
@@ -91,91 +91,25 @@ func runApply(dryRun bool, force bool) error {
 		return err
 	}
 
-	fmt.Println("正在应用技能到项目...")
-
 	projectState := ctx.ProjectState
 	if projectState == nil {
 		return errors.NewWithCode("runApply", errors.ErrProjectInvalid, "项目状态无效")
 	}
 
-	fmt.Printf("项目路径: %s\n", ctx.Cwd)
-
-	skills, err := ctx.StateManager.GetProjectSkills(ctx.Cwd)
+	result, err := projectapplyservice.New().Apply(ctx.Cwd, skillID, dryRun, force)
 	if err != nil {
-		return errors.Wrap(err, "runApply: 获取项目技能失败")
+		return errors.Wrap(err, "应用技能失败")
 	}
-
-	if len(skills) == 0 {
-		fmt.Println("ℹ️  当前项目未启用任何技能")
-		fmt.Println("使用 'skill-hub use <skill-id>' 启用技能")
-		return nil
-	}
-
-	fmt.Printf("启用技能数: %d\n", len(skills))
-
-	if dryRun {
-		fmt.Println("\n=== 演习模式 (dry-run) ===")
-		fmt.Println("将显示将要执行的变更，不实际修改文件")
-	}
-
-	// 应用所有技能
-	for skillID, skillVars := range skills {
-		fmt.Printf("应用技能: %s\n", skillID)
-
-		sourceRepository := skillVars.SourceRepository
-		if sourceRepository == "" {
-			defaultRepo, err := defaultRepository()
-			if err != nil {
-				fmt.Printf("⚠️  获取默认仓库失败: %v\n", err)
-				continue
-			}
-			if defaultRepo != nil {
-				sourceRepository = defaultRepo.Name
-			}
-		}
-
-		if dryRun {
-			fmt.Println("  [演习] 将应用技能到标准项目技能目录")
-			fmt.Printf("  变量: %v\n", skillVars.Variables)
-		} else {
-			if err := copyRepositorySkillToProject(ctx.Cwd, sourceRepository, skillID); err != nil {
-				fmt.Printf("⚠️  应用技能失败: %s: %v\n", skillID, err)
-			} else {
-				fmt.Printf("✓ 成功应用技能: %s\n", skillID)
-			}
-		}
-	}
-
-	if dryRun {
-		fmt.Println("\n✅ 演习完成，未实际修改文件")
-	} else {
-		fmt.Println("\n✅ 所有技能应用完成")
-	}
+	renderApplyResult(result)
 
 	return nil
-}
-
-func copyRepositorySkillToProject(projectPath, repoName, skillID string) error {
-	repoPath, err := repositoryPath(repoName)
-	if err != nil {
-		return errors.Wrap(err, "copyRepositorySkillToProject: 获取仓库路径失败")
-	}
-	srcDir := filepath.Join(repoPath, "skills", skillID)
-	if _, err := os.Stat(filepath.Join(srcDir, "SKILL.md")); err != nil {
-		if os.IsNotExist(err) {
-			return errors.NewWithCodef("copyRepositorySkillToProject", errors.ErrFileNotFound, "技能文件在仓库中不存在: %s", srcDir)
-		}
-		return errors.Wrap(err, "copyRepositorySkillToProject: 检查仓库技能失败")
-	}
-	dstDir := filepath.Join(projectPath, ".agents", "skills", skillID)
-	return copySkillDirectory(srcDir, dstDir)
 }
 
 type serviceApplyClient interface {
 	ApplyProject(ctx context.Context, req httpapibiz.ApplyProjectRequest) (*httpapibiz.ApplyProjectData, error)
 }
 
-func runApplyViaService(client serviceApplyClient, dryRun bool, force bool) error {
+func runApplyViaService(client serviceApplyClient, skillID string, dryRun bool, force bool) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return utils.GetCwdErr(err)
@@ -183,6 +117,7 @@ func runApplyViaService(client serviceApplyClient, dryRun bool, force bool) erro
 
 	resp, err := client.ApplyProject(context.Background(), httpapibiz.ApplyProjectRequest{
 		ProjectPath: cwd,
+		SkillID:     skillID,
 		DryRun:      dryRun,
 		Force:       force,
 	})

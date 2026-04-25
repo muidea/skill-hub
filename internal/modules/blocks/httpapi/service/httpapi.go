@@ -761,7 +761,7 @@ func (h *HTTPAPI) handleApplyProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.applySvc.Service().Apply(req.ProjectPath, req.DryRun, req.Force)
+	result, err := h.applySvc.Service().Apply(req.ProjectPath, req.SkillID, req.DryRun, req.Force)
 	if err != nil {
 		writeWrappedError(w, err)
 		return
