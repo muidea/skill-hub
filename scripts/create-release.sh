@@ -504,6 +504,7 @@ if ! confirm "是否创建发布"; then
     exit 0
 fi
 
+run_step "运行 lint..." make lint
 run_step "运行测试..." make test
 
 run_step "构建二进制..." make clean

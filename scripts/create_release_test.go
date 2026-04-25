@@ -237,6 +237,9 @@ func TestCreateReleasePushesCurrentBranchBeforeTag(t *testing.T) {
 	env := append(os.Environ(), "LC_ALL=C", "PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	runCmdEnv(t, releaseDir, env, "bash", scriptPath, "--yes", "--version", "0.2.0")
 
+	makeCalls := strings.Fields(readFile(t, filepath.Join(tmpDir, "fake-make-calls.log")))
+	assertSubsequence(t, makeCalls, []string{"lint", "test", "clean", "build"})
+
 	remoteHead := firstField(t, runCmdOutput(t, releaseDir, "git", "ls-remote", "origin", "refs/heads/master"))
 	if remoteHead != localHead {
 		t.Fatalf("remote master was not pushed before release: got %s want %s", remoteHead, localHead)
@@ -314,6 +317,16 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read file %s: %v", path, err)
+	}
+	return string(content)
+}
+
 func createFakeMake(t *testing.T, dir string) string {
 	t.Helper()
 
@@ -326,7 +339,12 @@ func createFakeMake(t *testing.T, dir string) string {
 	makeScript := `#!/usr/bin/env bash
 set -euo pipefail
 
+printf '%s\n' "${1:-}" >> "` + filepath.ToSlash(filepath.Join(dir, "fake-make-calls.log")) + `"
+
 case "${1:-}" in
+    lint)
+        exit 0
+        ;;
     test)
         exit 0
         ;;
@@ -357,6 +375,20 @@ esac
 		t.Fatalf("write fake make: %v", err)
 	}
 	return fakeBin
+}
+
+func assertSubsequence(t *testing.T, values []string, expected []string) {
+	t.Helper()
+
+	pos := 0
+	for _, value := range values {
+		if pos < len(expected) && value == expected[pos] {
+			pos++
+		}
+	}
+	if pos != len(expected) {
+		t.Fatalf("expected make calls to contain %v in order, got %v", expected, values)
+	}
 }
 
 func firstField(t *testing.T, value string) string {
