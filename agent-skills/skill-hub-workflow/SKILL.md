@@ -5,7 +5,7 @@ compatibility: "Designed for Claude Code, Cursor, OpenCode, and other AI coding 
 metadata:
   author: skill-hub Team
   tags: skill-hub,skills,workflow,router
-  version: 1.1.4
+  version: 1.1.5
 ---
 
 # Skill Hub Workflow Router
@@ -55,6 +55,7 @@ Use `skill-hub-project-usage` when the user wants to:
 - `feedback` writes project-local skill changes to the local default skill repository.
 - `push` is the explicit remote publication step. Never run it automatically.
 - `pull` and `repo sync` synchronize remote repositories into local repositories; they are not remote publication.
+- `upgrade` updates the skill-hub binary from GitHub Releases; it is not a skill repository sync and does not publish local skill changes.
 - In `serve` mode, `secretKey` is only required for remote push.
 - `target` and compatibility metadata are descriptive; do not branch business logic by target.
 
@@ -106,6 +107,15 @@ skill-hub push --dry-run --json
 skill-hub push --message "update skills"
 ```
 
+For updating the installed `skill-hub` binary:
+
+```bash
+skill-hub upgrade --check
+skill-hub upgrade --yes
+```
+
+`upgrade` verifies Release sha256 archives, replaces the current binary on Linux/macOS, refreshes bundled `skill-hub-*` agent workflow skills, and restarts registered running `serve` instances unless disabled.
+
 ## Serve Troubleshooting
 
 If a non-push command returns an old read-only error, the running `serve` process is stale. Update or restart the running service instead of changing the project workflow.
@@ -116,8 +126,9 @@ skill-hub serve stop <name>
 skill-hub serve start <name>
 ```
 
-The latest installer restarts running registered `serve` instances after replacing the binary:
+The latest installer and `skill-hub upgrade --yes` restart running registered `serve` instances after replacing the binary:
 
 ```bash
 curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
+skill-hub upgrade --yes
 ```

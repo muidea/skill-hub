@@ -93,6 +93,22 @@ skill-hub --version
 skill-hub --help
 ```
 
+#### 升级已安装版本
+
+已安装的 `skill-hub` 可直接检测 GitHub Releases 是否存在新版本：
+
+```bash
+skill-hub upgrade --check
+```
+
+确认升级时执行：
+
+```bash
+skill-hub upgrade --yes
+```
+
+`upgrade` 会下载当前系统架构对应的 `.tar.gz` 发布包，校验配套 `.sha256`，预执行新版 `skill-hub --version`，再替换当前二进制。升级完成后默认同步 release 内置 `skill-hub-*` agent workflow skills，并重启已注册且正在运行的 `serve` 实例。可用 `--skip-agent-skills` 跳过 skill 同步，用 `--no-restart-serve` 跳过 serve 重启。Linux 与 macOS 支持自动替换；Windows 当前请继续使用安装脚本或手动下载 Release 包。
+
 ### 3. 从源码编译
 
 如果您需要自定义构建、参与开发或使用最新代码，可以从源码编译。
@@ -207,6 +223,7 @@ skill-hub 提供了一系列命令来管理技能和项目。
 | `prune` | 清理 `state.json` 中失效的项目记录 | `skill-hub prune` |
 | `pull` | 拉取默认仓库的远程更新 | `skill-hub pull [--force] [--check] [--json]` |
 | `push` | 推送默认仓库的本地更改 | `skill-hub push [--message MESSAGE] [--force] [--dry-run] [--json]` |
+| `upgrade` | 检测并升级 skill-hub 到 GitHub Release 版本 | `skill-hub upgrade [--check] [--yes] [--version vX.Y.Z] [--dry-run] [--force] [--json]` |
 
 ### 多仓库管理命令
 
@@ -478,6 +495,7 @@ skill-hub apply --help
 skill-hub feedback --help
 skill-hub pull --help
 skill-hub push --help
+skill-hub upgrade --help
 
 # 查看版本信息
 skill-hub --version

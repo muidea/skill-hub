@@ -62,6 +62,7 @@ func init() {
 	rootCmd.AddCommand(feedbackCmd)
 	rootCmd.AddCommand(pullCmd)
 	rootCmd.AddCommand(pushCmd)
+	rootCmd.AddCommand(upgradeCmd)
 	rootCmd.AddCommand(gitCmd)
 	rootCmd.AddCommand(repoCmd)
 	rootCmd.AddCommand(pruneCmd)

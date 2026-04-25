@@ -26,6 +26,8 @@ ${OPENCODE_HOME:-$HOME/.config/opencode}/skills
 
 可通过 `SKILL_HUB_INSTALL_AGENT_SKILLS=0` 跳过所有 agent skills 安装，通过 `SKILL_HUB_AGENT_SKILLS_DIR=/path/to/skills` 覆盖工具无关目录。Codex、OpenCode、Claude 镜像分别可用 `SKILL_HUB_INSTALL_CODEX_SKILLS=0`、`SKILL_HUB_INSTALL_OPENCODE_SKILLS=0`、`SKILL_HUB_INSTALL_CLAUDE_SKILLS=0` 关闭，也可用 `CODEX_SKILLS_DIR`、`OPENCODE_SKILLS_DIR`、`CLAUDE_SKILLS_DIR` 覆盖目标目录。安装脚本只覆盖 release 内置的 `skill-hub-*` workflow skills，不扫描或删除其他用户 skill。
 
+内置 `upgrade` 命令复用同一套 GitHub Release 资产和 agent workflow skills 安装约定。Linux 与 macOS 支持自动替换当前二进制；Windows 当前只提示使用安装脚本或手动下载 Release 包。
+
 ## 名词说明
 
 * **项目**：需要启用和管理 Skill 的代码工作区。
@@ -115,6 +117,7 @@ ${OPENCODE_HOME:-$HOME/.config/opencode}/skills
 | `pull` | 从远程仓库拉取最新技能 | `skill-hub pull [--force] [--check] [--json]` |
 | `push` | 推送本地更改到远程仓库 | `skill-hub push [--message MESSAGE] [--force] [--dry-run] [--json]` |
 | `git` | Git仓库操作 | `skill-hub git <subcommand>` |
+| `upgrade` | 检测并升级 skill-hub 二进制 | `skill-hub upgrade [--check] [--yes] [--version vX.Y.Z] [--dry-run] [--force] [--json]` |
 
 ## 4. 命令详细规范
 
@@ -855,7 +858,44 @@ skill-hub push --dry-run
 skill-hub push --dry-run --json
 ```
 
-### 4.15 git - Git仓库操作
+### 4.15 upgrade - 检测并升级 skill-hub
+
+**语法**: `skill-hub upgrade [--check] [--yes] [--version vX.Y.Z] [--dry-run] [--force] [--json] [--skip-agent-skills] [--no-restart-serve]`
+
+**选项**:
+- `--check`: 仅检测 GitHub Releases 是否存在新版本，不修改文件。
+- `--yes`: 跳过交互确认，检测到可升级版本后自动执行升级。
+- `--version vX.Y.Z`: 指定目标 Release 版本；未指定时使用 latest release。
+- `--dry-run`: 生成升级计划，不下载或替换二进制。
+- `--force`: 允许重新安装当前版本或安装低于当前版本的指定版本。
+- `--json`: 输出机器可读检测或执行结果。
+- `--skip-agent-skills`: 升级二进制后跳过 release 内置 `skill-hub-*` agent workflow skills 同步。
+- `--no-restart-serve`: 升级后不自动重启已注册且正在运行的 `serve` 实例。
+
+**功能描述**:
+
+检测 `muidea/skill-hub` GitHub Releases，按当前 `GOOS/GOARCH` 下载对应 `.tar.gz` 发布包和 `.sha256` 文件。命令会校验发布包 sha256，解压后预执行新版 `skill-hub --version` 验证版本，再通过同目录临时文件 rename 替换当前二进制。
+
+Linux 与 macOS 支持自动替换当前运行中的二进制。Windows 当前不做运行中自动替换，命令会返回明确提示，用户需继续使用安装脚本或手动下载 Release 包。
+
+升级成功后，默认同步 release 内置 `skill-hub-*` agent workflow skills 到工具无关目录和检测到的 agent 全局 skills 目录，并尝试重启已注册且正在运行的 `serve` 实例。该命令不依赖项目初始化，也不修改技能仓库或项目工作区。
+
+**示例**:
+```bash
+# 只检测是否有新版本
+skill-hub upgrade --check
+
+# 自动升级到 latest release
+skill-hub upgrade --yes
+
+# 预览升级计划并输出 JSON
+skill-hub upgrade --dry-run --json
+
+# 安装指定版本
+skill-hub upgrade --version v0.8.1 --yes
+```
+
+### 4.16 git - Git仓库操作
 
 **语法**: `skill-hub git <subcommand> [options]`
 
@@ -923,9 +963,9 @@ skill-hub git remote https://github.com/your-username/skills-repo.git
   ```
 
 ### 5.3 通用选项
-- `--dry-run`: 演习模式（支持命令: `apply`, `feedback`, `import`, `sync-copies`, `lint`, `push`）
-- `--force`: 强制模式（支持命令: `apply`, `feedback`, `import`, `pull`, `push`）
-- `--json`: 机器可读输出（支持命令: `status`, `repo list`, `repo sync`, `feedback`, `validate`, `dedupe`, `sync-copies`, `lint`, `audit`, `pull`, `push`）
+- `--dry-run`: 演习模式（支持命令: `apply`, `feedback`, `import`, `sync-copies`, `lint`, `push`, `upgrade`）
+- `--force`: 强制模式（支持命令: `apply`, `feedback`, `import`, `pull`, `push`, `upgrade`）
+- `--json`: 机器可读输出（支持命令: `status`, `repo list`, `repo sync`, `feedback`, `validate`, `dedupe`, `sync-copies`, `lint`, `audit`, `pull`, `push`, `upgrade`）
 
 ## 6. 使用示例
 
@@ -1173,6 +1213,7 @@ skill-hub repo sync --json
 - `create`
 - `remove` 的项目模式
 - `prune`
+- `upgrade`
 - `git` 的交互式或非 JSON 子命令
 
 ## 9. 更新记录
@@ -1203,6 +1244,7 @@ skill-hub repo sync --json
 | 1.21 | 2026-04-19 | Web UI/API 增加基础安全响应头，并在默认 loopback 监听下拒绝跨站写请求 |
 | 1.22 | 2026-04-19 | `serve` 增加 `--secret-key` 保护配置，后续收口为默认仓库远端推送保护 |
 | 1.23 | 2026-04-19 | CLI bridge 保留服务端错误码，Web UI 管理端增强只读与密钥错误提示 |
+| 1.24 | 2026-04-25 | 增加 `upgrade` 自升级命令，复用 GitHub Release 资产、sha256 校验、agent workflow skills 同步和 serve 重启约定 |
 | 1.24 | 2026-04-20 | Web UI 目录页技能总数改用服务端 `total`，管理端移除写入密钥入口 |
 | 1.25 | 2026-04-20 | 弱化 Skill `compatibility` 处理，列表/搜索/Web UI 不再按兼容性硬过滤 |
 | 1.26 | 2026-04-20 | `target` 降级为兼容输入，Web UI 不再展示目标选择，项目业务统一使用 `.agents/skills` |

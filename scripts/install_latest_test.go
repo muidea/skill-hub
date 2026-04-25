@@ -123,6 +123,24 @@ func TestInstallLatestInstallsBundledAgentSkills(t *testing.T) {
 	}
 }
 
+func TestInstallLatestVerifiesReleaseArchiveChecksum(t *testing.T) {
+	contentBytes, err := os.ReadFile("install-latest.sh")
+	if err != nil {
+		t.Fatalf("read install script: %v", err)
+	}
+
+	content := string(contentBytes)
+	downloadBlock := sectionBetween(t, content, "# 下载校验文件", "# 解压文件")
+	if !strings.Contains(downloadBlock, "verify_file \"$ARCHIVE_NAME\" \"$CHECKSUM_NAME\"") {
+		t.Fatalf("installer should verify the release archive checksum before extraction")
+	}
+
+	binaryBlock := sectionBetween(t, content, "# 查找解压出的二进制文件", "# 显示内容")
+	if strings.Contains(binaryBlock, "verify_file \"$ACTUAL_BINARY\" \"$CHECKSUM_NAME\"") {
+		t.Fatalf("installer should not verify extracted binary with archive checksum")
+	}
+}
+
 func TestReleasePackagesIncludeAgentSkills(t *testing.T) {
 	contentBytes, err := os.ReadFile("../Makefile")
 	if err != nil {

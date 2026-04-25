@@ -1,402 +1,148 @@
-# skill-hub 🚀
+# skill-hub
 
-一款专为 AI 时代开发者设计的"技能（Prompt/Script）生命周期管理工具"。它旨在解决 AI 指令碎片化、跨工具同步难、缺乏版本控制等痛点。
+`skill-hub` 是面向 AI 编程工具的 skill 生命周期管理工具。它用 Git 仓库管理可复用的 Prompt、脚本和工作流说明，并把这些 skill 分发到项目工作区或本机全局 agent skills 目录。
 
 [![CI](https://github.com/muidea/skill-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/ci.yml)
 [![Tests](https://github.com/muidea/skill-hub/actions/workflows/test.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/test.yml)
 [![Release](https://github.com/muidea/skill-hub/actions/workflows/release.yml/badge.svg)](https://github.com/muidea/skill-hub/actions/workflows/release.yml)
 
-## 简介
+## 能做什么
 
-`skill-hub` 首先是一个命令行工具，用于管理 skill、在项目中启用 skill，并维护 skill 的仓库生命周期。
+- 管理多个 skill 仓库，支持查看、搜索、同步和切换默认归档仓库。
+- 在项目中启用 skill，并应用到标准目录 `.agents/skills/`。
+- 检查项目 skill 是否与来源仓库一致，并刷新 `Outdated` 的本地副本。
+- 将项目中改进过的 skill 反馈回默认仓库，形成 `use -> apply -> feedback -> push` 闭环。
+- 将托管 skill 启用到本机全局 agent skills 目录，服务 Codex、OpenCode、Claude 等工具。
+- 支持已有 skill 登记、批量导入、验证、重复副本检测、路径可移植性审计和刷新审计报告。
+- 支持本地 `serve` 模式，为 CLI 和 Web 管理提供统一的本机执行入口。
+- 支持从 GitHub Releases 检测和升级已安装的 `skill-hub`。
 
-同时它支持以 `serve` 模式运行。`serve` 模式会托管用户本地的 `~/.skill-hub/` 目录，提供 Web 管理能力；CLI 在执行命令时会优先与本地 `serve` 实例交互，但 `serve` 不是必选项，本地服务不可用时所有命令都必须回退到本地执行。
+## 安装
 
-当前除了前台直接运行：
-
-```bash
-skill-hub serve
-# 推送本地仓库到远端需开启 secretKey；未配置时仅禁止远端推送
-skill-hub serve --secret-key write-secret
-```
-
-也支持服务实例管理：
-
-```bash
-skill-hub serve register local --host 127.0.0.1 --port 6600 --secret-key write-secret
-skill-hub serve start local
-skill-hub serve status
-skill-hub serve stop local
-skill-hub serve remove local
-```
-
-服务注册信息会持久化到 `~/.skill-hub/services.json`，`start` 会记录后台进程 `pid` 与日志路径，`status` 会显示 `running` / `stopped` / `stale` 三种状态，并以 `push=blocked` 或 `push=secret-key` 标识远端推送保护模式。
-
-### 概念模型
-
-1. **全局管理目录**：`~/.skill-hub/`
-   承接多仓库配置、本地仓库存储、默认仓库、全局状态、索引和缓存。
-
-2. **项目本地工作区**：`<project>/.agents/skills/`
-   承接当前项目实际使用的 skill 内容，是项目侧的工作目录。
-
-3. **本机全局工作区**：`~/.skill-hub/global/skills/`
-   承接通过 `--global` 启用的本机级 skill 镜像。`apply --global` 会在此基础上刷新本机已配置的 agent 全局 skills 目录，例如 Codex、OpenCode、Claude。
-
-4. **来源仓库**
-   指某个 skill 在 `use` 时选中的仓库。它决定 `apply` 的读取来源，以及 `status` 的上游对比基线。
-
-5. **默认仓库**
-   指当前配置中的默认仓库，同时也是归档仓库。`feedback` 只归档到默认仓库，`pull` / `push` 默认也只操作默认仓库。
-
-6. **多仓库管理**
-   指 `~/.skill-hub/` 下多个本地仓库的配置、启停、默认仓库切换和同步能力。
-
-7. **服务实例**
-   指 `skill-hub serve` 启动的本地服务。它托管 `~/.skill-hub/`，为 Web 管理和 CLI 复用提供统一执行入口。
-
-## 项目结构
-
-当前代码结构包含模块化内核与现有 CLI 实现。当前构建入口统一位于 `application/skill-hub/cmd`，实际命令执行仍由 `internal/cli` 承载，`internal/modules/kernel` 主要提供服务化封装与后续重构落点：
-
-```text
-skill-hub/
-├── application/skill-hub/      # 主应用入口
-│   ├── cmd/                    # 推荐构建入口
-│   └── docker/                 # Docker 启动定义
-├── internal/modules/kernel/    # 核心模块壳层
-├── internal/cli/               # CLI 命令实现
-├── internal/adapter/           # 外部工具适配器
-├── internal/engine/            # 技能引擎
-├── internal/state/             # 状态管理
-└── pkg/                        # 公共包
-```
-
-当前推荐构建命令：
-
-```bash
-go build -o bin/skill-hub ./application/skill-hub/cmd
-```
-
-### 核心理念
-
-- **Git 为中心**：所有技能存储在Git仓库中，作为单一可信源
-- **多仓库架构**：支持同时管理多个技能仓库（个人、社区、官方）
-- **一键分发**：将技能快速应用到不同的AI工具
-- **闭环反馈**：将项目中的手动修改反馈回技能仓库
-- **现代架构**：采用 Go 1.24+ 特性，遵循 Effective Go 最佳实践
-
-### 功能特性
-
-- **技能管理**：查看、启用、禁用技能
-- **技能创建**：从当前项目创建新的技能模板
-- **已有技能登记**：将 `.agents/skills/<id>/SKILL.md` 中的存量技能登记到项目状态
-- **本机全局启用**：通过 `--global` 将技能按需应用到本机 agent 全局 skills 目录
-- **Agent 一致性检查**：根据当前机器实际配置的 Codex、OpenCode、Claude 全局目录检查、刷新 skill
-- **批量导入**：扫描 `.agents/skills/*/SKILL.md`，批量登记、修复、验证并可选归档
-- **重复检测与副本同步**：扫描嵌套项目中的同 ID 技能副本，报告冲突，并可从 canonical 目录同步副本
-- **本地验证**：校验项目本地 skill 是否符合规范，并可用 `--fix` 修复 legacy frontmatter
-- **技能归档**：将验证通过的技能归档到正式仓库
-- **跨工具同步**：支持 Cursor、Claude Code、OpenCode 等AI工具
-- **版本控制**：基于Git的技能版本管理
-- **差异检测**：自动检测手动修改并支持反馈
-- **安全操作**：原子文件写入和备份机制
-- **全面测试**：单元测试 + 端到端测试覆盖
-
-### 命令分层
-
-- **项目本地工作区命令**：`use`、`status`、`apply`、`feedback`、`pull`、`push`、`create`、`register`、`import`、`dedupe`、`sync-copies`、`lint`、`audit`、`remove`、`validate`
-- **多仓库管理命令**：`repo *`
-- **状态维护命令**：`prune`
-- **远端搜索命令**：`search`
-- **底层运维命令**：`git *`、`serve`
-- **引导命令**：`init`
-
-其中：
-
-- `create` 只作用于项目本地工作区，不参与服务化托管；`remove` 默认移除项目技能，带 `--global` 时移除本机全局技能
-- `search` 面向远端能力；当本地 `serve` 实例可用时优先通过服务承接远端交互，不可用时回退到本地执行
-- `repo *` 面向 `~/.skill-hub/` 下的多仓库管理
-- `prune` 用于清理 `state.json` 中因项目目录移动、删除而残留的失效项目记录
-- `use` / `status` / `apply` / `feedback` / `pull` / `push` 都服务于项目工作流，但会依赖全局管理目录中的仓库与状态信息
-- `use --global` / `status --global` / `apply --global` / `remove --global` 服务于本机全局 agent skills 目录；`list` 始终表示仓库可用技能清单，不区分项目或全局作用域
-- `register` / `import` / `dedupe` / `sync-copies` / `lint --paths` / `validate` / `audit` / `pull` / `push` 在本地 `serve` 实例可用时会优先通过服务桥接执行；涉及项目路径的命令会把路径解析为绝对路径再交给服务端，避免 `serve` 进程工作目录不同导致误扫或误改
-
-## 🚀 快速开始
-
-### 安装
-
-使用一键安装脚本（最简单的方式）：
+推荐使用一键安装脚本：
 
 ```bash
 curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
 ```
 
-安装脚本会同时安装 release 内置的 `skill-hub-*` workflow skills 到工具无关目录 `${XDG_DATA_HOME:-$HOME/.local/share}/skill-hub/agent-skills`，并检测当前系统中已安装或已有配置目录的 agent，再同步镜像到对应全局 skills 目录，让 agent 在创建或使用 skill 时优先采用 skill-hub 工作流。可通过 `SKILL_HUB_INSTALL_AGENT_SKILLS=0` 跳过全局安装，通过 `SKILL_HUB_AGENT_SKILLS_DIR=/path/to/skills` 指定通用目录；Codex、OpenCode、Claude 镜像分别可用 `SKILL_HUB_INSTALL_CODEX_SKILLS=0`、`SKILL_HUB_INSTALL_OPENCODE_SKILLS=0`、`SKILL_HUB_INSTALL_CLAUDE_SKILLS=0` 关闭，也可通过 `CODEX_SKILLS_DIR`、`OPENCODE_SKILLS_DIR`、`CLAUDE_SKILLS_DIR` 指定目标目录。
+安装后检查版本：
 
-### 基本使用
-
-安装完成后，按照以下工作流程开始使用：
-
-项目本地 Skill 目录统一使用 `.agents/skills/`。`target` 命令和参数入口已从 CLI/API 移除，不再写入项目状态、不参与适配器选择、不参与列表/搜索过滤，也不作为任何业务校验依据。Skill `compatibility` 仅在存在说明时作为基础信息展示。
-
-#### 多仓库初始化流程
 ```bash
-# 1. 初始化多仓库工作区（可指定初始仓库URL）
-skill-hub init https://github.com/muidea/skill-hub-examples.git
-
-# 2. 添加更多技能仓库（可选）
-skill-hub repo add community https://github.com/community/skills.git
-skill-hub repo add personal https://github.com/yourname/skills.git
-
-# 3. 设置默认归档仓库
-skill-hub repo default main
-
-# 4. 先查看和搜索可用技能，再选择合适的技能启用
-skill-hub list
-skill-hub search git
-skill-hub use git-expert
-
-# 5. 应用已启用技能到项目
-skill-hub apply
-
-# 只刷新一个已启用技能，例如 status 显示 Outdated 时
-skill-hub apply git-expert
+skill-hub --version
 ```
 
-#### 本机全局启用流程
+已安装用户可检测和升级到最新 Release：
+
 ```bash
-# 将技能加入本机全局期望状态，可重复指定 agent
+skill-hub upgrade --check
+skill-hub upgrade --yes
+```
+
+更多安装方式、环境变量和故障排查见 [INSTALLATION.md](INSTALLATION.md)。
+
+## 快速开始
+
+在需要使用 skill 的项目目录中初始化：
+
+```bash
+skill-hub init
+```
+
+同步仓库并查找可用 skill：
+
+```bash
+skill-hub repo sync --json
+skill-hub list
+skill-hub search git
+```
+
+启用并应用 skill：
+
+```bash
+skill-hub use git-expert
+skill-hub apply
+skill-hub status
+```
+
+只刷新一个已启用 skill：
+
+```bash
+skill-hub apply git-expert
+skill-hub status git-expert
+```
+
+将项目中的改进反馈回默认仓库：
+
+```bash
+skill-hub feedback git-expert --dry-run
+skill-hub feedback git-expert --force
+skill-hub push --dry-run --json
+```
+
+## 本机全局 Skill
+
+如果希望某个 skill 对本机 agent 全局可用，可以使用 `--global`：
+
+```bash
 skill-hub use git-expert --global --agent codex
-
-# 检查 Skill-Hub 期望状态与当前机器 agent 全局 skills 目录是否一致
 skill-hub status --global
-
-# 预览刷新动作
 skill-hub apply --global --dry-run
-
-# 刷新本机 agent 全局 skills 目录
 skill-hub apply --global
 ```
 
-全局状态记录在 `~/.skill-hub/global-state.json`，表示用户希望哪些 skill 对哪些 agent 全局有效。实际写入的 agent 目录会包含 `.skill-hub-manifest.json`，用于区分 Skill-Hub 托管目录和用户手写目录；遇到同名但没有 manifest 的目录时默认报告冲突，只有显式 `--force` 才会备份并覆盖。
-当 `status --global <id>` 或 `apply <id> --global` 显式指定的技能尚未全局启用，或指定的 `--agent` 并未启用该技能时，命令会返回明确错误，避免把遗留空状态误判为已完成。
+`use --global` 只记录期望状态，`apply --global` 才会刷新本机 agent 全局 skills 目录。
 
-#### 技能创建与验证流程
+## 常用工作流
+
+创建新 skill：
+
 ```bash
-# 1. 从当前项目创建新技能模板
-skill-hub create my-new-skill
-
-# 生成的 SKILL.md 默认使用中文定义，并包含 Formatter 段
-
-# 2. 在 feedback 前校验本地新建 skill
-skill-hub validate my-new-skill
-
-# 3. 反馈手动修改并归档到默认仓库
-skill-hub feedback my-new-skill
-
-# 批量反馈当前项目中已登记的所有技能，适合批量刷新后归档
-skill-hub feedback --all --force --json
-
-# 预览默认仓库待推送变更，输出机器可读摘要
-skill-hub push --dry-run --json
-
-# 检查默认仓库拉取动作，输出机器可读摘要
-skill-hub pull --check --json
-
-# 查看默认仓库工作区状态，输出机器可读摘要
-skill-hub git status --json
-
-# 执行底层默认仓库同步，输出机器可读摘要
-skill-hub git sync --json
+skill-hub create my-skill
+skill-hub validate my-skill --links
+skill-hub feedback my-skill --force
 ```
 
-`pull --check --json` 会返回 `no_remote`、`up_to_date`、`updates_available`、`ahead` 或 `divergent`，并包含本地/远端提交与 `ahead` / `behind` 计数，便于自动化判断是否需要执行实际拉取。
+登记已有项目 skill：
 
-服务 API 的默认仓库推送必须先预览再确认：`GET /api/v1/skill-repository/push-preview` 返回 `changed_files`，`POST /api/v1/skill-repository/push` 必须携带 `confirm: true`，并可携带 `expected_changed_files` 防止预览后文件变化仍继续推送。
-
-Web UI 管理端的默认仓库推送入口也遵循同一约束：先点击“预览推送”取得变更列表，勾选确认后才会启用“推送默认仓库”。
-
-服务 API 的业务错误会保留稳定错误码，例如 `SKILL_NOT_FOUND`、`PROJECT_NOT_FOUND`、`VALIDATION_FAILED`、`INVALID_INPUT`，并按错误类别映射到对应 HTTP 状态，便于 CLI bridge 和 Web UI 统一处理。
-
-`serve` 默认绑定 `127.0.0.1`，在 loopback 监听下还会校验 Host header 必须为 loopback；显式绑定到非 loopback 地址时保留远程访问兼容行为。
-
-Web UI/API 会设置基础安全响应头；默认 loopback 监听下，修改类请求会拒绝非 loopback `Origin` / `Referer` 和 `Sec-Fetch-Site: cross-site`，CLI bridge 仍保持兼容。
-
-`serve` 远端推送采用可选 `secretKey`：未配置 `--secret-key` 时，读取、项目本地写入、仓库拉取/同步和 Web UI 仍可访问，但 `POST /api/v1/skill-repository/push` 会返回 `READ_ONLY`，禁止将本地仓库推送至远端；配置后该推送 API 必须携带 `X-Skill-Hub-Secret-Key`。当前阶段 Web UI 管理端不开放写入密钥能力，只展示只读或密钥错误；CLI bridge 可通过 `SKILL_HUB_SERVICE_SECRET_KEY` 传递该值。
-
-#### 存量技能登记与批量导入流程
 ```bash
-# 登记已有 .agents/skills/<id>/SKILL.md，不创建或覆盖内容
 skill-hub register existing-skill
-
-# 修复 legacy SKILL.md frontmatter（修改前自动创建 SKILL.md.bak.<timestamp>）
 skill-hub validate existing-skill --fix
-
-# 检查 SKILL.md 和技能目录内 Markdown 文件的本地链接
-skill-hub validate existing-skill --links
-
-# 批量扫描、修复、登记、验证，并归档到默认仓库
-skill-hub import .agents/skills \
-  --fix-frontmatter \
-  --archive \
-  --force
-
-# 面向自动化脚本输出状态 JSON
-skill-hub status --json
 ```
 
-#### 重复检测与副本同步流程
-```bash
-# 检测 scope 下所有 .agents/skills/<id>/SKILL.md 重复副本
-skill-hub dedupe . --canonical .agents/skills --strategy newest
+批量导入和归档：
 
-# 输出机器可读报告
+```bash
+skill-hub import .agents/skills --fix-frontmatter --archive --force
+```
+
+检查重复副本和路径可移植性：
+
+```bash
 skill-hub dedupe . --canonical .agents/skills --json
-
-# 从 canonical 目录同步所有同 ID 副本，默认先创建 <skill-dir>.bak.<timestamp>
-skill-hub sync-copies --canonical .agents/skills --scope .
-
-# 只预览将同步的副本
-skill-hub sync-copies --canonical .agents/skills --scope . --dry-run
+skill-hub lint . --paths --project-root "$PWD" --json
 ```
 
-#### 路径可移植性审计流程
+启动本地服务：
+
 ```bash
-# 扫描技能内容中的本机绝对路径、file://、vscode:// 链接
-skill-hub lint . --paths --project-root "$PWD"
-
-# 自动将 project-root 内的本机路径改写为相对路径，默认创建 SKILL.md.bak.<timestamp>
-skill-hub lint . --paths --project-root "$PWD" --fix
-
-# 演习模式输出 JSON，适合脚本审计
-skill-hub lint . --paths --project-root "$PWD" --fix --dry-run --json
+skill-hub serve
 ```
 
-#### 技能刷新审计报告
-```bash
-# 生成 Markdown 审计报告，聚合数量、登记、validate、status、dedupe、lint 和默认仓库推送状态
-skill-hub audit .agents/skills --output .agents/skills-refresh-progress.md
+## 文档
 
-# 输出 JSON 报告，适合 CI 或 agent 自动化消费
-skill-hub audit .agents/skills --format json
-```
+- [安装和使用指南](INSTALLATION.md)
+- [命令规范](docs/Skill-Hub命令规范.md)
+- [开发指南](DEVELOPMENT.md)
+- [v0.8.0 全局技能管理发布说明](docs/release-notes-v0.8.0-global-skill-management.md)
+- [v0.8.1 发布说明流水线收口](docs/release-notes-v0.8.1-release-notes-pipeline.md)
+- [v0.8.2 upgrade 命令发布说明](docs/release-notes-v0.8.2-upgrade-command.md)
 
-#### 多仓库管理示例
-```bash
-# 查看所有仓库
-skill-hub repo list
+## 链接
 
-# 机器可读仓库列表
-skill-hub repo list --json
+- [GitHub 仓库](https://github.com/muidea/skill-hub)
+- [Releases](https://github.com/muidea/skill-hub/releases)
+- [Issues](https://github.com/muidea/skill-hub/issues)
 
-# 同步所有仓库
-skill-hub repo sync
+## 许可证
 
-# 机器可读同步摘要
-skill-hub repo sync --json
-
-# 启用/禁用仓库
-skill-hub repo enable community
-skill-hub repo disable personal
-```
-
-#### 状态维护示例
-```bash
-# 项目目录移动或删除后，清理 state.json 中的失效项目记录
-skill-hub prune
-```
-
-## 🛠️ 命令参考
-
-### 核心命令
-
-| 命令 | 参数 | 功能说明 |
-|------|------|----------|
-| `init` | `[git_url]` | 初始化多仓库工作区 |
-| `list` | `[--verbose]` | 列出可用技能；`compatibility` 仅作为说明展示，不过滤结果 |
-| `search` | `<keyword> [--limit <number>]` | 搜索远程技能；CLI 在本地 `serve` 可用时优先通过服务承接 |
-| `create` | `<id>` | 创建新技能模板 |
-| `register` | `<id> [--skip-validate]` | 登记已有项目本地技能，不覆盖内容 |
-| `import` | `<skills-dir> [--fix-frontmatter] [--archive] [--force] [--dry-run] [--fail-fast]` | 批量登记、验证并可选归档已有技能 |
-| `dedupe` | `<scope> [--canonical <dir>] [--strategy newest\|canonical\|fail-on-conflict] [--json]` | 检测嵌套项目中的重复技能副本 |
-| `sync-copies` | `--canonical <dir> [--scope <dir>] [--dry-run] [--no-backup] [--json]` | 从 canonical 目录同步同 ID 技能副本 |
-| `lint` | `[scope] --paths [--project-root <dir>] [--fix] [--dry-run] [--no-backup] [--json]` | 审计并可修复技能内容中的本机路径 |
-| `audit` | `[scope] [--output <file>] [--format markdown\|json] [--canonical <dir>] [--project-root <dir>]` | 生成技能刷新审计报告 |
-| `remove` | `<id> [--global] [--agent codex\|opencode\|claude] [--force]` | 移除项目技能；`--global` 时移除本机全局技能 |
-| `validate` | `<id> [--fix] [--links] [--json]` 或 `--all [--fix] [--links] [--json]` | 验证项目工作区 skill 的合规性，可修复 legacy frontmatter 并检查本地 Markdown 链接 |
-| `use` | `<id> [--global] [--agent codex\|opencode\|claude]` | 使用指定技能；`--global` 时写入本机全局期望状态 |
-| `status` | `[id] [--verbose] [--json] [--global] [--agent codex\|opencode\|claude]` | 检查项目或本机全局技能状态；`--json` 便于CI和脚本处理 |
-| `apply` | `[id] [--dry-run] [--force] [--global] [--agent codex\|opencode\|claude]` | 应用技能到项目；`--global` 时刷新本机 agent 全局 skills 目录 |
-| `feedback` | `<id> [--dry-run] [--force] [--json]` 或 `--all [--dry-run] [--force] [--json]` | 反馈单个或全部已登记技能修改到默认仓库 |
-| `prune` | `无` | 清理 state.json 中失效的项目记录 |
-| `pull` | `[--force] [--check] [--json]` | 拉取默认仓库的远程更新 |
-| `push` | `[--message MESSAGE] [--force] [--dry-run] [--json]` | 推送默认仓库的本地更改 |
-
-### 多仓库管理命令
-
-| 命令 | 参数 | 功能说明 |
-|------|------|----------|
-| `repo add` | `<name> <git_url>` | 添加新技能仓库 |
-| `repo list` | `[--json]` | 列出所有技能仓库 |
-| `repo remove` | `<name>` | 移除技能仓库 |
-| `repo enable` | `<name>` | 启用技能仓库 |
-| `repo disable` | `<name>` | 禁用技能仓库 |
-| `repo default` | `<name>` | 设置默认（归档）仓库 |
-| `repo sync` | `[name] [--all] [--json]` | 同步指定仓库或所有启用仓库 |
-
-**语法说明**：`<参数>`为必需参数，`[参数]`为可选参数
-
-**全局选项**：
-- `-h, --help` - 显示帮助信息
-- `-v, --version` - 显示版本信息
-- `--dry-run` - 演习模式
-- `--force` - 强制模式
-
-## 📚 文档导航
-
-### 用户文档
-
-- **[详细安装和使用指南](INSTALLATION.md)** - 完整的安装方法、命令参考、技能管理和故障排除
-  - 4种安装方法详解（一键脚本、预编译二进制、源码编译、本地开发）
-  - 完整命令参考和常用工作流程
-  - 技能规范、目录结构和变量系统
-  - 项目工作区、技能元数据和适用说明
-  - 常见问题故障排除
-
-### 开发文档
-
-- **[开发指南](DEVELOPMENT.md)** - 构建、发布、贡献和架构设计
-  - 项目结构和代码架构
-  - 开发环境设置和构建系统
-  - 测试策略和发布流程
-  - 贡献指南和代码审查
-  - 性能优化和安全考虑
-- **[v0.8.0 全局技能管理发布说明](docs/release-notes-v0.8.0-global-skill-management.md)** - `--global` 功能范围、验证结果和后续 lint 收口记录
-- **[v0.8.1 发布说明流水线收口](docs/release-notes-v0.8.1-release-notes-pipeline.md)** - tracked release notes、发布脚本和 GitHub Release workflow 收口记录
-
-## 📋 其他信息
-
-### 许可证
-
-MIT License - 详见 [LICENSE](LICENSE) 文件
-
-### 问题反馈
-
-如遇到问题或有功能建议，请：
-1. 查看现有Issue是否已解决
-2. 创建新的Issue，详细描述问题
-3. 提供复现步骤和环境信息
-
-### 贡献指南
-
-欢迎贡献代码！请参考 [DEVELOPMENT.md](DEVELOPMENT.md) 中的贡献指南。
-
----
-
-**快速链接**:
-- [GitHub仓库](https://github.com/muidea/skill-hub)
-- [最新发布版本](https://github.com/muidea/skill-hub/releases)
-- [问题反馈](https://github.com/muidea/skill-hub/issues)
-- [开发文档](DEVELOPMENT.md)
-- [安装指南](INSTALLATION.md)
+MIT License，详见 [LICENSE](LICENSE)。

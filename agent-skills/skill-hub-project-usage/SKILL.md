@@ -5,7 +5,7 @@ compatibility: "Designed for Claude Code, Cursor, OpenCode, and other AI coding 
 metadata:
   author: skill-hub Team
   tags: skill-hub,project-usage,skills,apply,use
-  version: 1.0.3
+  version: 1.0.4
 ---
 
 # Skill Hub Project Usage
@@ -26,6 +26,7 @@ This is a consumer workflow. If the task is to create or maintain the reusable s
 - `remove --global` removes global desired state and only deletes Skill-Hub managed global skill directories unless `--force` is explicit.
 - `feedback` can archive project-local improvements back to the local default skill repository.
 - `push` is the only remote publication step and must be explicit.
+- `upgrade` updates the installed skill-hub binary and bundled workflow skills; it does not sync skill repositories or publish local changes.
 - Discovery comes before selection: run `list` and/or `search` before `use`, and only run `use` after confirming a suitable managed skill exists.
 
 ## Standard Flow
@@ -202,6 +203,8 @@ If a non-push command returns an old read-only error, the background `serve` pro
 For registered services:
 
 ```bash
+skill-hub upgrade --check
+skill-hub upgrade --yes
 skill-hub serve status
 skill-hub serve stop <name>
 skill-hub serve start <name>
@@ -213,7 +216,7 @@ For fresh installation, the latest installer restarts running registered `serve`
 curl -s https://raw.githubusercontent.com/muidea/skill-hub/master/scripts/install-latest.sh | bash
 ```
 
-Manually started foreground `serve` processes must still be restarted manually.
+`skill-hub upgrade --yes` also refreshes release-bundled `skill-hub-*` workflow skills. Manually started foreground `serve` processes must still be restarted manually.
 
 ## Safety Rules
 

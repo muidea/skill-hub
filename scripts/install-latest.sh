@@ -441,6 +441,18 @@ main() {
         echo "警告: 校验和文件下载失败，跳过验证"
         CHECKSUM_DOWNLOADED=false
     fi
+
+    # 验证压缩包完整性。Makefile 为 .tar.gz 发布包生成 .sha256 文件。
+    if [ "$CHECKSUM_DOWNLOADED" = "true" ]; then
+        if ! verify_file "$ARCHIVE_NAME" "$CHECKSUM_NAME"; then
+            echo "下载失败: 文件验证错误"
+            cd /
+            rm -rf "$TEMP_DIR"
+            exit 1
+        fi
+    else
+        echo "跳过文件验证（校验文件缺失）"
+    fi
     
     # 解压文件
     if ! extract_file "$ARCHIVE_NAME"; then
@@ -477,19 +489,6 @@ main() {
     fi
     
     echo "找到可执行文件: $ACTUAL_BINARY"
-    
-    # 验证文件（仅当校验文件下载成功时）
-    # 注意：校验文件验证的是解压后的二进制文件，不是压缩包
-    if [ "$CHECKSUM_DOWNLOADED" = "true" ]; then
-        if ! verify_file "$ACTUAL_BINARY" "$CHECKSUM_NAME"; then
-            echo "下载失败: 文件验证错误"
-            cd /
-            rm -rf "$TEMP_DIR"
-            exit 1
-        fi
-    else
-        echo "跳过文件验证（校验文件缺失）"
-    fi
     
     # 显示内容
     echo ""
