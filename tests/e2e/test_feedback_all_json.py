@@ -102,7 +102,9 @@ metadata:
             cwd=str(self.project_dir),
             env=self.env,
         )
-        assert not git_sync.success
+        assert git_sync.success, f"git sync --json failed: {git_sync.stderr}\n{git_sync.stdout}"
         git_sync_data = json.loads(git_sync.stdout)
         assert git_sync_data["command"] == "sync"
-        assert git_sync_data["status"] == "failed"
+        # 本地有未提交更改但远程无更新时，sync 成功并保留本地更改
+        assert git_sync_data["status"] == "synced"
+        assert git_sync_data["skill_count"] > 0

@@ -6,6 +6,7 @@ Based on testCaseV2.md v3.0
 
 import os
 import json
+import shutil
 import tempfile
 import pytest
 from pathlib import Path
@@ -74,16 +75,24 @@ class TestScenario6RemoteSynchronization:
     def test_01_command_dependency_check(self):
         """Test 6.1: Command dependency check verification"""
         print("\n=== Test 6.1: Command Dependency Check ===")
-        
-        # 创建一个新的临时目录，确保没有初始化
-        temp_dir = Path(self.home_dir) / "temp-uninitialized-6"
-        temp_dir.mkdir(exist_ok=True)
-        
-        # 测试未初始化时执行 skill-hub pull
-        result = self.cmd.run("pull", cwd=str(temp_dir))
-        # 应该提示需要先进行初始化
-        assert not result.success or "需要先进行初始化" in result.stdout or "需要先进行初始化" in result.stderr, \
-            f"Should prompt for initialization when running pull without init"
+
+        # 使用一个完全独立的 HOME 目录来模拟真正的未初始化环境
+        uninit_home = tempfile.mkdtemp(prefix="skill_hub_uninit_")
+        try:
+            temp_dir = Path(uninit_home) / "temp-uninitialized-6"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+
+            # 在未初始化的 HOME 中执行 pull
+            run_env = {**os.environ, "HOME": uninit_home}
+            # 清除可能的 SKILL_HUB_HOME 指向已初始化的路径
+            run_env.pop("SKILL_HUB_HOME", None)
+
+            result = self.cmd.run("pull", cwd=str(temp_dir), env=run_env)
+            # 应该提示需要先进行初始化
+            assert not result.success or "本地仓库未初始化" in result.stdout or "本地仓库未初始化" in result.stderr, \
+                f"Should prompt for initialization when running pull without init"
+        finally:
+            shutil.rmtree(uninit_home, ignore_errors=True)
         
         print(f"✓ pull command dependency check passed")
         
