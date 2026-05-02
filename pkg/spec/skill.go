@@ -73,22 +73,8 @@ type ProjectConfig struct {
 const (
 	TargetCursor     = "cursor"
 	TargetClaudeCode = "claude_code"
-	TargetOpenCode   = "open_code" // OpenCode支持
-	TargetClaude     = "claude"    // 向后兼容
-	TargetUnknown    = "unknown"
-	TargetAll        = "all"
+	TargetOpenCode   = "open_code"
 )
-
-// NormalizeTarget 规范化目标类型（处理向后兼容）
-func NormalizeTarget(target string) string {
-	if target == TargetClaude {
-		return TargetClaudeCode
-	}
-	if target == "opencode" {
-		return TargetOpenCode
-	}
-	return target
-}
 
 // ProjectState 表示项目与技能的关联状态（向后兼容）
 type ProjectState struct {
