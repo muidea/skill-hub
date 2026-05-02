@@ -15,6 +15,8 @@ func TestGlobal_EnableApplyAndInspect(t *testing.T) {
 
 	homeDir := t.TempDir()
 	codexSkillsDir := filepath.Join(homeDir, "codex", "skills")
+	t.Setenv("HOME", homeDir)
+	t.Setenv("PATH", homeDir) // isolate from real claude/opencode commands
 	t.Setenv("SKILL_HUB_HOME", homeDir)
 	t.Setenv("CODEX_SKILLS_DIR", codexSkillsDir)
 
@@ -69,6 +71,8 @@ func TestGlobal_InspectModifiedAndConflict(t *testing.T) {
 
 	homeDir := t.TempDir()
 	codexSkillsDir := filepath.Join(homeDir, "codex", "skills")
+	t.Setenv("HOME", homeDir)
+	t.Setenv("PATH", homeDir) // isolate from real claude/opencode commands
 	t.Setenv("SKILL_HUB_HOME", homeDir)
 	t.Setenv("CODEX_SKILLS_DIR", codexSkillsDir)
 
@@ -119,6 +123,8 @@ func TestGlobal_ApplyDryRunAndForceConflict(t *testing.T) {
 
 	homeDir := t.TempDir()
 	codexSkillsDir := filepath.Join(homeDir, "codex", "skills")
+	t.Setenv("HOME", homeDir)
+	t.Setenv("PATH", homeDir) // isolate from real claude/opencode commands
 	t.Setenv("SKILL_HUB_HOME", homeDir)
 	t.Setenv("CODEX_SKILLS_DIR", codexSkillsDir)
 

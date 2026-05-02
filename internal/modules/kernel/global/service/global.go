@@ -307,6 +307,15 @@ func (g *Global) Apply(skillID string, agentFilters []string, dryRun, force bool
 	for _, id := range skillIDs {
 		skillState := state.EnabledSkills[id]
 		targetAgents := filterDesiredAgents(skillState.Agents, agentFilters)
+		// When no agent filters are specified, merge currently detected agents
+		// so that newly installed agents (e.g., claude) also receive the skill.
+		if len(agentFilters) == 0 {
+			detectedNames := make([]string, 0, len(agentInfos))
+			for _, a := range agentInfos {
+				detectedNames = append(detectedNames, a.Name)
+			}
+			targetAgents = mergeStrings(targetAgents, detectedNames)
+		}
 		if skillID != "" && len(agentFilters) > 0 && len(targetAgents) == 0 {
 			return nil, errors.NewWithCodef("ApplyGlobalSkills", errors.ErrSkillNotFound, "技能 %s 未对指定 agent 启用: %s", skillID, strings.Join(normalizeAgentNames(agentFilters), ", "))
 		}
@@ -361,6 +370,7 @@ func (g *Global) Apply(skillID string, agentFilters []string, dryRun, force bool
 		if !dryRun {
 			skillState.ContentHash = sourceHash
 			skillState.AppliedAt = now
+			skillState.Agents = targetAgents
 			state.EnabledSkills[id] = skillState
 		}
 	}
