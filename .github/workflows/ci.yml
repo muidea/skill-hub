@@ -26,9 +26,7 @@ jobs:
         run: make test
 
       - name: Run basic linting
-        run: |
-          gofmt -d .
-          go vet ./...
+        run: make lint
 
       - name: Build binary
         run: make build
