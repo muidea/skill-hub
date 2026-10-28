@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -120,6 +122,168 @@ func TestCLIJSONFirstRegister(t *testing.T) {
 	status := requireCLIJSON(t, home, project, "status", "--json")
 	if status["skill_count"] != float64(1) {
 		t.Fatalf("registered skill absent from status: %v", status)
+	}
+}
+
+func TestCLIJSONEmptyProjectRegistrationReceipt(t *testing.T) {
+	home, project := jsonTestWorkspace(t)
+	first := requireCLIJSON(t, home, project, "project", "register", "--request-id", "lost-response", "--json")
+	if first["status"] != "succeeded" || first["finished"] != true || first["executed"] != true || first["project_path"] != project {
+		t.Fatalf("unexpected receipt: %v", first)
+	}
+	effects := first["result"].(map[string]any)
+	if effects["project_created"] != true || effects["skill_count"] != float64(0) {
+		t.Fatalf("unexpected original effects: %v", first)
+	}
+	status := requireCLIJSON(t, home, project, "status", "--json")
+	if status["skill_count"] != float64(0) {
+		t.Fatalf("empty project not registered: %v", status)
+	}
+	// Change current state, then query from a different directory. The response
+	// must still describe the original empty registration, not today's status.
+	writeJSONTestSkill(t, project, "later-skill")
+	requireCLIJSON(t, home, project, "register", "later-skill", "--json")
+	for _, args := range [][]string{
+		{"project", "register", "--request-id", "lost-response", "--json"},
+		{"project", "register", project, "--request-id", "lost-response", "--json"},
+		{"project", "register", "--query", "--request-id", "lost-response", "--json"},
+	} {
+		got := requireCLIJSON(t, home, project, args...)
+		if !reflect.DeepEqual(first, got) {
+			t.Fatalf("original receipt changed: got=%v, want=%v", got, first)
+		}
+	}
+	got := requireCLIJSON(t, home, t.TempDir(), "project", "register", "--query", "--request-id", "lost-response", "--json")
+	if !reflect.DeepEqual(first, got) {
+		t.Fatalf("query used cwd instead of request ID: %v", got)
+	}
+	other := t.TempDir()
+	conflict, _, err := runCLIProcess(t, home, other, nil, "project", "register", "--request-id", "lost-response", "--json")
+	if err == nil || conflict["command_error"].(map[string]any)["code"] != "REQUEST_CONFLICT" {
+		t.Fatalf("expected request conflict: %v, %v", conflict, err)
+	}
+	if _, err := os.Stat(filepath.Join(other, ".agents")); !os.IsNotExist(err) {
+		t.Fatal("conflict created another workspace")
+	}
+	// Receipt queries must work even when current state/config become unreadable.
+	if err := os.WriteFile(filepath.Join(home, "state.json"), []byte("broken"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(home, "config.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	got = requireCLIJSON(t, home, other, "project", "register", "--query", "--request-id", "lost-response", "--json")
+	if !reflect.DeepEqual(first, got) {
+		t.Fatalf("receipt query depended on current state: %v", got)
+	}
+}
+
+func TestCLIJSONEmptyProjectRegistrationErrors(t *testing.T) {
+	home, project := jsonTestWorkspace(t)
+	for _, tc := range []struct {
+		args []string
+		code string
+	}{
+		{[]string{"project", "register", "--json"}, "INVALID_INPUT"},
+		{[]string{"project", "register", "--request-id", "../invalid", "--json"}, "INVALID_INPUT"},
+		{[]string{"project", "register", "--query", "--request-id", "missing", "--json"}, "REQUEST_NOT_FOUND"},
+		{[]string{"project", "register", ".", "--query", "--request-id", "missing", "--json"}, "INVALID_INPUT"},
+	} {
+		got, _, err := runCLIProcess(t, home, project, nil, tc.args...)
+		if err == nil || got["command_error"].(map[string]any)["code"] != tc.code {
+			t.Fatalf("%v = %v, %v", tc.args, got, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(project, ".agents")); !os.IsNotExist(err) {
+		t.Fatal("invalid request created workspace")
+	}
+	failed, _, err := runCLIProcess(t, home, project, nil, "project", "register", filepath.Join(project, "missing"), "--request-id", "failed-request", "--json")
+	if err == nil || failed["status"] != "failed" || failed["finished"] != true {
+		t.Fatalf("failure not recorded: %v, %v", failed, err)
+	}
+	query := requireCLIJSON(t, home, project, "project", "register", "--query", "--request-id", "failed-request", "--json")
+	if !reflect.DeepEqual(failed, query) {
+		t.Fatalf("failed query lost original error: %v, want %v", query, failed)
+	}
+}
+
+func TestCLIJSONEmptyProjectRegistrationSurvivesLostStdout(t *testing.T) {
+	home, project := jsonTestWorkspace(t)
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = reader.Close() // No consumer can receive the registration response.
+	defer writer.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCLIJSONProcess$", "--", "project", "register", "--request-id", "broken-stdout", "--json")
+	cmd.Dir = project
+	cmd.Env = append(os.Environ(), "SKILL_HUB_JSON_TEST_PROCESS=1", "SKILL_HUB_HOME="+home, "SKILL_HUB_DISABLE_SERVICE_BRIDGE=1")
+	cmd.Stdout = writer
+	if err := cmd.Run(); err == nil || ctx.Err() != nil {
+		t.Fatalf("expected lost stdout, got err=%v, timeout=%v", err, ctx.Err())
+	}
+	receipt := requireCLIJSON(t, home, project, "project", "register", "--query", "--request-id", "broken-stdout", "--json")
+	if receipt["status"] != "succeeded" || receipt["result"].(map[string]any)["project_created"] != true {
+		t.Fatalf("lost response lost receipt: %v", receipt)
+	}
+	// Neither a replay nor query may recreate a project removed after that request.
+	if err := os.Remove(filepath.Join(home, "state.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(project); err != nil {
+		t.Fatal(err)
+	}
+	replayed := requireCLIJSON(t, home, t.TempDir(), "project", "register", project, "--request-id", "broken-stdout", "--json")
+	if !reflect.DeepEqual(receipt, replayed) {
+		t.Fatalf("lost response was not replayed: %v", replayed)
+	}
+	if _, err := os.Stat(project); !os.IsNotExist(err) {
+		t.Fatal("replay recreated the removed project")
+	}
+	if _, err := os.Stat(filepath.Join(home, "state.json")); !os.IsNotExist(err) {
+		t.Fatal("replay registered project again")
+	}
+}
+
+func TestCLIJSONEmptyProjectRegistrationConcurrent(t *testing.T) {
+	for _, sameID := range []bool{true, false} {
+		t.Run(fmt.Sprintf("same-id=%t", sameID), func(t *testing.T) {
+			home, project := jsonTestWorkspace(t)
+			ids := make([]string, 6)
+			var requests sync.WaitGroup
+			for i := range ids {
+				id := "concurrent-request"
+				if !sameID {
+					id = fmt.Sprintf("concurrent-request-%d", i)
+				}
+				ids[i] = id
+				requests.Go(func() {
+					result, _, err := runCLIProcess(t, home, project, nil, "project", "register", "--request-id", id, "--json")
+					if err != nil && result["command_error"].(map[string]any)["code"] != "REQUEST_IN_PROGRESS" {
+						t.Errorf("concurrent CLI request: %v, %v", result, err)
+					}
+				})
+			}
+			requests.Wait()
+			if sameID {
+				ids = ids[:1]
+			}
+			created := 0
+			for _, id := range ids {
+				receipt := requireCLIJSON(t, home, project, "project", "register", "--query", "--request-id", id, "--json")
+				if receipt["status"] != "succeeded" {
+					t.Fatalf("request did not finish: %v", receipt)
+				}
+				if receipt["result"].(map[string]any)["project_created"] == true {
+					created++
+				}
+			}
+			if created != 1 {
+				t.Fatalf("expected exactly one original project creation, got %d", created)
+			}
+		})
 	}
 }
 

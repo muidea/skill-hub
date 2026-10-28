@@ -25,6 +25,8 @@ func New(hub event.Hub, background task.BackgroundRoutine, stateService *service
 	biz.SubscribeFunc(events.TopicProjectHasSkill, biz.handleProjectHasSkill)
 	biz.SubscribeFunc(events.TopicRemoveSkill, biz.handleRemoveSkill)
 	biz.SubscribeFunc(events.TopicPruneProjects, biz.handlePruneProjects)
+	biz.SubscribeFunc(events.TopicRegisterProject, biz.handleRegisterProject)
+	biz.SubscribeFunc(events.TopicQueryRegistration, biz.handleQueryRegistration)
 	return biz
 }
 
@@ -36,6 +38,8 @@ func (b *ProjectState) Teardown() {
 	b.UnsubscribeFunc(events.TopicProjectHasSkill)
 	b.UnsubscribeFunc(events.TopicRemoveSkill)
 	b.UnsubscribeFunc(events.TopicPruneProjects)
+	b.UnsubscribeFunc(events.TopicRegisterProject)
+	b.UnsubscribeFunc(events.TopicQueryRegistration)
 }
 
 func (b *ProjectState) handleLoadProject(e event.Event, result event.Result) {

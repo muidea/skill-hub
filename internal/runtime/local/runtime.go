@@ -26,6 +26,7 @@ type Runtime struct {
 	repoOwner          *repositorymodule.Repository
 	repository         repositoryport.Repository
 	projectState       projectstateport.ProjectState
+	registration       projectstateport.Registration
 	git                gitport.Git
 	config             configport.Config
 	skill              skillport.Skill
@@ -68,6 +69,7 @@ func newRuntime(hub event.Hub, background task.BackgroundRoutine, stateOwner *pr
 		repoOwner:          repoOwner,
 		repository:         repositoryport.NewRepository(hub, "local_runtime"),
 		projectState:       projectstateport.New(hub, "local_runtime"),
+		registration:       projectstateport.NewRegistration(hub, "local_runtime"),
 		git:                NewGit(),
 		config:             NewConfig(),
 		skill:              NewSkill(),
@@ -110,12 +112,13 @@ func (r *Runtime) Close() {
 	}
 }
 
-func (r *Runtime) Repository() repositoryport.Repository       { return r.repository }
-func (r *Runtime) ProjectState() projectstateport.ProjectState { return r.projectState }
-func (r *Runtime) Git() gitport.Git                            { return r.git }
-func (r *Runtime) Config() configport.Config                   { return r.config }
-func (r *Runtime) Skill() skillport.Skill                      { return r.skill }
-func (r *Runtime) Project() *Project                           { return r.project }
-func (r *Runtime) Global() *Global                             { return r.global }
-func (r *Runtime) Maintenance() *Maintenance                   { return r.maintenance }
-func (r *Runtime) Upgrade() *Upgrade                           { return r.upgrade }
+func (r *Runtime) Repository() repositoryport.Repository              { return r.repository }
+func (r *Runtime) ProjectState() projectstateport.ProjectState        { return r.projectState }
+func (r *Runtime) ProjectRegistration() projectstateport.Registration { return r.registration }
+func (r *Runtime) Git() gitport.Git                                   { return r.git }
+func (r *Runtime) Config() configport.Config                          { return r.config }
+func (r *Runtime) Skill() skillport.Skill                             { return r.skill }
+func (r *Runtime) Project() *Project                                  { return r.project }
+func (r *Runtime) Global() *Global                                    { return r.global }
+func (r *Runtime) Maintenance() *Maintenance                          { return r.maintenance }
+func (r *Runtime) Upgrade() *Upgrade                                  { return r.upgrade }

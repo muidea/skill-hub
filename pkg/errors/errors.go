@@ -23,6 +23,12 @@ const (
 	ErrProjectNotFound ErrorCode = "PROJECT_NOT_FOUND"
 	ErrProjectInvalid  ErrorCode = "PROJECT_INVALID"
 
+	// 项目登记请求相关错误
+	ErrRequestNotFound       ErrorCode = "REQUEST_NOT_FOUND"
+	ErrRequestConflict       ErrorCode = "REQUEST_CONFLICT"
+	ErrRequestInProgress     ErrorCode = "REQUEST_IN_PROGRESS"
+	ErrRequestOutcomeUnknown ErrorCode = "REQUEST_OUTCOME_UNKNOWN"
+
 	// 文件操作错误
 	ErrFileOperation  ErrorCode = "FILE_OPERATION_FAILED"
 	ErrFileNotFound   ErrorCode = "FILE_NOT_FOUND"

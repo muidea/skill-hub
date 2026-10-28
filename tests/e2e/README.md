@@ -106,8 +106,10 @@ Based on the business scenarios defined in the repo test documents and current C
    - Argument errors return `command_error` and a nonzero exit status without duplicate Usage/Error text.
    - Partial import failures preserve successful counts and per-skill failures.
    - Read-only status and import previews do not register the project or create an implicit workspace.
+   - Empty-project registration persists original request receipts; same-ID replay/query return the original effects after subsequent state changes, while different-path reuse is rejected.
+   - Failed receipts are preserved; missing receipt queries have no side effects and queries remain available after live state/config removal.
 
-The JSON regression selection contains 8 e2e cases: 4 in `test_cli_json.py`, 3 in `test_bulk_import_register_status.py`, and 1 in `test_feedback_all_json.py`. Open-but-unwritten stdin, service bridge responses, empty pattern matches, confirmation requirements, and audit file responses are additionally covered by Go process tests in `internal/clis/skill-hub/output_test.go`.
+The JSON regression selection contains 10 e2e cases: 6 in `test_cli_json.py`, 3 in `test_bulk_import_register_status.py`, and 1 in `test_feedback_all_json.py`. Open-but-unwritten stdin, lost stdout during empty-project registration, queries from a different cwd, service bridge responses, empty pattern matches, confirmation requirements, and audit file responses are additionally covered by Go process tests in `internal/clis/skill-hub/output_test.go`. Concurrent registrations and running/interrupted request receipts are covered by `internal/state/project_registration_test.go`. The existing default runner and required CI JSON step both execute `test_cli_json.py`, including the new receipt cases.
 
 ## Architecture
 
@@ -145,7 +147,7 @@ tests/e2e/
 ├── test_skill_content_commands.py  # create/status/feedback/apply/use skill content
 ├── test_state_prune.py           # prune invalid state.json project records
 ├── test_bulk_import_register_status.py # register/status JSON/frontmatter fix/import archive
-├── test_cli_json.py               # first-register stdout, structured errors, partial import, preview safety
+├── test_cli_json.py               # JSON stdout, errors, import previews, empty-project request receipts
 ├── test_dedupe_sync_copies.py      # duplicate detection and canonical copy sync
 ├── test_path_lint.py              # local path portability lint and fix
 ├── test_validate_links.py         # Markdown local link validation

@@ -2,10 +2,16 @@
 
 package state
 
-import "os"
+import (
+	"os"
 
-// Windows' atomic rename protects readers from partial JSON. Keep this a
-// no-op until the Windows-specific locking abstraction is introduced.
-func lockStateFile(_ *os.File) error { return nil }
+	"golang.org/x/sys/windows"
+)
 
-func unlockStateFile(_ *os.File) error { return nil }
+func lockStateFile(file *os.File) error {
+	return windows.LockFileEx(windows.Handle(file.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK, 0, 1, 0, &windows.Overlapped{})
+}
+
+func unlockStateFile(file *os.File) error {
+	return windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, &windows.Overlapped{})
+}

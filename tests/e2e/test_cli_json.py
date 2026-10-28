@@ -97,3 +97,84 @@ def test_json_status_and_import_preview_do_not_register_project(json_cli):
     assert preview.success, preview
     assert json.loads(preview.stdout)["discovered"] == 1
     assert state_path.read_bytes() == original
+
+
+def test_empty_project_registration_replays_original_request_receipt(json_cli):
+    run, project, hub = json_cli
+    args = ("register", "--request-id", "lost-register-response", "--json")
+    first = run("project", *args)
+    assert first.success, first
+    receipt = json.loads(first.stdout)
+    assert receipt["status"] == "succeeded"
+    assert receipt["executed"] is True
+    assert receipt["finished"] is True
+    assert receipt["project_path"] == str(project)
+    assert receipt["result"]["project_created"] is True
+    assert receipt["result"]["skill_count"] == 0
+    state_path = hub / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state[str(project)]["skills"] == {}
+
+    # Current state is intentionally different from the original effect.
+    write_skill(project, "added-after-request")
+    registered = run("register", "added-after-request", "--json")
+    assert registered.success, registered
+    state_before = state_path.read_bytes()
+    for extra in ((), ("--query",)):
+        replay = run("project", *args, *extra)
+        assert replay.success, replay
+        assert json.loads(replay.stdout) == receipt
+        assert state_path.read_bytes() == state_before
+
+    # Another request may register an existing project, but cannot erase skills.
+    existing = run("project", "register", "--request-id", "another-request", "--json")
+    assert existing.success, existing
+    effects = json.loads(existing.stdout)["result"]
+    assert effects["project_created"] is False
+    assert effects["skill_count"] == 1
+    assert effects["created_directories"] == []
+    assert state_path.read_bytes() == state_before
+
+    other = project.parent / "other-project"
+    other.mkdir()
+    conflict = run("project", "register", str(other), "--request-id", "lost-register-response", "--json")
+    assert not conflict.success
+    assert json.loads(conflict.stdout)["command_error"]["code"] == "REQUEST_CONFLICT"
+    assert not (other / ".agents").exists()
+
+    # Historical queries must survive removal of both live state and config.
+    state_path.unlink()
+    (hub / "config.yaml").unlink()
+    queried = run("project", *args, "--query")
+    assert queried.success, queried
+    assert json.loads(queried.stdout) == receipt
+    assert not state_path.exists()
+
+
+def test_empty_project_registration_missing_receipt_and_failed_receipt(json_cli):
+    run, project, hub = json_cli
+    before = (hub / "state.json").read_bytes()
+    missing = run("project", "register", "--query", "--request-id", "never-submitted", "--json")
+    assert not missing.success
+    assert json.loads(missing.stdout)["command_error"]["code"] == "REQUEST_NOT_FOUND"
+    assert not (hub / "project-registrations").exists()
+    assert not (project / ".agents").exists()
+    assert (hub / "state.json").read_bytes() == before
+
+    blocked = project / ".agents"
+    blocked.write_text("workspace blocked", encoding="utf-8")
+    args = ("register", "--request-id", "failed-register", "--json")
+    failed = run("project", *args)
+    assert not failed.success
+    receipt = json.loads(failed.stdout)
+    assert receipt["status"] == "failed"
+    assert receipt["finished"] is True
+    assert receipt["result"]["project_created"] is False
+    blocked.unlink()
+    replay = run("project", *args)
+    assert not replay.success
+    assert json.loads(replay.stdout) == receipt
+    queried = run("project", *args, "--query")
+    assert queried.success, queried
+    assert json.loads(queried.stdout) == receipt
+    assert not blocked.exists()

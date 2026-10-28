@@ -87,6 +87,7 @@ func init() {
 	rootCmd.AddCommand(searchCmd)
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(registerCmd)
+	rootCmd.AddCommand(projectCmd)
 	rootCmd.AddCommand(removeCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(importCmd)

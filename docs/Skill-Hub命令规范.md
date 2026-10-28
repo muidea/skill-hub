@@ -82,6 +82,7 @@ skill-hub remove my-skill --yes --json
 | 命令 | 功能描述 | 语法 |
 |------|----------|------|
 | `init` | 初始化本地仓库 | `skill-hub init [git_url]` |
+| `project register` | 幂等登记空项目、查询原请求回执 | `skill-hub project register [path] --request-id <id> [--query] [--json]` |
 | `skill-hubd` | 启动本地 daemon | `skill-hubd [--host <value>] [--port <value>] [--secret-key <value>]` |
 
 ### 3.2. 技能发现
@@ -196,6 +197,47 @@ skill-hub init
 # 使用自定义仓库初始化
 skill-hub init https://github.com/example/skills-repo.git
 
+```
+
+### 4.2 project register - 空项目登记与请求回执
+
+**登记**: `skill-hub project register [path] --request-id <id> [--json]`
+
+**查询**: `skill-hub project register --query --request-id <id> [--json]`
+
+- `path` 默认当前目录，须为已有目录。登记前需已执行 `skill-hub init`。
+- `--request-id` 必填，由调用方在首次发送前生成并保存；允许 1–128 个字母、数字、点、下划线、冒号或连字符，首字符为字母或数字。
+- 同一 `SKILL_HUB_HOME` 内，相同 ID 绑定同一个清理后的绝对项目路径。相同请求重放原始回执；ID 用于其他路径时返回 `REQUEST_CONFLICT`，不执行新登记。相对路径按每次调用的 cwd 解析，不做 symlink 路径合并。
+- 登记精确指定目录，即使它在已登记项目之内，也不会被归属到父项目。创建 `.agents/skills` 和空技能状态，不创建占位技能，不扫描或导入目录中的技能。已有项目保留技能、变量、时间戳和历史字段，不清空状态。
+- 新 ID 登记已存在项目返回 `result.project_created=false`。同 ID 重放则保留原值；重放不重新读取项目或创建目录，即使项目已删除。
+- `--query` 不接受 `path`；只读取原请求回执及执行锁，不调用 `status`，不登记项目、不创建文件。可从其他目录查询，也不依赖当前配置或 `state.json` 仍然可用。
+
+回执字段：
+
+| 字段 | 含义 |
+|------|------|
+| `request_id`, `project_path` | 原请求身份及绑定的绝对路径 |
+| `status` | `running`、`succeeded`、`failed` 或 `unknown` |
+| `executed` | 终态时为 `true`，表示已执行登记处理；不保证发生变更。进行中或无法确认时为 `null` |
+| `finished` | 终态为 `true`；进行中为 `false`；异常中断且没有最终回执时为 `null` |
+| `started_at`, `completed_at` | 原请求开始、完成时间（UTC）；未确认完成时没有 `completed_at` |
+| `result.registered`, `result.project_created` | 原操作确认的登记状态、是否新建项目状态记录 |
+| `result.created_directories`, `result.skill_count` | 原操作创建的目录、当时已登记技能数；失败时保留已确认的部分效果 |
+| `command_error` | 原操作失败原因或结果未知说明 |
+
+登记命令失败、重放失败回执或结果未知时返回非零退出码。查询成功读取回执时退出码为 0，包括原请求失败或结果未知的回执；调用方通过 `status`、`finished` 和 `result` 判断原操作，而非使用查询进程退出码代替原操作结果。并发提交同 ID 时可返回 `running`，需继续查询。
+
+回执按请求独立保存于 `${SKILL_HUB_HOME:-~/.skill-hub}/project-registrations/`，先持久化请求占用，再执行登记，最终回执持久化后才输出。跨进程请求锁防止同 ID 并发执行，项目状态写锁保护不同 ID 的登记。失败回执也不会因重试而被重新执行；修复失败原因后需要提交新的请求 ID。
+
+进程异常中断、最终回执写入失败时，已占用的 ID 不自动重跑，查询返回 `unknown`。项目状态写入和回执写入不是跨文件事务，不能把中断后的结果推断为成功或未执行，需人工核对后决定后续操作。未找到持久化回执返回 `REQUEST_NOT_FOUND`，不等同于证明未执行。回执损坏或无读取权限时返回错误并禁止重复执行。不要删除回执及其锁文件；丢失回执、切换 Hub home 或沿用旧版本未记录的请求，都无法保证原请求查询与去重。
+
+当前入口仅供 CLI，本地通过项目状态 Block 的类型化 EventHub port 执行和查询；不增加 daemon、HTTP API、Web UI 或其他命令的请求回执机制。
+
+```bash
+skill-hub init --json
+skill-hub project register /path/to/project --request-id setup-001 --json
+# 原回复丢失、agent 超时或需要恢复会话时，使用同一 Hub home 和原 ID
+skill-hub project register --query --request-id setup-001 --json
 ```
 
 ### 4.3 list - 列出可用技能
@@ -1322,6 +1364,7 @@ skill-hub repo rebuild-index skills-repo --json
 
 - `init`
 - `create`
+- `project register`（含 `--query` 原请求查询）
 - `remove` 的项目模式
 - `prune`
 - `upgrade`
@@ -1363,3 +1406,4 @@ skill-hub repo rebuild-index skills-repo --json
 | 1.28 | 2026-04-23 | 增加 `use/apply/status/remove --global` 本机全局技能状态、agent 目录检查刷新、服务桥接和 manifest 冲突保护 |
 | 1.29 | 2026-05-23 | 增加项目工作区 skill 来源指纹、`ModifiedAgainstOutdatedRepo` 状态和低版本 `feedback` 防护 |
 | 1.30 | 2026-06-03 | 增加 `list/use/status/apply/feedback/validate` 基于技能 ID 字段的 glob pattern 支持（`*` / `?` / `**`），单字面量参数仍按精确 ID 兼容处理，详见 §6 |
+| 1.31 | 2026-10-28 | 增加 `project register --request-id` 空项目登记与 `--query` 原请求回执查询，覆盖回复丢失后的安全重放 |

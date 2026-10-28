@@ -15,8 +15,12 @@ go build -o bin/skill-hub ./application/skill-hub/cmd
 Agent 和自动化调用可使用全局 `--json`。stdout 只返回一个 JSON 文档，进度与诊断写入 stderr；命令不会读取 stdin，也不会自动同意覆盖或删除。成功结果保留各命令的数据结构，失败结果包含 `command_error` 并返回非零退出码。
 
 ```bash
+skill-hub project register --request-id project-setup-001 --json
+skill-hub project register --query --request-id project-setup-001 --json
 skill-hub register my-skill --json
 skill-hub import .agents/skills --dry-run --json
 ```
+
+`project register` 无需已有技能，同 ID、同路径返回原始持久化回执；`--query` 只按 ID 查询原操作，查询成功退出码为 0，原操作结果看 `status` 和 `result`。回执与去重范围为同一个 `SKILL_HUB_HOME`；异常中断且缺少最终回执时返回 `unknown`，不自动重跑。
 
 完整约定见 [CLI 命令规范](../../docs/Skill-Hub命令规范.md#cli-json-调用合同)。
