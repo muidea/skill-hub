@@ -116,9 +116,19 @@ func runAudit(opts projectport.AuditOptions, format, output string) error {
 		if err := os.WriteFile(output, payload, 0644); err != nil {
 			return errors.WrapWithCode(err, "runAudit", errors.ErrFileOperation, "写入审计报告失败")
 		}
-		fmt.Printf("审计报告已写入: %s\n", output)
-	} else {
-		fmt.Print(string(payload))
+		printfText("审计报告已写入: %s\n", output)
+	} else if !jsonMode() {
+		printText(string(payload))
+	}
+	if jsonMode() {
+		if output != "" {
+			err = writeJSON(map[string]any{"output": output, "format": format, "report": report})
+		} else {
+			err = writeJSON(report)
+		}
+		if err != nil {
+			return err
+		}
 	}
 	if report != nil && len(report.Errors) > 0 {
 		return errors.NewWithCodef("runAudit", errors.ErrValidation, "审计完成但发现 %d 个问题", len(report.Errors))

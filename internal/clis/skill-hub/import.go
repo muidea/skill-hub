@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -55,10 +54,10 @@ func runImport(skillsDir string, opts projectport.ImportOptions) error {
 	}
 
 	if opts.DryRun {
-		fmt.Println("🔎 import 演习模式，不会修改项目状态、技能文件或仓库")
+		printlnText("🔎 import 演习模式，不会修改项目状态、技能文件或仓库")
 	}
 	if opts.Force {
-		fmt.Println("ℹ️  force 模式已启用：批量流程将不进行交互确认")
+		printlnText("ℹ️  force 模式已启用：批量流程将不进行交互确认")
 	}
 
 	var summary *projectport.ImportSummary
@@ -86,33 +85,39 @@ func runImport(skillsDir string, opts projectport.ImportOptions) error {
 		}
 	}
 
-	renderImportSummary(summary)
+	if jsonMode() {
+		if err := writeJSON(summary); err != nil {
+			return err
+		}
+	} else {
+		renderImportSummary(summary)
+	}
 	if summary != nil && summary.Failed > 0 {
 		return errors.NewWithCodef("runImport", errors.ErrValidation, "%d 个技能导入失败", summary.Failed)
 	}
-	return nil
+	return err
 }
 
 func renderImportSummary(summary *projectport.ImportSummary) {
 	if summary == nil {
-		fmt.Println("\n=== import summary ===")
-		fmt.Println("未返回导入摘要")
+		printlnText("\n=== import summary ===")
+		printlnText("未返回导入摘要")
 		return
 	}
 
-	fmt.Printf("发现 %d 个技能，目录: %s\n", summary.Discovered, summary.SkillsDir)
-	fmt.Println("\n=== import summary ===")
-	fmt.Printf("discovered: %d\n", summary.Discovered)
-	fmt.Printf("registered: %d\n", summary.Registered)
-	fmt.Printf("valid:      %d\n", summary.Valid)
-	fmt.Printf("archived:   %d\n", summary.Archived)
-	fmt.Printf("unchanged:  %d\n", summary.Unchanged)
-	fmt.Printf("failed:     %d\n", summary.Failed)
+	printfText("发现 %d 个技能，目录: %s\n", summary.Discovered, summary.SkillsDir)
+	printlnText("\n=== import summary ===")
+	printfText("discovered: %d\n", summary.Discovered)
+	printfText("registered: %d\n", summary.Registered)
+	printfText("valid:      %d\n", summary.Valid)
+	printfText("archived:   %d\n", summary.Archived)
+	printfText("unchanged:  %d\n", summary.Unchanged)
+	printfText("failed:     %d\n", summary.Failed)
 	if len(summary.Failures) == 0 {
 		return
 	}
-	fmt.Println("\n失败项:")
+	printlnText("\n失败项:")
 	for _, failure := range summary.Failures {
-		fmt.Printf("- id=%s command=%s path=%s error=%s\n", failure.SkillID, failure.Command, failure.Path, failure.Error)
+		printfText("- id=%s command=%s path=%s error=%s\n", failure.SkillID, failure.Command, failure.Path, failure.Error)
 	}
 }

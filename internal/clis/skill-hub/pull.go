@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -25,6 +24,7 @@ var pullCmd = &cobra.Command{
 此命令仅同步仓库层（~/.skill-hub/repositories/），不涉及项目工作目录的更新。
 使用 --check 选项可以检查可用更新但不实际执行拉取操作。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		pullJSON = mustGetBoolFlag(cmd, "json")
 		return runPull()
 	},
 }
@@ -32,7 +32,6 @@ var pullCmd = &cobra.Command{
 func init() {
 	pullCmd.Flags().BoolVar(&pullForce, "force", false, "远端有更新且默认仓库存在未提交更改时，先自动 stash 再拉取")
 	pullCmd.Flags().BoolVar(&pullCheck, "check", false, "检查模式，仅显示可用的更新，不实际执行拉取操作")
-	pullCmd.Flags().BoolVar(&pullJSON, "json", false, "以JSON格式输出拉取摘要")
 }
 
 func runPull() error {
@@ -53,7 +52,7 @@ func runPull() error {
 	}
 
 	if pullCheck {
-		fmt.Println("检查默认仓库远程的可用更新...")
+		printlnText("检查默认仓库远程的可用更新...")
 		result, err := pullCheckDefaultRepository(client, useService)
 		if err != nil {
 			return errors.Wrap(err, "检查默认仓库远程更新失败")
@@ -62,17 +61,17 @@ func runPull() error {
 		return nil
 	}
 
-	fmt.Println("正在从默认仓库远程拉取最新技能...")
+	printlnText("正在从默认仓库远程拉取最新技能...")
 
 	skillCount, err := pullSyncDefaultRepository(client, useService)
 	if err != nil {
 		return errors.Wrap(err, "同步技能仓库失败")
 	}
 
-	fmt.Printf("\n✅ 默认仓库更新完成，共 %d 个技能\n", skillCount)
-	fmt.Println("使用 'skill-hub status' 检查项目技能状态")
-	fmt.Println("使用 'skill-hub apply' 将仓库更新应用到项目工作目录")
-	fmt.Println("如需同步所有启用仓库，请使用 'skill-hub repo sync'")
+	printfText("\n✅ 默认仓库更新完成，共 %d 个技能\n", skillCount)
+	printlnText("使用 'skill-hub status' 检查项目技能状态")
+	printlnText("使用 'skill-hub apply' 将仓库更新应用到项目工作目录")
+	printlnText("如需同步所有启用仓库，请使用 'skill-hub repo sync'")
 
 	return nil
 }
@@ -163,23 +162,23 @@ func applyPullCheckToSummary(summary *pullSummary, result *httpapibiz.SkillRepos
 
 func renderPullCheckResult(result *httpapibiz.SkillRepositoryCheckData) {
 	if result.RemoteURL != "" {
-		fmt.Printf("远程仓库: %s\n", result.RemoteURL)
+		printfText("远程仓库: %s\n", result.RemoteURL)
 	}
-	fmt.Printf("状态: %s\n", result.Status)
+	printfText("状态: %s\n", result.Status)
 	if result.Message != "" {
-		fmt.Println(result.Message)
+		printlnText(result.Message)
 	}
 	if result.LocalCommit != "" {
-		fmt.Printf("本地提交: %s\n", shortCommit(result.LocalCommit))
+		printfText("本地提交: %s\n", shortCommit(result.LocalCommit))
 	}
 	if result.RemoteCommit != "" {
-		fmt.Printf("远程提交: %s\n", shortCommit(result.RemoteCommit))
+		printfText("远程提交: %s\n", shortCommit(result.RemoteCommit))
 	}
 	if result.Ahead > 0 || result.Behind > 0 {
-		fmt.Printf("本地领先: %d，远程领先: %d\n", result.Ahead, result.Behind)
+		printfText("本地领先: %d，远程领先: %d\n", result.Ahead, result.Behind)
 	}
 	if result.HasUpdates {
-		fmt.Println("可执行 'skill-hub pull' 拉取更新")
+		printlnText("可执行 'skill-hub pull' 拉取更新")
 	}
 }
 

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -62,22 +61,25 @@ func runRegister(skillID string, skipValidate bool) error {
 		}
 	}
 
+	if jsonMode() {
+		return writeJSON(result)
+	}
 	renderRegisterResult(result)
 	return nil
 }
 
 func renderRegisterResult(result *projectport.RegisterResult) {
 	if result == nil {
-		fmt.Println("✅ 技能已登记到项目状态")
+		printlnText("✅ 技能已登记到项目状态")
 		return
 	}
 	if result.Registered {
-		fmt.Printf("✅ 技能 '%s' 已登记到项目状态\n", result.SkillID)
+		printfText("✅ 技能 '%s' 已登记到项目状态\n", result.SkillID)
 	} else {
-		fmt.Printf("✅ 技能 '%s' 已刷新项目状态\n", result.SkillID)
+		printfText("✅ 技能 '%s' 已刷新项目状态\n", result.SkillID)
 	}
-	fmt.Println("说明: register 仅登记已有内容，不会创建或覆盖 SKILL.md")
-	fmt.Println("\n下一步:")
-	fmt.Printf("1. 使用 'skill-hub validate %s' 验证技能合规性\n", result.SkillID)
-	fmt.Printf("2. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", result.SkillID)
+	printlnText("说明: register 仅登记已有内容，不会创建或覆盖 SKILL.md")
+	printlnText("\n下一步:")
+	printfText("1. 使用 'skill-hub validate %s' 验证技能合规性\n", result.SkillID)
+	printfText("2. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", result.SkillID)
 }

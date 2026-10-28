@@ -9,7 +9,9 @@ import (
 
 func main() {
 	if err := cli.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", cli.FormatError(err))
+		if !cli.ErrorReported(err) {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", cli.FormatError(err))
+		}
 		os.Exit(1)
 	}
 }

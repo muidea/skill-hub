@@ -18,7 +18,7 @@ If home-directory caches are unavailable, set `GOCACHE`, `GOMODCACHE`, and `XDG_
 
 ## Coding Style & Architecture
 
-Use Go 1.24 and `gofmt`. Keep package names lowercase, exported symbols GoDoc-worthy, and flags kebab-case (for example, `--dry-run`). Cobra code parses, renders, and selects a runtime; it must use focused ports rather than directly accessing config, Git, state, or module internals. Blocks own one resource; Application Modules coordinate workflows through typed EventHub contracts. `skill-hubd` is the only HTTP listener—do not restore `skill-hub serve`.
+Use Go 1.26 and `gofmt`. Keep package names lowercase, exported symbols GoDoc-worthy, and flags kebab-case (for example, `--dry-run`). Cobra code parses, renders, and selects a runtime; it must use focused ports rather than directly accessing config, Git, state, or module internals. Blocks own one resource; Application Modules coordinate workflows through typed EventHub contracts. `skill-hubd` is the only HTTP listener—do not restore `skill-hub serve`.
 
 ## Testing, Commits, and Releases
 

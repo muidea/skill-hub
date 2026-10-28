@@ -3,8 +3,6 @@ package cli
 import (
 	"bufio"
 	"context"
-	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -39,7 +37,7 @@ func init() {
 	upgradeCmd.Flags().String("version", "", "升级到指定版本，例如 v0.8.1")
 	upgradeCmd.Flags().Bool("dry-run", false, "演习模式，显示将要下载和替换的资产，不修改文件")
 	upgradeCmd.Flags().Bool("force", false, "允许重新安装当前版本或安装低于当前版本的指定版本")
-	upgradeCmd.Flags().Bool("json", false, "以JSON格式输出升级检测或执行结果")
+
 	upgradeCmd.Flags().Bool("skip-agent-skills", false, "升级二进制后跳过内置 workflow skills 同步")
 }
 
@@ -102,51 +100,51 @@ func runUpgrade(opts upgradeport.Options, yes bool, jsonOutput bool) error {
 
 func renderUpgradeResult(result *upgradeport.Result) {
 	if result == nil {
-		fmt.Println("未返回升级结果")
+		printlnText("未返回升级结果")
 		return
 	}
-	fmt.Printf("当前版本: %s\n", valueOr(result.CurrentVersion, "unknown"))
+	printfText("当前版本: %s\n", valueOr(result.CurrentVersion, "unknown"))
 	if result.LatestVersion != "" {
-		fmt.Printf("最新版本: %s\n", result.LatestVersion)
+		printfText("最新版本: %s\n", result.LatestVersion)
 	}
 	if result.TargetVersion != "" && result.TargetVersion != result.LatestVersion {
-		fmt.Printf("目标版本: %s\n", result.TargetVersion)
+		printfText("目标版本: %s\n", result.TargetVersion)
 	}
-	fmt.Printf("状态: %s\n", result.Status)
+	printfText("状态: %s\n", result.Status)
 
 	if result.ArchiveName != "" {
-		fmt.Printf("Release 资产: %s\n", result.ArchiveName)
+		printfText("Release 资产: %s\n", result.ArchiveName)
 	}
 	if result.InstallPath != "" {
-		fmt.Printf("安装路径: %s\n", result.InstallPath)
+		printfText("安装路径: %s\n", result.InstallPath)
 	}
 
 	switch result.Status {
 	case "up_to_date":
-		fmt.Println("skill-hub 已是最新版本")
+		printlnText("skill-hub 已是最新版本")
 	case "target_not_newer":
-		fmt.Println("目标版本不高于当前版本；如需重新安装或回退，请使用 --force")
+		printlnText("目标版本不高于当前版本；如需重新安装或回退，请使用 --force")
 	case "planned":
-		fmt.Println("dry-run 已完成，未修改任何文件")
+		printlnText("dry-run 已完成，未修改任何文件")
 	case "upgraded":
-		fmt.Println("skill-hub 升级完成")
+		printlnText("skill-hub 升级完成")
 		if result.AgentSkillsInstalled > 0 {
-			fmt.Printf("已同步内置 workflow skills: %d\n", result.AgentSkillsInstalled)
+			printfText("已同步内置 workflow skills: %d\n", result.AgentSkillsInstalled)
 		}
 	case "update_available":
-		fmt.Println("发现可升级版本")
+		printlnText("发现可升级版本")
 	case "check_complete":
-		fmt.Println("版本检测完成")
+		printlnText("版本检测完成")
 	}
 	for _, warning := range result.Warnings {
-		fmt.Printf("警告: %s\n", warning)
+		printfText("警告: %s\n", warning)
 	}
 }
 
 func confirmUpgrade(result *upgradeport.Result) bool {
-	fmt.Printf("是否升级到 %s？(y/n): ", result.TargetVersion)
-	reader := bufio.NewReader(os.Stdin)
-	input, _ := reader.ReadString('\n')
+	printfText("是否升级到 %s？(y/n): ", result.TargetVersion)
+	reader := bufio.NewReader(inputSource())
+	input, _ := readInputLine(reader)
 	input = strings.TrimSpace(strings.ToLower(input))
 	return input == "y" || input == "yes"
 }

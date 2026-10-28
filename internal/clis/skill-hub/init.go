@@ -99,25 +99,28 @@ func runInit(args []string) error {
 
 	if alreadyInitialized {
 		logger.Info("skill-hub 已经初始化完成", "skillHubDir", skillHubDir, "gitURL", gitURL)
-		fmt.Printf("✅ skill-hub 已经初始化完成！\n")
-		fmt.Println("工作区位置:", skillHubDir)
+		printfText("✅ skill-hub 已经初始化完成！\n")
+		printlnText("工作区位置:", skillHubDir)
 		if gitURL != "" {
-			fmt.Println("远程仓库:", gitURL)
+			printlnText("远程仓库:", gitURL)
 		}
-		fmt.Println("\n使用 'skill-hub list' 查看可用技能")
+		printlnText("\n使用 'skill-hub list' 查看可用技能")
 
 		// 记录初始化完成
 		logger.Info("skill-hub已经初始化完成",
 			"skill_hub_dir", skillHubDir,
 			"git_url", gitURL,
 			"already_initialized", true)
+		if jsonMode() {
+			return writeJSON(map[string]any{"workspace": skillHubDir, "repository": repoName, "remote_url": gitURL, "already_initialized": true})
+		}
 		return nil
 	}
 
 	logger.Info("正在初始化Skill Hub工作区", "skillHubDir", skillHubDir, "gitURL", gitURL)
-	fmt.Printf("正在初始化Skill Hub工作区: %s\n", skillHubDir)
+	printfText("正在初始化Skill Hub工作区: %s\n", skillHubDir)
 	if gitURL != "" {
-		fmt.Printf("将克隆远程仓库: %s\n", gitURL)
+		printfText("将克隆远程仓库: %s\n", gitURL)
 	}
 
 	// 创建基础目录结构（只创建多仓库结构）
@@ -130,7 +133,7 @@ func runInit(args []string) error {
 		if err := utils.EnsureDir(dir); err != nil {
 			return err
 		}
-		fmt.Printf("✓ 目录已就绪: %s\n", dir)
+		printfText("✓ 目录已就绪: %s\n", dir)
 	}
 
 	// 创建配置文件
@@ -142,7 +145,7 @@ func runInit(args []string) error {
 		defaultRepoPath := filepath.Join(repositoriesDir, "main")
 		if remoteURL, err := getRemoteURLFromGit(defaultRepoPath); err == nil && remoteURL != "" {
 			gitURL = remoteURL
-			fmt.Printf("✓ 从现有Git仓库读取远程URL: %s\n", gitURL)
+			printfText("✓ 从现有Git仓库读取远程URL: %s\n", gitURL)
 		}
 	}
 
@@ -172,7 +175,7 @@ multi_repo:
 		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 			return errors.WrapWithCode(err, "runInit", errors.ErrFileOperation, "创建配置文件失败")
 		}
-		fmt.Printf("✓ 创建配置文件: %s\n", configPath)
+		printfText("✓ 创建配置文件: %s\n", configPath)
 	} else {
 		// 配置文件已存在，更新git_remote_url字段
 		// 首先检查是否需要从git配置读取远程URL
@@ -180,12 +183,12 @@ multi_repo:
 			repoPath := filepath.Join(skillHubDir, "repo")
 			if remoteURL, err := getRemoteURLFromGit(repoPath); err == nil && remoteURL != "" {
 				gitURL = remoteURL
-				fmt.Printf("✓ 从现有Git仓库读取远程URL: %s\n", gitURL)
+				printfText("✓ 从现有Git仓库读取远程URL: %s\n", gitURL)
 			}
 		}
 
 		// 配置文件已存在，确保它是多仓库配置
-		fmt.Printf("✓ 配置文件已存在: %s\n", configPath)
+		printfText("✓ 配置文件已存在: %s\n", configPath)
 		// 注意：现有配置文件需要手动更新为多仓库格式
 		// 用户可以通过重新运行 init 或手动编辑 config.yaml 来更新
 	}
@@ -197,9 +200,9 @@ multi_repo:
 		if err := os.WriteFile(statePath, []byte(initialState), 0644); err != nil {
 			return errors.WrapWithCode(err, "runInit", errors.ErrFileOperation, "创建状态文件失败")
 		}
-		fmt.Printf("✓ 创建状态文件: %s\n", statePath)
+		printfText("✓ 创建状态文件: %s\n", statePath)
 	} else {
-		fmt.Printf("✓ 状态文件已存在: %s\n", statePath)
+		printfText("✓ 状态文件已存在: %s\n", statePath)
 	}
 
 	// 根据是否提供git_url执行不同的初始化逻辑
@@ -210,14 +213,14 @@ multi_repo:
 
 		// 检查是否已经是相同的git仓库
 		if isSameGitRepo(repoPath, gitURL) {
-			fmt.Println("\n✅ 检测到相同的远程仓库，跳过克隆")
+			printlnText("\n✅ 检测到相同的远程仓库，跳过克隆")
 		} else {
-			fmt.Println("\n正在克隆远程技能仓库...")
+			printlnText("\n正在克隆远程技能仓库...")
 
 			// 如果repo目录已存在且非空，备份
 			if entries, err := os.ReadDir(repoPath); err == nil && len(entries) > 0 {
 				backupDir := repoPath + ".bak." + time.Now().Format("20060102-150405")
-				fmt.Printf("备份现有仓库到: %s\n", backupDir)
+				printfText("备份现有仓库到: %s\n", backupDir)
 				if err := os.Rename(repoPath, backupDir); err != nil {
 					return errors.WrapWithCode(err, "runInit", errors.ErrFileOperation, "备份失败")
 				}
@@ -230,37 +233,37 @@ multi_repo:
 			// 创建临时Repository对象用于克隆
 			// 克隆远程仓库
 			if err := localRuntime.Git().CloneRepository(repoPath, gitURL); err != nil {
-				fmt.Printf("⚠️  克隆远程仓库失败: %v\n", err)
-				fmt.Println("\n故障排除建议:")
-				fmt.Println("1. 对于SSH URL (git@...):")
-				fmt.Println("   - 确保SSH agent正在运行: eval $(ssh-agent) && ssh-add ~/.ssh/id_rsa")
-				fmt.Println("   - 或使用HTTPS URL代替: https://github.com/user/repo.git")
-				fmt.Println("2. 对于HTTPS URL:")
-				fmt.Println("   - 确保网络连接正常")
-				fmt.Println("   - 如果需要认证，设置Git token: skill-hub config set git_token YOUR_TOKEN")
-				fmt.Println("3. 检查URL格式是否正确")
-				fmt.Println("\n将创建本地空仓库")
+				printfText("⚠️  克隆远程仓库失败: %v\n", err)
+				printlnText("\n故障排除建议:")
+				printlnText("1. 对于SSH URL (git@...):")
+				printlnText("   - 确保SSH agent正在运行: eval $(ssh-agent) && ssh-add ~/.ssh/id_rsa")
+				printlnText("   - 或使用HTTPS URL代替: https://github.com/user/repo.git")
+				printlnText("2. 对于HTTPS URL:")
+				printlnText("   - 确保网络连接正常")
+				printlnText("   - 如果需要认证，设置Git token: skill-hub config set git_token YOUR_TOKEN")
+				printlnText("3. 检查URL格式是否正确")
+				printlnText("\n将创建本地空仓库")
 
 				// 如果克隆失败，创建本地空仓库
 				return initLocalEmptyRepository(repoPath)
 			}
 
-			fmt.Println("✅ 远程技能仓库克隆完成")
+			printlnText("✅ 远程技能仓库克隆完成")
 		}
 
 		// 刷新技能索引
-		fmt.Println("\n正在刷新技能索引...")
+		printlnText("\n正在刷新技能索引...")
 		if err := rebuildRepositoryIndex(repoName); err != nil {
-			fmt.Printf("⚠️  刷新技能索引失败: %v\n", err)
+			printfText("⚠️  刷新技能索引失败: %v\n", err)
 		} else {
-			fmt.Println("✓ 技能索引已刷新")
+			printlnText("✓ 技能索引已刷新")
 		}
 
 	} else {
 		// 情况2：没有提供git_url
 		// 检查repo目录是否已存在且符合要求
 		if isRepoDirectoryValid(repoPath) {
-			fmt.Println("\n✅ 检测到有效的技能仓库，直接使用现有仓库")
+			printlnText("\n✅ 检测到有效的技能仓库，直接使用现有仓库")
 			repoAlreadyValid = true
 		} else {
 			// 初始化新的本地空git仓库
@@ -270,26 +273,26 @@ multi_repo:
 		}
 	}
 
-	fmt.Println("\n✅ skill-hub 初始化完成！")
-	fmt.Println("工作区位置:", skillHubDir)
+	printlnText("\n✅ skill-hub 初始化完成！")
+	printlnText("工作区位置:", skillHubDir)
 
 	if gitURL != "" {
-		fmt.Println("远程仓库:", gitURL)
-		fmt.Println("使用 'skill-hub git sync' 同步最新技能")
+		printlnText("远程仓库:", gitURL)
+		printlnText("使用 'skill-hub git sync' 同步最新技能")
 	} else {
 		if repoAlreadyValid {
-			fmt.Println("使用现有技能仓库")
+			printlnText("使用现有技能仓库")
 		} else {
-			fmt.Println("本地空仓库已初始化")
+			printlnText("本地空仓库已初始化")
 		}
 	}
 
-	fmt.Println("\n使用 'skill-hub list' 查看可用技能")
+	printlnText("\n使用 'skill-hub list' 查看可用技能")
 
 	// 清理可能创建的备份目录
 	if gitURL != "" {
 		if err := cleanupTimestampedBackupDirs(repoPath); err != nil {
-			fmt.Printf("⚠️  清理备份目录失败: %v\n", err)
+			printfText("⚠️  清理备份目录失败: %v\n", err)
 			logger.Warn("清理备份目录失败", "error", err.Error())
 		}
 	}
@@ -301,6 +304,9 @@ multi_repo:
 		"repo_dir", repoPath,
 		"duration_ms", time.Since(startTime).Milliseconds())
 
+	if jsonMode() {
+		return writeJSON(map[string]any{"workspace": skillHubDir, "repository": repoName, "remote_url": gitURL, "already_initialized": false})
+	}
 	return nil
 }
 
@@ -332,7 +338,7 @@ func isRepoDirectoryValid(repoPath string) bool {
 
 // initLocalEmptyRepository 在repo目录初始化本地空git仓库
 func initLocalEmptyRepository(repoPath string) error {
-	fmt.Println("\n正在初始化本地空技能仓库...")
+	printlnText("\n正在初始化本地空技能仓库...")
 
 	// 创建必要的子目录
 	dirs := []string{
@@ -344,20 +350,20 @@ func initLocalEmptyRepository(repoPath string) error {
 		if err := utils.EnsureDir(dir); err != nil {
 			return err
 		}
-		fmt.Printf("✓ 创建目录: %s\n", dir)
+		printfText("✓ 创建目录: %s\n", dir)
 	}
 
 	// 初始化git仓库（NewRepository会自动初始化如果不存在）
 	if err := localRuntime.Git().InitializeRepository(repoPath); err != nil {
 		return errors.WrapWithCode(err, "initLocalEmptyRepository", errors.ErrGitOperation, "初始化git仓库失败")
 	}
-	fmt.Println("✓ 初始化git仓库")
+	printlnText("✓ 初始化git仓库")
 
 	repoName := filepath.Base(repoPath)
 	if err := rebuildRepositoryIndex(repoName); err != nil {
 		return errors.WrapWithCode(err, "initLocalEmptyRepository", errors.ErrFileOperation, "创建技能索引失败")
 	}
-	fmt.Printf("✓ 创建仓库技能索引: %s\n", filepath.Join(repoPath, "registry.json"))
+	printfText("✓ 创建仓库技能索引: %s\n", filepath.Join(repoPath, "registry.json"))
 
 	return nil
 }

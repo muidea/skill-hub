@@ -129,7 +129,7 @@ skill-hubd service uninstall
 
 #### 环境要求
 
-- **Go 1.24+** 环境
+- **Go 1.26+** 环境
 - **Git** 版本控制工具
 - **make** 构建工具（可选，推荐）
 
@@ -218,7 +218,7 @@ go test ./...
 
 ## 命令参考
 
-skill-hub 提供了一系列命令来管理技能和项目。
+skill-hub 提供了一系列命令来管理技能和项目。Agent 和自动化调用统一使用全局 `--json`，分别捕获 stdout 与 stderr，并检查退出码；完整规则见 [CLI JSON 调用合同](docs/Skill-Hub命令规范.md#cli-json-调用合同)。
 
 ### 核心命令
 
@@ -227,12 +227,14 @@ skill-hub 提供了一系列命令来管理技能和项目。
 | `init` | 初始化多仓库工作区 | `skill-hub init [git_url]` |
 | `list` | 列出可用技能 | `skill-hub list [--pattern <glob>...] [--verbose] [--repo <repo-name>...]` |
 | `search` | 搜索远程技能 | `skill-hub search <keyword> [--limit <number>]` |
-| `create` | 创建新技能模板 | `skill-hub create <id>` |
-| `remove` | 移除项目技能；`--global` 时移除本机全局技能 | `skill-hub remove <id> [--global] [--agent codex|opencode|claude] [--force]` |
+| `create` | 创建新技能模板 | `skill-hub create <id> [--description <text>] [--json]` |
+| `register` | 登记已有项目技能，不改写内容 | `skill-hub register <id> [--skip-validate] [--json]` |
+| `import` | 批量登记、验证并可选归档 | `skill-hub import <skills-dir> [--archive] [--archive-only] [--dry-run] [--json]` |
+| `remove` | 移除项目技能；`--global` 时移除本机全局技能 | `skill-hub remove <id> [--global] [--force] [--yes] [--json]` |
 | `validate` | 验证项目工作区中新建 skill 的合规性 | `skill-hub validate --pattern <id-or-glob> [--fix] [--links] [--json]` |
-| `use` | 使用指定技能；`--global` 时写入本机全局期望状态 | `skill-hub use --pattern <id-or-glob> [--global] [--agent codex|opencode|claude]` |
-| `status` | 检查项目或本机全局技能状态 | `skill-hub status [--pattern <id-or-glob>] [--verbose] [--json] [--global] [--agent codex|opencode|claude]` |
-| `apply` | 应用技能到项目；`--global` 时刷新本机 agent 全局 skills 目录 | `skill-hub apply [--pattern <id-or-glob>] [--dry-run] [--force] [--global] [--agent codex|opencode|claude]` |
+| `use` | 使用指定技能；`--global` 时写入本机全局期望状态 | `skill-hub use --pattern <id-or-glob> [--global]` |
+| `status` | 检查项目或本机全局技能状态 | `skill-hub status [--pattern <id-or-glob>] [--verbose] [--json] [--global]` |
+| `apply` | 应用技能到项目；`--global` 时刷新本机 agent 全局 skills 目录 | `skill-hub apply [--pattern <id-or-glob>] [--dry-run] [--force] [--global]` |
 | `feedback` | 反馈项目修改到默认仓库 | `skill-hub feedback --pattern <id-or-glob> [--dry-run] [--force] [--json]` |
 | `prune` | 清理 `state.json` 中失效的项目记录 | `skill-hub prune` |
 | `pull` | 拉取默认仓库的远程更新 | `skill-hub pull [--force] [--check] [--json]` |
@@ -300,19 +302,19 @@ skill-hub list --repo skills-repo --verbose
 
 #### 本机全局技能管理
 ```bash
-# 将技能启用为 Codex 全局 skill
-skill-hub use --pattern golang-best-practices --global --agent codex
+# 将技能启用到本机已检测或配置的 agent 全局目录
+skill-hub use --pattern golang-best-practices --global
 
 # 检查本机全局期望状态与 agent skills 目录是否一致
 skill-hub status --global
-skill-hub status --pattern golang-best-practices --global --agent codex
+skill-hub status --pattern golang-best-practices --global
 
 # 预览并刷新本机 agent 全局 skills 目录
 skill-hub apply --global --dry-run
 skill-hub apply --global
 
 # 从本机全局状态和 agent 全局目录移除
-skill-hub remove golang-best-practices --global --agent codex
+skill-hub remove golang-best-practices --global
 ```
 
 #### 技能反馈和更新
@@ -449,7 +451,7 @@ skill-hub status
 skill-hub status --verbose
 
 # 刷新本机全局技能
-skill-hub use --pattern git-expert --global --agent opencode
+skill-hub use --pattern git-expert --global
 skill-hub apply --global
 ```
 

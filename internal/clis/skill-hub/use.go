@@ -69,7 +69,7 @@ func init() {
 	useCmd.Flags().StringArray("pattern", nil, "技能 ID 通配符（可重复）。请引用通配符避免 shell 展开。")
 	useCmd.Flags().String("repo", "", "精确指定技能来源仓库")
 	useCmd.Flags().Bool("dry-run", false, "仅解析并预览启用结果，不写入状态")
-	useCmd.Flags().Bool("json", false, "以统一 JSON 结果输出，适合自动化处理")
+
 	useCmd.Flags().Bool("non-interactive", false, "禁止交互；歧义来源会报错，变量使用默认值或 --var")
 	useCmd.Flags().StringArray("var", nil, "设置技能变量，格式 key=value，可重复使用")
 }
@@ -313,15 +313,15 @@ func resolveUseVariables(fullSkill *spec.Skill, options useOptions) (map[string]
 		return values, nil
 	}
 
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("请设置技能变量 (按Enter使用默认值):")
+	reader := bufio.NewReader(inputSource())
+	printlnText("请设置技能变量 (按Enter使用默认值):")
 	for _, variable := range fullSkill.Variables {
 		if value, ok := options.Variables[variable.Name]; ok {
 			values[variable.Name] = value
 			continue
 		}
-		fmt.Printf("%s [%s]: ", variable.Name, variable.Default)
-		input, _ := reader.ReadString('\n')
+		printfText("%s [%s]: ", variable.Name, variable.Default)
+		input, _ := readInputLine(reader)
 		input = strings.TrimSpace(input)
 		if input == "" {
 			values[variable.Name] = variable.Default
@@ -497,13 +497,13 @@ func chooseSkillCandidate(skills []spec.SkillMetadata) (spec.SkillMetadata, erro
 	if len(skills) == 1 {
 		return skills[0], nil
 	}
-	fmt.Printf("发现 %d 个同名技能，请选择要使用的技能:\n", len(skills))
+	printfText("发现 %d 个同名技能，请选择要使用的技能:\n", len(skills))
 	for i, skill := range skills {
-		fmt.Printf("  %d. [%s] %s - %s\n", i+1, skill.Repository, skill.Name, skill.Description)
+		printfText("  %d. [%s] %s - %s\n", i+1, skill.Repository, skill.Name, skill.Description)
 	}
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("请选择 (输入编号): ")
-	input, _ := reader.ReadString('\n')
+	reader := bufio.NewReader(inputSource())
+	printText("请选择 (输入编号): ")
+	input, _ := readInputLine(reader)
 	input = strings.TrimSpace(input)
 	var choice int
 	if _, err := fmt.Sscanf(input, "%d", &choice); err != nil || choice < 1 || choice > len(skills) {
@@ -513,10 +513,10 @@ func chooseSkillCandidate(skills []spec.SkillMetadata) (spec.SkillMetadata, erro
 }
 
 func confirmSkillReconfigure() bool {
-	fmt.Println("⚠️  该技能已在当前项目启用")
-	fmt.Print("是否重新配置变量？ [y/N]: ")
-	reader := bufio.NewReader(os.Stdin)
-	response, _ := reader.ReadString('\n')
+	printlnText("⚠️  该技能已在当前项目启用")
+	printText("是否重新配置变量？ [y/N]: ")
+	reader := bufio.NewReader(inputSource())
+	response, _ := readInputLine(reader)
 	response = strings.TrimSpace(response)
 	return response == "y" || response == "Y"
 }
@@ -526,31 +526,31 @@ func renderUseSummary(summary *UseSummary) {
 		return
 	}
 	if summary.DryRun {
-		fmt.Println("=== use 预览（dry-run） ===")
+		printlnText("=== use 预览（dry-run） ===")
 	} else {
-		fmt.Println("=== use 结果 ===")
+		printlnText("=== use 结果 ===")
 	}
 	for _, item := range summary.Items {
 		switch item.Status {
 		case "enabled":
-			fmt.Printf("✓ 已启用 %s [%s]", item.SkillID, item.Repository)
+			printfText("✓ 已启用 %s [%s]", item.SkillID, item.Repository)
 		case "planned":
-			fmt.Printf("[计划] 将启用 %s [%s]", item.SkillID, item.Repository)
+			printfText("[计划] 将启用 %s [%s]", item.SkillID, item.Repository)
 		case "skipped":
-			fmt.Printf("- 已跳过 %s", item.Input)
+			printfText("- 已跳过 %s", item.Input)
 		case "error":
-			fmt.Printf("✗ %s", item.Input)
+			printfText("✗ %s", item.Input)
 		}
 		if item.Version != "" {
-			fmt.Printf(" (v%s)", item.Version)
+			printfText(" (v%s)", item.Version)
 		}
 		if item.NeedsVariables {
-			fmt.Print("；包含可配置变量")
+			printText("；包含可配置变量")
 		}
 		if item.Error != "" {
-			fmt.Printf("：%s", item.Error)
+			printfText("：%s", item.Error)
 		}
-		fmt.Println()
+		printlnText()
 	}
-	fmt.Printf("范围: %s；总计: %d，已启用: %d，计划: %d，跳过: %d，失败: %d\n", summary.Scope, summary.Total, summary.Enabled, summary.Planned, summary.Skipped, summary.Failed)
+	printfText("范围: %s；总计: %d，已启用: %d，计划: %d，跳过: %d，失败: %d\n", summary.Scope, summary.Total, summary.Enabled, summary.Planned, summary.Skipped, summary.Failed)
 }

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -47,7 +46,6 @@ func init() {
 	lintCmd.Flags().Bool("fix", false, "将可安全改写的本机路径替换为相对路径")
 	lintCmd.Flags().Bool("dry-run", false, "演习模式，仅报告将改写的路径")
 	lintCmd.Flags().Bool("no-backup", false, "修复前不创建备份文件")
-	lintCmd.Flags().Bool("json", false, "以JSON格式输出路径审计报告")
 }
 
 func runLintPaths(opts projectport.PathLintOptions, jsonOutput bool) error {
@@ -91,31 +89,31 @@ func runLintPaths(opts projectport.PathLintOptions, jsonOutput bool) error {
 
 func renderPathLintReport(report *projectport.PathLintReport) {
 	if report == nil {
-		fmt.Println("未返回路径审计报告")
+		printlnText("未返回路径审计报告")
 		return
 	}
 	if report.DryRun {
-		fmt.Println("🔎 lint --paths 演习模式，未修改文件")
+		printlnText("🔎 lint --paths 演习模式，未修改文件")
 	}
-	fmt.Printf("扫描范围: %s\n", report.Scope)
+	printfText("扫描范围: %s\n", report.Scope)
 	if report.ProjectRoot != "" {
-		fmt.Printf("project-root: %s\n", report.ProjectRoot)
+		printfText("project-root: %s\n", report.ProjectRoot)
 	}
-	fmt.Printf("files:         %d\n", report.FilesScanned)
-	fmt.Printf("findings:      %d\n", report.FindingCount)
-	fmt.Printf("rewritten:     %d\n", report.Rewritten)
-	fmt.Printf("manual-review: %d\n", report.ManualReview)
+	printfText("files:         %d\n", report.FilesScanned)
+	printfText("findings:      %d\n", report.FindingCount)
+	printfText("rewritten:     %d\n", report.Rewritten)
+	printfText("manual-review: %d\n", report.ManualReview)
 	for _, backup := range report.Backups {
-		fmt.Printf("backup:        %s\n", backup)
+		printfText("backup:        %s\n", backup)
 	}
 	for _, finding := range report.Findings {
-		fmt.Printf("- [%s] %s:%d %s %s", finding.Status, finding.File, finding.Line, finding.Kind, finding.Value)
+		printfText("- [%s] %s:%d %s %s", finding.Status, finding.File, finding.Line, finding.Kind, finding.Value)
 		if finding.Replacement != "" {
-			fmt.Printf(" -> %s", finding.Replacement)
+			printfText(" -> %s", finding.Replacement)
 		}
 		if finding.Reason != "" {
-			fmt.Printf(" (%s)", finding.Reason)
+			printfText(" (%s)", finding.Reason)
 		}
-		fmt.Println()
+		printlnText()
 	}
 }

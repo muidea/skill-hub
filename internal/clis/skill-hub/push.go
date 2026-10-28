@@ -3,7 +3,6 @@ package cli
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -30,6 +29,7 @@ var pushCmd = &cobra.Command{
 此命令默认只处理默认仓库，用于完成 feedback -> push 的归档闭环。
 使用 --dry-run 选项可以查看将要推送的更改而不实际执行。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		pushJSON = mustGetBoolFlag(cmd, "json")
 		return runPush()
 	},
 }
@@ -38,7 +38,6 @@ func init() {
 	pushCmd.Flags().StringVarP(&pushMessage, "message", "m", "", "提交消息。如未提供，将根据待推送文件自动生成")
 	pushCmd.Flags().BoolVar(&pushForce, "force", false, "强制推送，跳过确认检查")
 	pushCmd.Flags().BoolVar(&pushDryRun, "dry-run", false, "演习模式，仅显示将要推送的更改，不实际执行")
-	pushCmd.Flags().BoolVar(&pushJSON, "json", false, "以JSON格式输出推送摘要")
 }
 
 func runPush() error {
@@ -71,41 +70,41 @@ func runPush() error {
 		return errors.Wrap(err, "检查待推送提交失败")
 	}
 	if !state.HasPendingPush {
-		fmt.Println("没有要推送的更改")
+		printlnText("没有要推送的更改")
 		return nil
 	}
 	changedLines := state.ChangedLines
 
 	// 显示将要推送的更改
 	if len(changedLines) > 0 {
-		fmt.Println("检测到以下未提交的更改:")
+		printlnText("检测到以下未提交的更改:")
 	} else {
-		fmt.Printf("检测到 %d 个本地提交尚未推送:\n", state.Ahead)
+		printfText("检测到 %d 个本地提交尚未推送:\n", state.Ahead)
 	}
-	fmt.Println(strings.Repeat("-", 50))
+	printlnText(strings.Repeat("-", 50))
 
 	for _, line := range changedLines {
-		fmt.Println(line)
+		printlnText(line)
 	}
 
-	fmt.Println(strings.Repeat("-", 50))
+	printlnText(strings.Repeat("-", 50))
 
 	// 演习模式
 	if pushDryRun {
-		fmt.Println("演习模式：仅显示将要推送的更改，不实际执行")
-		fmt.Println("使用 'skill-hub push'（不带 --dry-run）实际推送更改")
+		printlnText("演习模式：仅显示将要推送的更改，不实际执行")
+		printlnText("使用 'skill-hub push'（不带 --dry-run）实际推送更改")
 		return nil
 	}
 
 	// 确认推送（除非使用 --force）
 	if !pushForce {
-		fmt.Print("\n是否推送这些更改到默认仓库远程？ [y/N]: ")
-		reader := bufio.NewReader(os.Stdin)
-		response, _ := reader.ReadString('\n')
+		printText("\n是否推送这些更改到默认仓库远程？ [y/N]: ")
+		reader := bufio.NewReader(inputSource())
+		response, _ := readInputLine(reader)
 		response = strings.TrimSpace(response)
 
 		if response != "y" && response != "Y" {
-			fmt.Println("取消推送操作")
+			printlnText("取消推送操作")
 			return nil
 		}
 	}
@@ -116,13 +115,13 @@ func runPush() error {
 		message = gitport.SuggestedCommitMessage(pushChangedFiles(changedLines))
 	}
 
-	fmt.Println("正在提交并推送默认仓库更改...")
+	printlnText("正在提交并推送默认仓库更改...")
 
 	if err := pushRepositoryChanges(client, useService, message); err != nil {
 		return errors.Wrap(err, "推送失败")
 	}
 
-	fmt.Println("✅ 默认仓库更改已成功推送到远程仓库")
+	printlnText("✅ 默认仓库更改已成功推送到远程仓库")
 	return nil
 }
 

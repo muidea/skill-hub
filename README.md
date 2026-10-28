@@ -83,6 +83,19 @@ skill-hub push --dry-run --json
 
 如果 `status` 显示 `ModifiedAgainstOutdatedRepo`，先执行 `skill-hub apply --pattern <id>` 刷新到仓库高版本，再把必要修改迁移到新版本后反馈。
 
+## Agent 与自动化调用
+
+CLI 客户端统一使用 `--json`：stdout 只返回一个完整 JSON 文档，进度与诊断写入 stderr，执行期间不读取 stdin。调用方应分别捕获两个通道，并检查退出码；失败和部分失败会在结果中保留 `command_error`。
+
+```bash
+skill-hub init --json
+skill-hub register my-skill --json
+skill-hub import .agents/skills --dry-run --json
+skill-hub status --json
+```
+
+`--json` 不自动确认删除或覆盖；例如移除项目技能需要 `remove <id> --yes --json`。完整规则见 [CLI JSON 调用合同](docs/Skill-Hub命令规范.md#cli-json-调用合同)，回归用例与运行方式见 [e2e 文档](tests/e2e/README.md#cli-json-regression-selection)。
+
 ## 本机全局 Skill
 
 如果希望某个 skill 对本机 agent 全局可用，可以使用 `--global`：

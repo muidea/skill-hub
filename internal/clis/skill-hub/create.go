@@ -29,6 +29,10 @@ create命令将会刷新state.json，标记当前项目工作区在使用该技�
 	},
 }
 
+func init() {
+	createCmd.Flags().String("description", "", "技能描述；未指定时使用默认描述")
+}
+
 func runCreate(skillID string) error {
 	if err := CheckInitDependency(); err != nil {
 		return err
@@ -48,38 +52,47 @@ func runCreate(skillID string) error {
 		if err := os.MkdirAll(agentsDir, 0755); err != nil {
 			return errors.WrapWithCode(err, "runCreate", errors.ErrFileOperation, "创建.agents目录失败")
 		}
-		fmt.Printf("✓ 创建.agents目录: %s\n", agentsDir)
+		printfText("✓ 创建.agents目录: %s\n", agentsDir)
 	}
 
 	skillDir := filepath.Join(agentsDir, "skills", skillID)
 	skillFilePath := filepath.Join(skillDir, "SKILL.md")
 
 	if _, err := os.Stat(skillFilePath); err == nil {
-		fmt.Printf("ℹ️  技能文件已存在: %s\n", skillFilePath)
+		printfText("ℹ️  技能文件已存在: %s\n", skillFilePath)
 		if err := validateSkillFile(skillFilePath); err != nil {
-			fmt.Printf("⚠️  技能文件验证失败: %v\n", err)
-			fmt.Print("是否重新创建？ [y/N]: ")
-			reader := bufio.NewReader(os.Stdin)
-			response, _ := reader.ReadString('\n')
+			if jsonMode() {
+				return errors.Wrap(err, "已有 SKILL.md 验证失败，请先修复；JSON 模式不会覆盖已有内容")
+			}
+			printfText("⚠️  技能文件验证失败: %v\n", err)
+			printText("是否重新创建？ [y/N]: ")
+			reader := bufio.NewReader(inputSource())
+			response, _ := readInputLine(reader)
 			response = strings.TrimSpace(response)
 			if response != "y" && response != "Y" {
-				fmt.Println("❌ 取消操作")
+				printlnText("❌ 取消操作")
 				return nil
 			}
-			fmt.Println("✅ 将重新创建技能文件")
+			printlnText("✅ 将重新创建技能文件")
 		} else {
-			fmt.Println("✅ 技能文件验证通过")
+			printlnText("✅ 技能文件验证通过")
 			if alreadyRegisteredAndSynced(ctx.Cwd, skillID, skillDir) {
-				fmt.Printf("✅ 技能 '%s' 已在本地仓库登记且与仓库一致，无需操作\n", skillID)
+				printfText("✅ 技能 '%s' 已在本地仓库登记且与仓库一致，无需操作\n", skillID)
+				if jsonMode() {
+					return writeCreateJSON(skillID, skillFilePath, "unchanged")
+				}
 				return nil
 			}
-			fmt.Println("正在刷新项目状态...")
+			printlnText("正在刷新项目状态...")
 			if err := refreshProjectState(ctx.Cwd, skillID); err != nil {
 				return errors.Wrap(err, "刷新项目状态失败")
 			}
-			fmt.Printf("✅ 技能 '%s' 已成功登记到项目状态\n", skillID)
-			fmt.Println("\n下一步:")
-			fmt.Printf("1. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", skillID)
+			printfText("✅ 技能 '%s' 已成功登记到项目状态\n", skillID)
+			printlnText("\n下一步:")
+			printfText("1. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", skillID)
+			if jsonMode() {
+				return writeCreateJSON(skillID, skillFilePath, "registered")
+			}
 			return nil
 		}
 	}
@@ -96,9 +109,15 @@ func runCreate(skillID string) error {
 	}
 
 	// 收集技能描述
-	fmt.Printf("请输入技能描述 (按Enter使用默认描述): ")
-	reader := bufio.NewReader(os.Stdin)
-	description, _ := reader.ReadString('\n')
+	description := ""
+	if activeOutput != nil {
+		description = mustGetStringFlag(activeOutput.command, "description")
+	}
+	if !jsonMode() && description == "" {
+		printfText("请输入技能描述 (按Enter使用默认描述): ")
+		reader := bufio.NewReader(inputSource())
+		description, _ = readInputLine(reader)
+	}
 	description = strings.TrimSpace(description)
 
 	// 使用默认描述如果用户未输入
@@ -116,18 +135,20 @@ func runCreate(skillID string) error {
 		return utils.WriteFileErr(err, skillFilePath)
 	}
 
-	fmt.Printf("✅ 技能模板创建成功: %s\n", skillFilePath)
+	printfText("✅ 技能模板创建成功: %s\n", skillFilePath)
 
-	fmt.Println("正在刷新项目状态...")
+	printlnText("正在刷新项目状态...")
 	if err := refreshProjectState(ctx.Cwd, skillID); err != nil {
 		return errors.Wrap(err, "刷新项目状态失败")
 	}
 
-	fmt.Println("\n下一步:")
-	fmt.Println("1. 编辑 SKILL.md 文件以完善技能内容")
-	fmt.Printf("2. 使用 'skill-hub validate %s' 验证技能合规性\n", skillID)
-	fmt.Printf("3. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", skillID)
-
+	printlnText("\n下一步:")
+	printlnText("1. 编辑 SKILL.md 文件以完善技能内容")
+	printfText("2. 使用 'skill-hub validate %s' 验证技能合规性\n", skillID)
+	printfText("3. 使用 'skill-hub feedback %s' 将技能反馈到仓库\n", skillID)
+	if jsonMode() {
+		return writeCreateJSON(skillID, skillFilePath, "created")
+	}
 	return nil
 }
 
@@ -269,4 +290,8 @@ func refreshProjectState(projectPath, skillID string) error {
 	}
 
 	return nil
+}
+
+func writeCreateJSON(skillID, path, status string) error {
+	return writeJSON(map[string]any{"skill_id": skillID, "local_path": path, "status": status})
 }

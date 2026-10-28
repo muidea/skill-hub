@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,7 +74,7 @@ func init() {
 	validateCmd.Flags().Bool("links", false, "检查SKILL.md和技能目录内Markdown文件的本地链接")
 	validateCmd.Flags().Bool("check-remote", false, "同时检查HTTP/HTTPS远端链接")
 	validateCmd.Flags().String("project-root", "", "解析项目相对链接的根目录，默认使用当前项目目录或metadata.project_root")
-	validateCmd.Flags().Bool("json", false, "以JSON格式输出验证报告")
+
 	validateCmd.Flags().StringArray("pattern", nil, "技能 ID 通配符（可重复）。请引用通配符避免 shell 展开。")
 }
 
@@ -154,7 +153,7 @@ func runValidateSilent(opts projectlifecycleservice.ValidateOptions) (*projectli
 			return nil, err
 		}
 	}
-	return report, nil
+	return report, err
 }
 
 // runValidateByPatterns resolves the patterns against the cross-repo skill
@@ -196,6 +195,9 @@ func runValidateByPatterns(patterns []string, opts validateCLIOptions) error {
 		return err
 	}
 	if len(ids) == 0 {
+		if opts.JSON {
+			return writeJSON(map[string]any{"total": 0, "passed": 0, "failed": 0, "repaired": 0, "items": []any{}})
+		}
 		return nil
 	}
 
@@ -303,24 +305,24 @@ func runValidateByLiteralIDs(ids []string, opts validateCLIOptions) error {
 
 func renderValidateReport(report *projectlifecycleservice.ValidateReport) {
 	if report == nil {
-		fmt.Println("未返回验证报告")
+		printlnText("未返回验证报告")
 		return
 	}
 	if report.Total == 0 {
-		fmt.Println("ℹ️  当前项目未登记任何技能")
+		printlnText("ℹ️  当前项目未登记任何技能")
 		return
 	}
 	if report.All {
-		fmt.Printf("验证全部技能: %d\n", report.Total)
+		printfText("验证全部技能: %d\n", report.Total)
 	} else {
-		fmt.Printf("验证技能合规性: %s\n", report.SkillID)
+		printfText("验证技能合规性: %s\n", report.SkillID)
 	}
-	fmt.Printf("项目路径: %s\n", report.ProjectPath)
-	fmt.Printf("passed:   %d\n", report.Passed)
-	fmt.Printf("failed:   %d\n", report.Failed)
-	fmt.Printf("repaired: %d\n", report.Repaired)
+	printfText("项目路径: %s\n", report.ProjectPath)
+	printfText("passed:   %d\n", report.Passed)
+	printfText("failed:   %d\n", report.Failed)
+	printfText("repaired: %d\n", report.Repaired)
 	if report.Links {
-		fmt.Printf("link issues: %d\n", report.LinkIssueCount)
+		printfText("link issues: %d\n", report.LinkIssueCount)
 	}
 
 	for _, item := range report.Items {
@@ -328,31 +330,31 @@ func renderValidateReport(report *projectlifecycleservice.ValidateReport) {
 		if !item.Valid {
 			status = "FAIL"
 		}
-		fmt.Printf("- [%s] %s\n", status, item.SkillID)
+		printfText("- [%s] %s\n", status, item.SkillID)
 		if item.Repaired {
-			fmt.Printf("  ✓ 已修复frontmatter，备份文件: %s\n", item.BackupPath)
+			printfText("  ✓ 已修复frontmatter，备份文件: %s\n", item.BackupPath)
 		}
 		for _, issue := range item.LinkIssues {
-			fmt.Printf("  link [%s] %s:%d %s", issue.Status, issue.SourceFile, issue.Line, issue.Link)
+			printfText("  link [%s] %s:%d %s", issue.Status, issue.SourceFile, issue.Line, issue.Link)
 			if issue.ResolvedPath != "" {
-				fmt.Printf(" -> %s", issue.ResolvedPath)
+				printfText(" -> %s", issue.ResolvedPath)
 			}
 			if issue.Reason != "" {
-				fmt.Printf(" (%s)", issue.Reason)
+				printfText(" (%s)", issue.Reason)
 			}
-			fmt.Println()
+			printlnText()
 		}
 		for _, itemErr := range item.Errors {
-			fmt.Printf("  error: %s\n", itemErr)
+			printfText("  error: %s\n", itemErr)
 		}
 	}
 
-	fmt.Println("\n" + strings.Repeat("=", 50))
+	printlnText("\n" + strings.Repeat("=", 50))
 	if report.Failed == 0 {
-		fmt.Println("✅ 验证通过！")
-		fmt.Println("本地技能合规性验证完成")
+		printlnText("✅ 验证通过！")
+		printlnText("本地技能合规性验证完成")
 	} else {
-		fmt.Printf("❌ %d 个技能验证失败\n", report.Failed)
+		printfText("❌ %d 个技能验证失败\n", report.Failed)
 	}
-	fmt.Println(strings.Repeat("=", 50))
+	printlnText(strings.Repeat("=", 50))
 }

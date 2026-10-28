@@ -101,6 +101,14 @@ Based on the business scenarios defined in the repo test documents and current C
    - `skill-hub status --json` reports `ModifiedAgainstOutdatedRepo` when the project copy was edited from an older version
    - `skill-hub feedback <id>` rejects stale project-copy feedback so repository higher versions are not overwritten
 
+16. **CLI JSON Contract** (`test_cli_json.py`)
+   - First registration and repeated registration produce one complete JSON document in stdout, with progress in stderr and unchanged `SKILL.md` content.
+   - Argument errors return `command_error` and a nonzero exit status without duplicate Usage/Error text.
+   - Partial import failures preserve successful counts and per-skill failures.
+   - Read-only status and import previews do not register the project or create an implicit workspace.
+
+The JSON regression selection contains 8 e2e cases: 4 in `test_cli_json.py`, 3 in `test_bulk_import_register_status.py`, and 1 in `test_feedback_all_json.py`. Open-but-unwritten stdin, service bridge responses, empty pattern matches, confirmation requirements, and audit file responses are additionally covered by Go process tests in `internal/clis/skill-hub/output_test.go`.
+
 ## Architecture
 
 ### Directory Structure
@@ -137,6 +145,7 @@ tests/e2e/
 ├── test_skill_content_commands.py  # create/status/feedback/apply/use skill content
 ├── test_state_prune.py           # prune invalid state.json project records
 ├── test_bulk_import_register_status.py # register/status JSON/frontmatter fix/import archive
+├── test_cli_json.py               # first-register stdout, structured errors, partial import, preview safety
 ├── test_dedupe_sync_copies.py      # duplicate detection and canonical copy sync
 ├── test_path_lint.py              # local path portability lint and fix
 ├── test_validate_links.py         # Markdown local link validation
@@ -173,6 +182,22 @@ Required packages:
 - `requests` - Network checks
 
 ## Usage
+
+### CLI JSON Regression Selection
+
+Run from the repository root after `make build`:
+
+```bash
+python3 -m pytest -p no:rerunfailures \
+  tests/e2e/test_cli_json.py \
+  tests/e2e/test_bulk_import_register_status.py \
+  tests/e2e/test_feedback_all_json.py \
+  -c tests/e2e/pytest.ini
+```
+
+The repository's Python environment is available at `~/codespace/venv/bin/python3`. These cases use temporary project/state directories and do not require remote repositories. The explicit file list in `run_tests.py` includes these three files; CI also runs this selection as a required step. This selection does not represent a full e2e suite run.
+
+The client contract is documented in [CLI command specification](../../docs/Skill-Hub命令规范.md#cli-json-调用合同). Tests must parse the entire stdout with `json.loads`, capture stderr separately, and check the exit status for partial failures.
 
 ### Using Makefile (Recommended)
 ```bash

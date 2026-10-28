@@ -112,7 +112,7 @@ skill-hub/
 
 ### 环境要求
 
-- **Go 1.24+**: 主要开发语言
+- **Go 1.26+**: 主要开发语言
 - **Git**: 版本控制
 - **make**: 构建工具（推荐）
 - **Docker**: 容器化测试（可选）
@@ -171,6 +171,9 @@ make clean
 
 # 运行所有测试
 make test
+
+# 使用当前 Go 工具链安装 staticcheck（升级 Go 后需重新编译该工具）
+go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
 
 # 代码检查
 make lint

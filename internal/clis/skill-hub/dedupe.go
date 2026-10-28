@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -35,7 +34,6 @@ var dedupeCmd = &cobra.Command{
 func init() {
 	dedupeCmd.Flags().String("canonical", "", "canonical技能目录，例如 .agents/skills")
 	dedupeCmd.Flags().String("strategy", "newest", "canonical选择策略: newest, canonical, fail-on-conflict")
-	dedupeCmd.Flags().Bool("json", false, "以JSON格式输出重复检测报告")
 }
 
 func runDedupe(scope string, opts projectport.DedupeOptions, jsonOutput bool) error {
@@ -76,18 +74,18 @@ func runDedupe(scope string, opts projectport.DedupeOptions, jsonOutput bool) er
 
 func renderDedupeReport(report *projectport.DuplicateReport) {
 	if report == nil {
-		fmt.Println("未返回重复检测报告")
+		printlnText("未返回重复检测报告")
 		return
 	}
-	fmt.Printf("扫描范围: %s\n", report.Scope)
+	printfText("扫描范围: %s\n", report.Scope)
 	if report.Canonical != "" {
-		fmt.Printf("canonical: %s\n", report.Canonical)
+		printfText("canonical: %s\n", report.Canonical)
 	}
-	fmt.Printf("策略: %s\n", report.Strategy)
-	fmt.Printf("重复技能组: %d\n", report.SkillCount)
-	fmt.Printf("冲突数: %d\n", report.Conflicts)
+	printfText("策略: %s\n", report.Strategy)
+	printfText("重复技能组: %d\n", report.SkillCount)
+	printfText("冲突数: %d\n", report.Conflicts)
 	if len(report.Groups) == 0 {
-		fmt.Println("未发现重复技能")
+		printlnText("未发现重复技能")
 		return
 	}
 	for _, group := range report.Groups {
@@ -95,16 +93,16 @@ func renderDedupeReport(report *projectport.DuplicateReport) {
 		if group.ContentDiffers {
 			status = "conflict"
 		}
-		fmt.Printf("\n== %s [%s] ==\n", group.SkillID, status)
+		printfText("\n== %s [%s] ==\n", group.SkillID, status)
 		if group.CanonicalSource != "" {
-			fmt.Printf("canonical_source: %s\n", group.CanonicalSource)
+			printfText("canonical_source: %s\n", group.CanonicalSource)
 		}
 		for _, loc := range group.Locations {
 			marker := ""
 			if loc.IsCanonical {
 				marker = " canonical"
 			}
-			fmt.Fprintf(os.Stdout, "- %s%s\n  hash: %s\n  modified: %s\n", loc.SkillDir, marker, loc.Hash, loc.ModifiedTime)
+			fmt.Fprintf(textOutput(), "- %s%s\n  hash: %s\n  modified: %s\n", loc.SkillDir, marker, loc.Hash, loc.ModifiedTime)
 		}
 	}
 }

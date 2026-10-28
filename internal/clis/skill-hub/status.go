@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,7 +51,7 @@ pattern 的已启用技能。请引用带通配符的 pattern，避免 shell 在
 
 func init() {
 	statusCmd.Flags().Bool("verbose", false, "显示详细差异信息")
-	statusCmd.Flags().Bool("json", false, "以JSON格式输出状态，便于CI和自动化脚本处理")
+
 	statusCmd.Flags().Bool("global", false, "检查本机全局技能状态")
 	statusCmd.Flags().StringArray("pattern", nil, "技能 ID 通配符（可重复）。请引用通配符避免 shell 展开。")
 }
@@ -113,10 +112,10 @@ func runStatus(skillID string, verbose bool, jsonOutputOpt ...bool) error {
 			}
 			renderProjectStatusSummary(data.Item)
 			if verbose {
-				fmt.Println("\n服务模式当前仅返回状态摘要，详细 diff 仍需本地模式执行。")
+				printlnText("\n服务模式当前仅返回状态摘要，详细 diff 仍需本地模式执行。")
 			} else if skillID == "" {
-				fmt.Println("\n使用 'skill-hub status --pattern <id>' 检查特定技能状态")
-				fmt.Println("使用 'skill-hub status --verbose' 显示详细差异")
+				printlnText("\n使用 'skill-hub status --pattern <id>' 检查特定技能状态")
+				printlnText("使用 'skill-hub status --verbose' 显示详细差异")
 			}
 			return nil
 		}
@@ -144,7 +143,7 @@ func runStatus(skillID string, verbose bool, jsonOutputOpt ...bool) error {
 	}
 
 	if verbose {
-		fmt.Println("\n=== 详细差异信息 ===")
+		printlnText("\n=== 详细差异信息 ===")
 		for _, item := range summary.Items {
 			showSkillDiff(item)
 		}
@@ -155,17 +154,11 @@ func runStatus(skillID string, verbose bool, jsonOutputOpt ...bool) error {
 			showSkillDetails(item)
 		}
 	} else if !verbose && summary.SkillCount > 0 {
-		fmt.Println("\n使用 'skill-hub status --pattern <id>' 检查特定技能状态")
-		fmt.Println("使用 'skill-hub status --verbose' 显示详细差异")
+		printlnText("\n使用 'skill-hub status --pattern <id>' 检查特定技能状态")
+		printlnText("使用 'skill-hub status --verbose' 显示详细差异")
 	}
 
 	return nil
-}
-
-func writeJSON(v interface{}) error {
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(v)
 }
 
 // runStatusByPatterns renders the status of the project's enabled skills
@@ -213,7 +206,7 @@ func runStatusByPatterns(patterns []string, verbose bool, jsonOutput bool) error
 	}
 	renderProjectStatusSummary(filtered)
 	if verbose {
-		fmt.Println("\n=== 详细差异信息 ===")
+		printlnText("\n=== 详细差异信息 ===")
 		for _, item := range filtered.Items {
 			showSkillDiff(item)
 		}
@@ -402,16 +395,16 @@ func filterGlobalStatusSummaryByIDs(summary *globalservice.StatusSummary, ids ma
 }
 
 func renderProjectStatusSummary(summary *projectstatusservice.ProjectStatusSummary) {
-	fmt.Println("检查技能状态...")
+	printlnText("检查技能状态...")
 
 	if summary.SkillCount == 0 {
-		fmt.Println("ℹ️  当前项目未启用任何技能")
+		printlnText("ℹ️  当前项目未启用任何技能")
 		return
 	}
 
-	fmt.Printf("项目路径: %s\n", summary.ProjectPath)
-	fmt.Printf("启用技能数: %d\n\n", summary.SkillCount)
-	fmt.Println("=== 技能状态 ===")
+	printfText("项目路径: %s\n", summary.ProjectPath)
+	printfText("启用技能数: %d\n\n", summary.SkillCount)
+	printlnText("=== 技能状态 ===")
 
 	maxIDLength := 2
 	maxVersionLength := 7
@@ -424,8 +417,8 @@ func renderProjectStatusSummary(summary *projectstatusservice.ProjectStatusSumma
 		}
 	}
 
-	fmt.Printf("%-*s %-*s 状态\n", maxIDLength, "ID", maxVersionLength, "本地版本")
-	fmt.Println(strings.Repeat("-", maxIDLength+1+maxVersionLength+1+2))
+	printfText("%-*s %-*s 状态\n", maxIDLength, "ID", maxVersionLength, "本地版本")
+	printlnText(strings.Repeat("-", maxIDLength+1+maxVersionLength+1+2))
 
 	for _, item := range summary.Items {
 		statusSymbol := "❓"
@@ -447,28 +440,28 @@ func renderProjectStatusSummary(summary *projectstatusservice.ProjectStatusSumma
 			localVersion = "—"
 		}
 
-		fmt.Printf("%-*s %-*s %s %s\n", maxIDLength, item.SkillID, maxVersionLength, localVersion, statusSymbol, item.Status)
+		printfText("%-*s %-*s %s %s\n", maxIDLength, item.SkillID, maxVersionLength, localVersion, statusSymbol, item.Status)
 	}
 
-	fmt.Println("\n说明:")
-	fmt.Println("✅ synced: 目标副本与来源一致")
-	fmt.Println("⚠️  modified: 目标副本有本地修改")
-	fmt.Println("🔄 outdated: 来源已更新，目标需要刷新")
-	fmt.Println("⛔ diverged: 来源已更新且目标也有修改，需先手工合并")
-	fmt.Println("❌ missing: 已启用但目标副本不存在")
+	printlnText("\n说明:")
+	printlnText("✅ synced: 目标副本与来源一致")
+	printlnText("⚠️  modified: 目标副本有本地修改")
+	printlnText("🔄 outdated: 来源已更新，目标需要刷新")
+	printlnText("⛔ diverged: 来源已更新且目标也有修改，需先手工合并")
+	printlnText("❌ missing: 已启用但目标副本不存在")
 }
 
 func renderGlobalStatusSummary(summary *globalservice.StatusSummary) {
-	fmt.Println("检查本机全局技能状态...")
+	printlnText("检查本机全局技能状态...")
 	if summary == nil {
-		fmt.Println("ℹ️  未返回状态")
+		printlnText("ℹ️  未返回状态")
 		return
 	}
-	fmt.Printf("全局镜像目录: %s\n", summary.GlobalPath)
+	printfText("全局镜像目录: %s\n", summary.GlobalPath)
 	if len(summary.Agents) == 0 {
-		fmt.Println("ℹ️  未检测到可用 agent")
+		printlnText("ℹ️  未检测到可用 agent")
 	} else {
-		fmt.Println("\n=== Agent 检测 ===")
+		printlnText("\n=== Agent 检测 ===")
 		for _, agent := range summary.Agents {
 			state := "detected"
 			if agent.Configured {
@@ -476,19 +469,19 @@ func renderGlobalStatusSummary(summary *globalservice.StatusSummary) {
 			} else if !agent.Detected {
 				state = "not_detected"
 			}
-			fmt.Printf("%-8s %-14s %s\n", agent.Name, state, agent.SkillsDir)
+			printfText("%-8s %-14s %s\n", agent.Name, state, agent.SkillsDir)
 		}
 	}
 
 	if len(summary.Items) == 0 {
-		fmt.Println("\nℹ️  当前未启用任何全局技能")
-		fmt.Println("使用 'skill-hub use <skill-id> --global' 启用全局技能")
+		printlnText("\nℹ️  当前未启用任何全局技能")
+		printlnText("使用 'skill-hub use <skill-id> --global' 启用全局技能")
 		return
 	}
 
 	rows := summarizeGlobalStatusItems(summary.Items)
-	fmt.Printf("\n全局启用技能数: %d\n", len(rows))
-	fmt.Println("\n=== 全局技能状态 ===")
+	printfText("\n全局启用技能数: %d\n", len(rows))
+	printlnText("\n=== 全局技能状态 ===")
 	maxIDLength := 2
 	maxVersionLength := len("版本")
 	maxAgentLength := len("Agent")
@@ -503,34 +496,34 @@ func renderGlobalStatusSummary(summary *globalservice.StatusSummary) {
 			maxAgentLength = len(row.Agents)
 		}
 	}
-	fmt.Printf("%-*s %-*s %-*s 状态\n", maxIDLength, "ID", maxVersionLength, "版本", maxAgentLength, "Agent")
-	fmt.Println(strings.Repeat("-", maxIDLength+1+maxVersionLength+1+maxAgentLength+1+12))
+	printfText("%-*s %-*s %-*s 状态\n", maxIDLength, "ID", maxVersionLength, "版本", maxAgentLength, "Agent")
+	printlnText(strings.Repeat("-", maxIDLength+1+maxVersionLength+1+maxAgentLength+1+12))
 	for _, row := range rows {
-		fmt.Printf("%-*s %-*s %-*s %s %s\n", maxIDLength, row.SkillID, maxVersionLength, row.Version, maxAgentLength, row.Agents, globalStatusSymbol(row.Status), row.Status)
+		printfText("%-*s %-*s %-*s %s %s\n", maxIDLength, row.SkillID, maxVersionLength, row.Version, maxAgentLength, row.Agents, globalStatusSymbol(row.Status), row.Status)
 		if row.ShowAgentDetails {
 			for _, item := range row.Items {
 				detail := fmt.Sprintf("%s: %s %s", item.Agent, globalStatusSymbol(item.Status), item.Status)
 				if item.Message != "" {
 					detail += ": " + item.Message
 				}
-				fmt.Printf("%-*s %-*s %-*s   %s\n", maxIDLength, "", maxVersionLength, "", maxAgentLength, "", detail)
+				printfText("%-*s %-*s %-*s   %s\n", maxIDLength, "", maxVersionLength, "", maxAgentLength, "", detail)
 			}
 		}
 	}
 	if len(summary.Orphaned) > 0 {
-		fmt.Println("\n=== 孤儿托管目录 ===")
+		printlnText("\n=== 孤儿托管目录 ===")
 		for _, item := range summary.Orphaned {
-			fmt.Printf("⚠️  %s -> %s: %s\n", item.SkillID, item.Agent, item.TargetPath)
+			printfText("⚠️  %s -> %s: %s\n", item.SkillID, item.Agent, item.TargetPath)
 		}
 	}
 
-	fmt.Println("\n说明:")
-	fmt.Println("✅ synced: 目标副本与来源一致")
-	fmt.Println("➕ missing: 已启用但目标副本不存在")
-	fmt.Println("⚠️  modified/conflict/orphaned: 需要人工确认后处理")
-	fmt.Println("🔄 outdated: 来源已变化，可运行 'skill-hub apply --global' 刷新")
-	fmt.Println("❌ unavailable: agent skills 目录或来源不可用")
-	fmt.Println("⚠️  mixed: 不同 agent 的状态不一致，详见该技能下方的 agent 明细")
+	printlnText("\n说明:")
+	printlnText("✅ synced: 目标副本与来源一致")
+	printlnText("➕ missing: 已启用但目标副本不存在")
+	printlnText("⚠️  modified/conflict/orphaned: 需要人工确认后处理")
+	printlnText("🔄 outdated: 来源已变化，可运行 'skill-hub apply --global' 刷新")
+	printlnText("❌ unavailable: agent skills 目录或来源不可用")
+	printlnText("⚠️  mixed: 不同 agent 的状态不一致，详见该技能下方的 agent 明细")
 }
 
 type globalStatusRow struct {
@@ -617,7 +610,7 @@ func globalStatusSymbol(status string) string {
 }
 
 func showSkillDetails(item projectstatusservice.SkillStatusItem) {
-	fmt.Println("\n=== 技能详情 ===")
+	printlnText("\n=== 技能详情 ===")
 
 	statusSymbol := "❓"
 	switch item.Status {
@@ -631,50 +624,50 @@ func showSkillDetails(item projectstatusservice.SkillStatusItem) {
 		statusSymbol = "❌"
 	}
 
-	fmt.Printf("ID:         %s\n", item.SkillID)
-	fmt.Printf("状态:       %s %s\n", statusSymbol, item.Status)
+	printfText("ID:         %s\n", item.SkillID)
+	printfText("状态:       %s %s\n", statusSymbol, item.Status)
 	if item.SourceRepository != "" {
-		fmt.Printf("来源仓库:   %s\n", item.SourceRepository)
+		printfText("来源仓库:   %s\n", item.SourceRepository)
 	}
 
 	localVersion := item.LocalVersion
 	if localVersion == "" {
 		localVersion = "N/A"
 	}
-	fmt.Printf("本地版本:   %s\n", localVersion)
+	printfText("本地版本:   %s\n", localVersion)
 
 	repoVersion := item.RepoVersion
 	if repoVersion == "" {
 		repoVersion = "N/A"
 	}
-	fmt.Printf("仓库版本:   %s\n", repoVersion)
+	printfText("仓库版本:   %s\n", repoVersion)
 
-	fmt.Printf("本地路径:   %s\n", item.LocalPath)
-	fmt.Printf("仓库路径:   %s\n", item.RepoPath)
+	printfText("本地路径:   %s\n", item.LocalPath)
+	printfText("仓库路径:   %s\n", item.RepoPath)
 
 	localInfo, localErr := os.Stat(item.LocalPath)
 	repoInfo, repoErr := os.Stat(item.RepoPath)
 
 	if localErr == nil || repoErr == nil {
-		fmt.Println("更新时间对比:")
+		printlnText("更新时间对比:")
 		if localErr == nil {
-			fmt.Printf("  本地文件: %s\n", localInfo.ModTime().Format(time.RFC3339))
+			printfText("  本地文件: %s\n", localInfo.ModTime().Format(time.RFC3339))
 		} else {
-			fmt.Println("  本地文件: 无法获取")
+			printlnText("  本地文件: 无法获取")
 		}
 		if repoErr == nil {
-			fmt.Printf("  仓库文件: %s\n", repoInfo.ModTime().Format(time.RFC3339))
+			printfText("  仓库文件: %s\n", repoInfo.ModTime().Format(time.RFC3339))
 		} else {
-			fmt.Println("  仓库文件: 无法获取")
+			printlnText("  仓库文件: 无法获取")
 		}
 		if localErr == nil && repoErr == nil {
-			fmt.Println("  注: 上述时间仅反映文件系统修改时间，可能与语义版本不完全一致，不代表版本新旧。")
+			printlnText("  注: 上述时间仅反映文件系统修改时间，可能与语义版本不完全一致，不代表版本新旧。")
 		}
 	}
 
 	if item.Status != spec.SkillStatusMissing && localVersion != "N/A" && repoVersion != "N/A" {
 		if desc := describeChangeDirection(item.Status, localVersion, repoVersion); desc != "" {
-			fmt.Println(desc)
+			printlnText(desc)
 		}
 	}
 }
@@ -683,22 +676,22 @@ func showSkillDiff(item projectstatusservice.SkillStatusItem) {
 	localContent, localErr := os.ReadFile(item.LocalPath)
 	repoContent, repoErr := os.ReadFile(item.RepoPath)
 
-	fmt.Printf("\n--- %s ---\n", item.SkillID)
+	printfText("\n--- %s ---\n", item.SkillID)
 
 	if localErr != nil && repoErr != nil {
-		fmt.Println("⚠️  无法读取本地和仓库文件")
+		printlnText("⚠️  无法读取本地和仓库文件")
 		return
 	}
 
 	if localErr != nil {
-		fmt.Println("⚠️  无法读取本地文件")
-		fmt.Printf("仓库文件: %s\n", item.RepoPath)
+		printlnText("⚠️  无法读取本地文件")
+		printfText("仓库文件: %s\n", item.RepoPath)
 		return
 	}
 
 	if repoErr != nil {
-		fmt.Println("⚠️  无法读取仓库文件（技能可能不在仓库中）")
-		fmt.Printf("本地文件: %s\n", item.LocalPath)
+		printlnText("⚠️  无法读取仓库文件（技能可能不在仓库中）")
+		printfText("本地文件: %s\n", item.LocalPath)
 		return
 	}
 
@@ -706,7 +699,7 @@ func showSkillDiff(item projectstatusservice.SkillStatusItem) {
 	repoLines := strings.Split(string(repoContent), "\n")
 
 	if string(localContent) == string(repoContent) {
-		fmt.Println("✅ 本地与仓库内容完全一致")
+		printlnText("✅ 本地与仓库内容完全一致")
 		return
 	}
 
@@ -714,24 +707,24 @@ func showSkillDiff(item projectstatusservice.SkillStatusItem) {
 	repoVersion, repoHash, rvErr := getLocalSkillInfo(item.RepoPath)
 	if lvErr == nil && rvErr == nil {
 		status := determineSkillStatus(localVersion, localHash, repoVersion, repoHash)
-		fmt.Printf("状态判定: %s\n", status)
+		printfText("状态判定: %s\n", status)
 		if desc := describeChangeDirection(status, localVersion, repoVersion); desc != "" {
-			fmt.Println("变更方向:", desc)
+			printlnText("变更方向:", desc)
 		}
 	}
 
-	fmt.Printf("差异统计: 本地 %d 行, 仓库 %d 行\n", len(localLines), len(repoLines))
-	fmt.Println("\n差异预览 (最多显示20行):")
-	fmt.Println("符号说明: '-' 表示仓库侧内容，'+' 表示项目本地工作区内容。")
+	printfText("差异统计: 本地 %d 行, 仓库 %d 行\n", len(localLines), len(repoLines))
+	printlnText("\n差异预览 (最多显示20行):")
+	printlnText("符号说明: '-' 表示仓库侧内容，'+' 表示项目本地工作区内容。")
 
 	diffLines := computeSimpleDiff(localLines, repoLines)
 	displayCount := 0
 	for _, line := range diffLines {
 		if displayCount >= 20 {
-			fmt.Printf("... 还有 %d 行差异未显示\n", len(diffLines)-20)
+			printfText("... 还有 %d 行差异未显示\n", len(diffLines)-20)
 			break
 		}
-		fmt.Println(line)
+		printlnText(line)
 		displayCount++
 	}
 }

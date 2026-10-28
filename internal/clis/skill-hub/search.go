@@ -27,19 +27,25 @@ func init() {
 }
 
 func runSearch(keyword string, limit int) error {
-	fmt.Printf("搜索远程技能: %s\n", keyword)
-	fmt.Printf("结果数量限制: %d\n", limit)
+	printfText("搜索远程技能: %s\n", keyword)
+	printfText("结果数量限制: %d\n", limit)
 
 	if client, ok := hubClientIfAvailable(); ok {
-		fmt.Println("\n正在通过本地服务搜索远端技能...")
+		printlnText("\n正在通过本地服务搜索远端技能...")
 		results, err := client.SearchRemoteSkills(context.Background(), keyword, limit)
 		if err != nil {
-			fmt.Printf("⚠️  本地服务搜索失败: %v\n", err)
-			fmt.Println("\n备用搜索方法:")
-			fmt.Println("1. 稍后重试，或检查本地服务网络访问能力")
-			fmt.Println("2. 访问 https://github.com/topics/agent-skills")
-			fmt.Println("3. 使用 'skill-hub list' 查看本地已有技能")
+			if jsonMode() {
+				return err
+			}
+			printfText("⚠️  本地服务搜索失败: %v\n", err)
+			printlnText("\n备用搜索方法:")
+			printlnText("1. 稍后重试，或检查本地服务网络访问能力")
+			printlnText("2. 访问 https://github.com/topics/agent-skills")
+			printlnText("3. 使用 'skill-hub list' 查看本地已有技能")
 			return nil
+		}
+		if jsonMode() {
+			return writeSearchJSON(results)
 		}
 		displaySearchResults(results, keyword, limit)
 		return nil
@@ -52,14 +58,20 @@ func runSearch(keyword string, limit int) error {
 
 	results, err := localRuntime.Skill().SearchRemote(keyword, limit)
 	if err != nil {
-		fmt.Printf("⚠️  远端搜索失败: %v\n", err)
-		fmt.Println("\n备用搜索方法:")
-		fmt.Println("1. 启动 'skill-hubd' 后重试")
-		fmt.Println("2. 访问 https://github.com/topics/agent-skills")
-		fmt.Println("3. 使用 'skill-hub list' 查看本地已有技能")
+		if jsonMode() {
+			return err
+		}
+		printfText("⚠️  远端搜索失败: %v\n", err)
+		printlnText("\n备用搜索方法:")
+		printlnText("1. 启动 'skill-hubd' 后重试")
+		printlnText("2. 访问 https://github.com/topics/agent-skills")
+		printlnText("3. 使用 'skill-hub list' 查看本地已有技能")
 		return nil
 	}
 
+	if jsonMode() {
+		return writeSearchJSON(results)
+	}
 	displaySearchResults(results, keyword, limit)
 	return nil
 }
@@ -90,8 +102,8 @@ func formatTimeAgo(t time.Time) string {
 
 func displaySearchResults(results []spec.RemoteSearchResult, keyword string, limit int) {
 	if len(results) == 0 {
-		fmt.Println("\nℹ️  未找到相关技能")
-		fmt.Printf("搜索关键词: %s\n", keyword)
+		printlnText("\nℹ️  未找到相关技能")
+		printfText("搜索关键词: %s\n", keyword)
 		return
 	}
 
@@ -99,38 +111,45 @@ func displaySearchResults(results []spec.RemoteSearchResult, keyword string, lim
 		return results[i].Stars > results[j].Stars
 	})
 
-	fmt.Println("\n搜索结果:")
-	fmt.Println(strings.Repeat("=", 80))
+	printlnText("\n搜索结果:")
+	printlnText(strings.Repeat("=", 80))
 
 	for i, result := range results {
 		if i >= limit {
 			break
 		}
 
-		fmt.Printf("%d. %s\n", i+1, result.FullName)
+		printfText("%d. %s\n", i+1, result.FullName)
 		if result.Description != "" {
-			fmt.Printf("   描述: %s\n", result.Description)
+			printfText("   描述: %s\n", result.Description)
 		}
-		fmt.Printf("   链接: %s\n", result.HTMLURL)
-		fmt.Printf("   ⭐ 星标: %d | 🍴 Fork: %d | 📅 更新: %s\n",
+		printfText("   链接: %s\n", result.HTMLURL)
+		printfText("   ⭐ 星标: %d | 🍴 Fork: %d | 📅 更新: %s\n",
 			result.Stars, result.Forks, formatTimeAgo(result.UpdatedAt))
 
 		if len(result.Topics) > 0 {
-			fmt.Printf("   标签: %s\n", strings.Join(result.Topics, ", "))
+			printfText("   标签: %s\n", strings.Join(result.Topics, ", "))
 		}
 
 		if result.Language != "" {
-			fmt.Printf("   语言: %s\n", result.Language)
+			printfText("   语言: %s\n", result.Language)
 		}
 
-		fmt.Println()
+		printlnText()
 	}
 
-	fmt.Println(strings.Repeat("=", 80))
-	fmt.Printf("找到 %d 个相关技能\n", len(results))
+	printlnText(strings.Repeat("=", 80))
+	printfText("找到 %d 个相关技能\n", len(results))
 
-	fmt.Println("\n使用建议:")
-	fmt.Println("1. 查看技能详情: 访问上面的GitHub链接")
-	fmt.Println("2. 添加技能到本地: 复制仓库URL，使用 'skill-hub init <git-url>'")
-	fmt.Println("3. 创建自己的技能: 使用 'skill-hub create <skill-id>'")
+	printlnText("\n使用建议:")
+	printlnText("1. 查看技能详情: 访问上面的GitHub链接")
+	printlnText("2. 添加技能到本地: 复制仓库URL，使用 'skill-hub init <git-url>'")
+	printlnText("3. 创建自己的技能: 使用 'skill-hub create <skill-id>'")
+}
+
+func writeSearchJSON(results []spec.RemoteSearchResult) error {
+	if results == nil {
+		results = []spec.RemoteSearchResult{}
+	}
+	return writeJSON(map[string]any{"items": results, "total": len(results)})
 }

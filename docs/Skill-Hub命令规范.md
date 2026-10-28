@@ -39,6 +39,43 @@ ${XDG_DATA_HOME:-$HOME/.local/share}/skill-hub/agent-skills
 - `...`：可重复参数
 - `|`：多个值中选择一个
 
+## CLI JSON 调用合同
+
+`--json` 是 `skill-hub` 客户端的全局选项，可放在子命令前后。它适用于客户端本地执行和服务桥接，不改变运行时选择，也不增加服务端模式。
+
+- stdout 只输出一个完整 JSON 文档；首次登记的工作区创建提示、进度及诊断写入 stderr。调用方应分别捕获两个通道，直接解析全部 stdout。
+- JSON 模式禁止读取 stdin，不隐含 `--force`、`--yes` 或覆盖授权。需要输入但未提供相应参数时返回结构化错误和非零退出码。
+- 成功时保留各命令既有 JSON 字段，不增加统一外层。失败时增加 `command_error` 对象，包含 `code`、`message` 和可选 `details`；批量部分失败仍保留摘要和逐项结果，并以非零退出码结束。
+- `apply --pattern` 和 `remove --pattern` 将各次执行结果放入 `results` 数组；未匹配时数组为空。`list`、`search` 使用 `items`、`total`，没有匹配时返回空数组。
+- `init --json` 显式初始化全局仓库。首次 `register`、`use`、需要登记的 `import`、`create` 可无交互建立项目工作区；项目只读查询在未登记时返回 `PROJECT_NOT_FOUND`。CLI 不在 dry-run 或 archive-only 导入前创建项目工作区、写入项目状态。
+- `create --json` 使用 `--description` 或默认描述，不覆盖验证失败的已有 `SKILL.md`。项目 `remove --json`、`repo remove --json`、`repo disable --json` 需要 `--yes`。
+- `feedback`、`push` 保留已有 `--force` / `--dry-run` 约定；`git commit --json` 需要 `--message`。`upgrade --json` 保留原有检测行为，实际升级仍需要 `--yes`。
+- `audit --format json` 同样遵守上述输出、非交互约定；使用 `--output` 时，文件内容按 `--format` 写入，stdout 返回 `output`、`format` 和 `report`。
+- `--help`、`help` 和 `--version` 在 JSON 模式下返回结构化元数据；shell completion 不支持 JSON，返回参数错误。
+
+示例：
+
+```bash
+skill-hub init --json
+skill-hub register my-skill --json
+skill-hub import .agents/skills --dry-run --json
+skill-hub status --json
+skill-hub remove my-skill --yes --json
+```
+
+参数错误示例（退出码非零）：
+
+```json
+{
+  "command_error": {
+    "code": "INVALID_INPUT",
+    "message": "accepts 1 arg(s), received 0"
+  }
+}
+```
+
+普通文本模式保留既有交互行为；JSON 模式从不读取 stdin，因此不会将 EOF 或空输入视为确认。
+
 ## 3. 核心命令列表（按功能分组）
 
 ### 3.1. 环境配置
@@ -239,10 +276,12 @@ skill-hub search database --limit 10
 
 ### 4.5 create - 在项目工作区创建一个新技能
 
-**语法**: `skill-hub create <id>`
+**语法**: `skill-hub create <id> [--description <text>] [--json]`
 
 **参数**:
 - `id` (必需): 新技能的标识符。
+- `--description` (可选): 技能描述；JSON 模式未提供时使用默认描述，不读取 stdin。
+- `--json` (可选): 按 CLI JSON 调用合同输出，已有文件验证失败时返回错误，不进入覆盖确认。
 
 **功能描述**:
 
@@ -268,11 +307,12 @@ skill-hub create my-logic
 
 ### 4.5.1 register - 登记已有项目本地技能
 
-**语法**: `skill-hub register <id> [--skip-validate]`
+**语法**: `skill-hub register <id> [--skip-validate] [--json]`
 
 **参数**:
 - `id` (必需): 已存在于 `.agents/skills/<id>/SKILL.md` 的技能标识符。
 - `--skip-validate` (可选): 跳过 `SKILL.md` 验证，直接登记项目状态。
+- `--json` (可选): 首次登记可无交互建立项目工作区，创建进度写入 stderr；stdout 返回 `project_path`、`skill_id`、`version`、`local_path`、`registered`。
 
 **功能描述**:
 
@@ -285,12 +325,13 @@ skill-hub create my-logic
 **示例**:
 ```bash
 skill-hub register existing-skill
+skill-hub register existing-skill --json
 skill-hub register legacy-skill --skip-validate
 ```
 
 ### 4.5.2 import - 批量导入已有技能
 
-**语法**: `skill-hub import <skills-dir> [--fix-frontmatter] [--archive] [--archive-only] [--force] [--dry-run] [--fail-fast]`
+**语法**: `skill-hub import <skills-dir> [--fix-frontmatter] [--archive] [--archive-only] [--force] [--dry-run] [--fail-fast] [--json]`
 
 **参数**:
 - `skills-dir` (必需): 包含 `<id>/SKILL.md` 子目录的技能目录，典型值为 `.agents/skills`。
@@ -300,6 +341,7 @@ skill-hub register legacy-skill --skip-validate
 - `--force` (可选): 批量流程不进行交互确认；不会自动删除源技能。
 - `--dry-run` (可选): 只输出将要登记、修复、归档的动作。
 - `--fail-fast` (可选): 遇到首个失败技能时停止，否则默认继续处理并在最后汇总失败项。
+- `--json` (可选): 输出完整导入摘要；部分失败保留计数与 `failures`，增加 `command_error` 并以非零退出码结束。dry-run 或 archive-only 不由 CLI 初始化项目工作区。
 
 **功能描述**:
 
@@ -320,7 +362,7 @@ skill-hub register legacy-skill --skip-validate
 ```bash
 skill-hub import .agents/skills --fix-frontmatter --archive --force
 skill-hub import agent-skills --archive --archive-only --force
-skill-hub import .agents/skills --dry-run
+skill-hub import .agents/skills --dry-run --json
 ```
 
 ### 4.5.3 dedupe - 检测重复技能副本
@@ -426,7 +468,7 @@ skill-hub audit . --canonical .agents/skills --project-root "$PWD"
 
 ### 4.6 remove - 移除项目技能
 
-**语法**: `skill-hub remove <id> [--global] [--force]` 或 `skill-hub remove --pattern <id-or-glob>... [--global] [--force]`
+**语法**: `skill-hub remove <id> [--global] [--force] [--yes] [--json]` 或 `skill-hub remove --pattern <id-or-glob>... [--global] [--force] [--yes] [--json]`
 
 **参数**:
 - `id` (与 `--pattern` 二选一): 要移除的技能精确标识符。
@@ -444,6 +486,8 @@ skill-hub audit . --canonical .agents/skills --project-root "$PWD"
 该命令会检查当前所在目录是否存在于本地仓库的`state.json`中，如果存在则更新，不存在则提示是否需要新建项目工作区；新建项目工作区统一初始化 `.agents/skills`，不会根据 target 创建专属文件。
 
 **安全机制**: 如果检测到本地有未反馈的修改，会弹出警告并要求确认。
+
+项目模式使用 `--json` 时必须提供 `--yes`，否则返回 `USER_INPUT_ERROR`，不会读取 stdin 或删除技能。`--yes` 只作为 JSON 项目移除的显式确认；普通文本模式保留原有交互。全局模式继续使用 `--force` 处理非托管目录冲突。
 
 使用 `--global` 时，命令不要求当前目录是项目工作区，而是从 `~/.skill-hub/global-state.json` 中移除对应 agent 的全局期望状态，并删除带有 `.skill-hub-manifest.json` 的 agent 全局 skill 目录。默认不会删除没有 Skill-Hub manifest 的同名目录；`--force` 才允许强制删除冲突目录。
 
@@ -896,8 +940,8 @@ skill-hub upgrade --version v0.8.1 --yes
 - `skill-hub git clone [url]` - 克隆远程技能仓库到本地
 - `skill-hub git sync [--json]` - 同步技能仓库（拉取最新更改）
 - `skill-hub git status [--json]` - 查看仓库状态（未提交的更改等）
-- `skill-hub git commit` - 提交更改到本地仓库（交互式输入消息）
-- `skill-hub git push` - 推送本地提交到远程仓库（检查未提交更改）
+- `skill-hub git commit [--message <text>] [--json]` - 提交并推送更改；JSON 模式必须显式提供 `--message`
+- `skill-hub git push [--json]` - 推送本地提交；JSON 模式遇到未提交更改时返回输入错误，不交互决定是否提交
 - `skill-hub git pull [--json]` - 从远程仓库拉取更新（同 `sync`）
 - `skill-hub git remote [url]` - 设置或更新远程仓库URL
 
@@ -949,7 +993,7 @@ skill-hub git remote https://github.com/your-username/skills-repo.git
 ### 5.3 通用选项
 - `--dry-run`: 演习模式（支持命令: `use`, `apply`, `feedback`, `import`, `sync-copies`, `lint`, `push`, `upgrade`）
 - `--force`: 强制模式（支持命令: `apply`, `feedback`, `import`, `pull`, `push`, `upgrade`）
-- `--json`: 机器可读输出（支持命令: `use`, `status`, `repo list`, `repo sync`, `feedback`, `validate`, `dedupe`, `sync-copies`, `lint`, `audit`, `pull`, `push`, `upgrade`）
+- `--json`: CLI 全局机器输出选项，适用于业务命令和帮助、版本元数据；遵循上文 CLI JSON 调用合同。shell completion 不支持该选项。
 
 ## 6. Pattern 语法与批量操作
 
@@ -1118,10 +1162,12 @@ skill-hub repo list --json
 
 ### 8.3 repo remove - 移除仓库
 
-**语法**: `skill-hub repo remove <name>`
+**语法**: `skill-hub repo remove <name> [--yes] [--json]`
 
 **参数**:
 - `name` (必需): 要移除的仓库名称
+- `--yes` (JSON 模式必需): 显式确认本次操作，缺少时返回 `USER_INPUT_ERROR`。
+- `--json` (可选): 输出结构化结果；普通文本模式仍保留交互确认。
 
 **功能描述**:
 从配置中移除指定的仓库。如果仓库是默认仓库，需要先设置其他仓库为默认仓库才能移除。
@@ -1152,10 +1198,12 @@ skill-hub repo enable community
 
 ### 8.5 repo disable - 禁用仓库
 
-**语法**: `skill-hub repo disable <name>`
+**语法**: `skill-hub repo disable <name> [--yes] [--json]`
 
 **参数**:
 - `name` (必需): 要禁用的仓库名称
+- `--yes` (JSON 模式必需): 显式确认本次操作，缺少时返回 `USER_INPUT_ERROR`。
+- `--json` (可选): 输出结构化结果；普通文本模式仍保留交互确认。
 
 **功能描述**:
 禁用指定的仓库。禁用后，该仓库中的技能不会出现在 `skill-hub list` 命令的结果中，但仓库配置仍然保留。

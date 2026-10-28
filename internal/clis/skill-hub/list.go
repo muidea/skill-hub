@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -107,6 +106,12 @@ func runList(verbose bool, repoFilters []string, patterns []string) error {
 
 	}
 
+	if jsonMode() {
+		if skillsMetadata == nil {
+			skillsMetadata = []spec.SkillMetadata{}
+		}
+		return writeJSON(map[string]any{"items": skillsMetadata, "total": len(skillsMetadata)})
+	}
 	renderSkillList(skillsMetadata, repoFilters, patterns, verbose)
 	return nil
 }
@@ -144,33 +149,33 @@ func validateRepoFilters(availableRepos []repositoryport.RepositoryConfig, repoF
 
 func renderSkillList(skillsMetadata []spec.SkillMetadata, repoFilters []string, patterns []string, verbose bool) {
 	if len(skillsMetadata) == 0 {
-		fmt.Println("ℹ️  未找到任何技能")
+		printlnText("ℹ️  未找到任何技能")
 		return
 	}
 
 	if verbose {
 		// 详细模式显示
-		fmt.Println("可用技能列表 (详细模式):")
-		fmt.Println(strings.Repeat("=", 60))
+		printlnText("可用技能列表 (详细模式):")
+		printlnText(strings.Repeat("=", 60))
 		for i, skill := range skillsMetadata {
-			fmt.Printf("%d. ID: %s\n", i+1, skill.ID)
-			fmt.Printf("   名称: %s\n", skill.Name)
-			fmt.Printf("   版本: %s\n", skill.Version)
-			fmt.Printf("   仓库: %s\n", skill.Repository)
+			printfText("%d. ID: %s\n", i+1, skill.ID)
+			printfText("   名称: %s\n", skill.Name)
+			printfText("   版本: %s\n", skill.Version)
+			printfText("   仓库: %s\n", skill.Repository)
 			if skill.Description != "" {
-				fmt.Printf("   描述: %s\n", skill.Description)
+				printfText("   描述: %s\n", skill.Description)
 			}
 			if len(skill.Tags) > 0 {
-				fmt.Printf("   标签: %s\n", strings.Join(skill.Tags, ", "))
+				printfText("   标签: %s\n", strings.Join(skill.Tags, ", "))
 			}
 			if skill.Author != "" && skill.Author != "unknown" {
-				fmt.Printf("   作者: %s\n", skill.Author)
+				printfText("   作者: %s\n", skill.Author)
 			}
-			fmt.Println()
+			printlnText()
 		}
 	} else {
 		// 简要模式显示 - 使用动态列宽
-		fmt.Println("可用技能列表:")
+		printlnText("可用技能列表:")
 
 		// 计算动态列宽
 		widths := calculateColumnWidths(skillsMetadata)
@@ -192,7 +197,7 @@ func renderSkillList(skillsMetadata []spec.SkillMetadata, repoFilters []string, 
 		if repoTitleSpaces < 0 {
 			repoTitleSpaces = 0
 		}
-		fmt.Printf("%s%s %s%s %s%s %s%s\n",
+		printfText("%s%s %s%s %s%s %s%s\n",
 			"ID", strings.Repeat(" ", idTitleSpaces),
 			"名称", strings.Repeat(" ", nameTitleSpaces),
 			"版本", strings.Repeat(" ", versionTitleSpaces),
@@ -200,7 +205,7 @@ func renderSkillList(skillsMetadata []spec.SkillMetadata, repoFilters []string, 
 
 		totalWidth := widths.idMin + widths.nameMin + widths.versionMin + widths.repoMin + 3
 		separator := strings.Repeat("-", totalWidth)
-		fmt.Println(separator)
+		printlnText(separator)
 
 		for _, skill := range skillsMetadata {
 			repoName := formatRepoName(skill.Repository, widths.repoMin)
@@ -224,7 +229,7 @@ func renderSkillList(skillsMetadata []spec.SkillMetadata, repoFilters []string, 
 				repoSpaces = 0
 			}
 
-			fmt.Printf("%s%s %s%s %s%s %s%s\n",
+			printfText("%s%s %s%s %s%s %s%s\n",
 				displaySkillID, strings.Repeat(" ", idSpaces),
 				skill.Name, strings.Repeat(" ", nameSpaces),
 				skill.Version, strings.Repeat(" ", versionSpaces),
@@ -233,12 +238,12 @@ func renderSkillList(skillsMetadata []spec.SkillMetadata, repoFilters []string, 
 	}
 
 	if len(repoFilters) > 0 {
-		fmt.Printf("\n已过滤显示仓库: %s\n", strings.Join(repoFilters, ", "))
+		printfText("\n已过滤显示仓库: %s\n", strings.Join(repoFilters, ", "))
 	}
 	if len(patterns) > 0 {
-		fmt.Printf("已过滤显示pattern: %s\n", strings.Join(patterns, ", "))
+		printfText("已过滤显示pattern: %s\n", strings.Join(patterns, ", "))
 	}
-	fmt.Println("\n使用 'skill-hub use <skill-id>' 在当前项目启用技能")
+	printlnText("\n使用 'skill-hub use <skill-id>' 在当前项目启用技能")
 }
 
 func normalizeRepoFilters(repoFilters []string) []string {

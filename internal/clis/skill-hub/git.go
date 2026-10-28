@@ -3,8 +3,6 @@ package cli
 import (
 	"bufio"
 	"context"
-	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -89,9 +87,7 @@ func init() {
 	gitCmd.AddCommand(gitPullCmd)
 	gitCmd.AddCommand(gitRemoteCmd)
 
-	gitSyncCmd.Flags().Bool("json", false, "以JSON格式输出同步摘要")
-	gitStatusCmd.Flags().Bool("json", false, "以JSON格式输出仓库状态")
-	gitPullCmd.Flags().Bool("json", false, "以JSON格式输出拉取摘要")
+	gitCommitCmd.Flags().StringP("message", "m", "", "提交信息；JSON 模式必须提供")
 	gitRemoteCmd.Flags().BoolP("verbose", "v", false, "显示详细远程仓库信息")
 }
 
@@ -167,7 +163,7 @@ func runGitStatusWithOptions(jsonOutput bool) error {
 		return writeJSON(buildGitStatusSummary(status))
 	}
 
-	fmt.Println(status)
+	printlnText(status)
 	return nil
 }
 
@@ -217,17 +213,31 @@ func runGitCommit() error {
 	}
 	defaultMessage := gitport.SuggestedCommitMessageFromStatus(status)
 
-	// 获取提交信息
-	fmt.Printf("请输入提交信息 [%s]: ", defaultMessage)
-	reader := bufio.NewReader(os.Stdin)
-	message, _ := reader.ReadString('\n')
+	message := ""
+	if activeOutput != nil {
+		message = mustGetStringFlag(activeOutput.command, "message")
+	}
+	if jsonMode() && strings.TrimSpace(message) == "" {
+		return inputRequired("JSON 提交需要 --message；此命令会提交并推送更改")
+	}
+	if message == "" {
+		printfText("请输入提交信息 [%s]: ", defaultMessage)
+		reader := bufio.NewReader(inputSource())
+		message, _ = readInputLine(reader)
+	}
 	message = strings.TrimSpace(message)
 
 	if message == "" {
 		message = defaultMessage
 	}
 
-	return pushSkillRepositoryChanges(message)
+	if err := pushSkillRepositoryChanges(message); err != nil {
+		return err
+	}
+	if jsonMode() {
+		return writeJSON(map[string]any{"status": "pushed", "message": message})
+	}
+	return nil
 }
 
 func runGitPush() error {
@@ -243,14 +253,17 @@ func runGitPush() error {
 	}
 
 	if len(pushChangedLines(status)) > 0 {
-		fmt.Println("⚠️  检测到工作区存在未提交的更改（包含已跟踪文件修改或未跟踪文件）。")
-		fmt.Println("    - 选 Y: 先把当前更改一起提交并推送")
-		fmt.Println("    - 选 N: 仅推送已经存在的提交，保留本地未提交更改")
-		fmt.Println("    - 建议: 如需查看详细变更，请先运行 'skill-hub git status'")
-		fmt.Print("是否在推送前先提交所有本地更改？ [y/N]: ")
+		if jsonMode() {
+			return inputRequired("工作区存在未提交更改；请使用 git commit --message <message> --json，或 push --dry-run --json 预览")
+		}
+		printlnText("⚠️  检测到工作区存在未提交的更改（包含已跟踪文件修改或未跟踪文件）。")
+		printlnText("    - 选 Y: 先把当前更改一起提交并推送")
+		printlnText("    - 选 N: 仅推送已经存在的提交，保留本地未提交更改")
+		printlnText("    - 建议: 如需查看详细变更，请先运行 'skill-hub git status'")
+		printText("是否在推送前先提交所有本地更改？ [y/N]: ")
 
-		reader := bufio.NewReader(os.Stdin)
-		response, _ := reader.ReadString('\n')
+		reader := bufio.NewReader(inputSource())
+		response, _ := readInputLine(reader)
 		response = strings.TrimSpace(response)
 
 		if response == "y" || response == "Y" {
@@ -259,8 +272,14 @@ func runGitPush() error {
 	}
 
 	// 直接推送已存在的提交（工作区可能仍有未提交更改）
-	fmt.Println("推送到远程仓库...")
-	return pushSkillRepositoryCommits()
+	printlnText("推送到远程仓库...")
+	if err := pushSkillRepositoryCommits(); err != nil {
+		return err
+	}
+	if jsonMode() {
+		return writeJSON(map[string]any{"status": "pushed"})
+	}
+	return nil
 }
 
 func runGitPullWithOptions(jsonOutput bool) error {
@@ -282,8 +301,11 @@ func runGitRemoteSet(url string) error {
 		_ = updateRepositoryURL(defaultRepo.Name, url)
 	}
 
-	fmt.Printf("✅ 远程仓库已设置为: %s\n", url)
-	fmt.Println("使用 'skill-hub git sync' 同步技能")
+	printfText("✅ 远程仓库已设置为: %s\n", url)
+	printlnText("使用 'skill-hub git sync' 同步技能")
+	if jsonMode() {
+		return writeJSON(map[string]any{"remote_url": url, "status": "updated"})
+	}
 	return nil
 }
 
@@ -307,52 +329,58 @@ func runGitRemoteView(verbose bool) error {
 		remoteURLs = urls
 	}
 
-	fmt.Printf("默认仓库: %s\n", repoCfg.Name)
-	fmt.Printf("状态: %s\n", func() string {
+	if jsonMode() {
+		if remoteURLs == nil {
+			remoteURLs = []string{}
+		}
+		return writeJSON(map[string]any{"repository": repoCfg, "repository_path": repoPath, "remote_urls": remoteURLs})
+	}
+	printfText("默认仓库: %s\n", repoCfg.Name)
+	printfText("状态: %s\n", func() string {
 		if repoCfg.Enabled {
 			return "已启用"
 		}
 		return "已禁用"
 	}())
 
-	fmt.Printf("类型: %s\n", repoCfg.Type)
+	printfText("类型: %s\n", repoCfg.Type)
 	if repoCfg.IsArchive {
-		fmt.Println("角色: 归档仓库")
+		printlnText("角色: 归档仓库")
 	}
 
-	fmt.Println()
-	fmt.Println("远程配置:")
+	printlnText()
+	printlnText("远程配置:")
 	if len(remoteURLs) == 0 {
-		fmt.Println("  未检测到远程仓库(origin)，可以使用 'skill-hub git remote <url>' 进行设置")
+		printlnText("  未检测到远程仓库(origin)，可以使用 'skill-hub git remote <url>' 进行设置")
 	} else {
 		for _, u := range remoteURLs {
-			fmt.Printf("  origin  %s (fetch)\n", u)
-			fmt.Printf("  origin  %s (push)\n", u)
+			printfText("  origin  %s (fetch)\n", u)
+			printfText("  origin  %s (push)\n", u)
 			if !verbose {
 				break
 			}
 		}
 	}
 
-	fmt.Println()
-	fmt.Println("配置文件中的远程:")
+	printlnText()
+	printlnText("配置文件中的远程:")
 	if repoCfg.URL == "" {
-		fmt.Println("  URL:    未配置")
+		printlnText("  URL:    未配置")
 	} else {
-		fmt.Printf("  URL:    %s\n", repoCfg.URL)
+		printfText("  URL:    %s\n", repoCfg.URL)
 	}
 	if repoCfg.Branch == "" {
-		fmt.Println("  分支:   main")
+		printlnText("  分支:   main")
 	} else {
-		fmt.Printf("  分支:   %s\n", repoCfg.Branch)
+		printfText("  分支:   %s\n", repoCfg.Branch)
 	}
 
-	fmt.Println("仓库路径:")
-	fmt.Printf("  %s\n", repoPath)
+	printlnText("仓库路径:")
+	printfText("  %s\n", repoPath)
 
 	if len(remoteURLs) > 0 && repoCfg.URL != "" && remoteURLs[0] != repoCfg.URL {
-		fmt.Println()
-		fmt.Println("提示: 实际Git远程URL与配置文件不同，如有需要请更新 config.yaml 或重新运行 'skill-hub git remote <url>'")
+		printlnText()
+		printlnText("提示: 实际Git远程URL与配置文件不同，如有需要请更新 config.yaml 或重新运行 'skill-hub git remote <url>'")
 	}
 
 	return nil

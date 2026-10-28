@@ -52,6 +52,7 @@ var feedbackCmd = &cobra.Command{
 	Args:              validatePatternOrExactID,
 	ValidArgsFunction: completeEnabledSkillIDsForCwd,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		feedbackJSON = mustGetBoolFlag(cmd, "json")
 		patterns, err := readPatternOrExactID(cmd, args)
 		if err != nil {
 			return err
@@ -73,7 +74,7 @@ func init() {
 	feedbackCmd.Flags().BoolVar(&feedbackDryRun, "dry-run", false, "演习模式，仅显示将要同步的差异")
 	feedbackCmd.Flags().BoolVar(&feedbackForce, "force", false, "强制更新，即使有冲突也继续执行")
 	feedbackCmd.Flags().BoolVar(&feedbackAll, "all", false, "反馈当前项目状态中登记的全部技能")
-	feedbackCmd.Flags().BoolVar(&feedbackJSON, "json", false, "以JSON格式输出反馈结果")
+
 	feedbackCmd.Flags().StringArray("pattern", nil, "技能 ID 通配符（可重复）。请引用通配符避免 shell 展开。")
 }
 
@@ -104,7 +105,7 @@ func runFeedback(skillID string) error {
 		return err
 	}
 
-	fmt.Printf("收集技能 '%s' 的反馈...\n", skillID)
+	printfText("收集技能 '%s' 的反馈...\n", skillID)
 
 	hasSkill, err := localRuntime.ProjectState().HasSkill(ctx.Cwd, skillID)
 	if err != nil {
@@ -151,7 +152,7 @@ func runFeedback(skillID string) error {
 			return errors.WrapWithCode(err, "runFeedback", errors.ErrFileOperation, "读取本地仓库文件失败")
 		}
 	} else {
-		fmt.Printf("ℹ️  技能 '%s' 在本地仓库中不存在，将作为新技能创建\n", skillID)
+		printfText("ℹ️  技能 '%s' 在本地仓库中不存在，将作为新技能创建\n", skillID)
 		repoContent = []byte{}
 	}
 
@@ -166,34 +167,34 @@ func runFeedback(skillID string) error {
 	hasContentChanges := projectStr != repoStr
 
 	if !skillExists {
-		fmt.Println("\n📝 新建技能内容:")
-		fmt.Println("========================================")
-		fmt.Printf("技能目录: %s\n", skillID)
-		fmt.Printf("文件数量: %d\n", len(changes))
+		printlnText("\n📝 新建技能内容:")
+		printlnText("========================================")
+		printfText("技能目录: %s\n", skillID)
+		printfText("文件数量: %d\n", len(changes))
 		for _, change := range changes {
-			fmt.Printf("  - %s\n", change)
+			printfText("  - %s\n", change)
 		}
-		fmt.Println("========================================")
+		printlnText("========================================")
 	} else if len(changes) == 0 && !hasContentChanges {
-		fmt.Println("✅ 技能内容未修改")
+		printlnText("✅ 技能内容未修改")
 		return nil
 	} else {
-		fmt.Println("\n🔍 检测到修改:")
-		fmt.Println("========================================")
-		fmt.Printf("技能目录: %s\n", skillID)
-		fmt.Printf("修改文件数: %d\n", len(changes))
+		printlnText("\n🔍 检测到修改:")
+		printlnText("========================================")
+		printfText("技能目录: %s\n", skillID)
+		printfText("修改文件数: %d\n", len(changes))
 
 		if len(changes) > 0 {
-			fmt.Println("\n修改的文件:")
+			printlnText("\n修改的文件:")
 			for _, change := range changes {
-				fmt.Printf("  - %s\n", change)
+				printfText("  - %s\n", change)
 			}
 		}
 
 		if hasContentChanges {
-			fmt.Println("\nSKILL.md 内容差异:")
-			fmt.Println("行号 | 修改前                      | 修改后")
-			fmt.Println("-----|---------------------------|---------------------------")
+			printlnText("\nSKILL.md 内容差异:")
+			printlnText("行号 | 修改前                      | 修改后")
+			printlnText("-----|---------------------------|---------------------------")
 
 			projectLines := strings.Split(projectStr, "\n")
 			repoLines := strings.Split(repoStr, "\n")
@@ -213,7 +214,7 @@ func runFeedback(skillID string) error {
 
 				if projectLine != repoLine {
 					lineNum := i + 1
-					fmt.Printf("%4d | %-25s | %-25s\n", lineNum, repoLine, projectLine)
+					printfText("%4d | %-25s | %-25s\n", lineNum, repoLine, projectLine)
 				}
 			}
 		}
@@ -238,19 +239,19 @@ func runFeedback(skillID string) error {
 		}
 
 		if feedbackDryRun {
-			fmt.Println("========================================")
-			fmt.Println("\n✅ 演习模式完成，未进行实际修改")
+			printlnText("========================================")
+			printlnText("\n✅ 演习模式完成，未进行实际修改")
 			return nil
 		}
 
 		if compareVersions(projectVersion, repoVersion) <= 0 {
 			newVersion := bumpPatchVersion(repoVersion)
-			fmt.Printf("\n🔧 自动升级版本号: %s -> %s\n", projectVersion, newVersion)
+			printfText("\n🔧 自动升级版本号: %s -> %s\n", projectVersion, newVersion)
 
 			if err := updateSkillMdVersion(projectSkillPath, newVersion); err != nil {
 				return errors.Wrap(err, "更新版本号失败")
 			}
-			fmt.Printf("✓ 已更新项目工作区 SKILL.md 版本号\n")
+			printfText("✓ 已更新项目工作区 SKILL.md 版本号\n")
 
 			_, err = os.ReadFile(projectSkillPath)
 			if err != nil {
@@ -258,27 +259,27 @@ func runFeedback(skillID string) error {
 			}
 			versionUpdated = true
 		} else {
-			fmt.Printf("\n✓ 使用用户指定的版本号: %s\n", projectVersion)
+			printfText("\n✓ 使用用户指定的版本号: %s\n", projectVersion)
 		}
 	}
 
-	fmt.Println("========================================")
+	printlnText("========================================")
 
 	if feedbackDryRun {
-		fmt.Println("\n✅ 演习模式完成，未进行实际修改")
+		printlnText("\n✅ 演习模式完成，未进行实际修改")
 		return nil
 	}
 
 	if feedbackForce {
-		fmt.Println("\n🔧 强制模式，直接更新本地仓库...")
+		printlnText("\n🔧 强制模式，直接更新本地仓库...")
 	} else {
-		fmt.Print("\n是否将这些修改更新到本地仓库？ [y/N]: ")
+		printText("\n是否将这些修改更新到本地仓库？ [y/N]: ")
 		var response string
-		fmt.Scanln(&response)
+		_ = scanInputToken(&response)
 		response = strings.TrimSpace(response)
 
 		if response != "y" && response != "Y" {
-			fmt.Println("❌ 取消反馈操作")
+			printlnText("❌ 取消反馈操作")
 			return nil
 		}
 	}
@@ -287,17 +288,17 @@ func runFeedback(skillID string) error {
 		return errors.Wrap(err, "归档技能到默认仓库失败")
 	}
 
-	fmt.Println("✓ 更新本地仓库文件")
-	fmt.Println("✓ 技能索引已刷新")
+	printlnText("✓ 更新本地仓库文件")
+	printlnText("✓ 技能索引已刷新")
 
-	fmt.Println("✓ 技能已归档到默认仓库")
+	printlnText("✓ 技能已归档到默认仓库")
 
-	fmt.Println("\n✅ 反馈完成！")
-	fmt.Printf("技能 '%s' 已保存到默认仓库: %s\n", skillID, defaultRepo.Name)
+	printlnText("\n✅ 反馈完成！")
+	printfText("技能 '%s' 已保存到默认仓库: %s\n", skillID, defaultRepo.Name)
 	if versionUpdated {
-		fmt.Println("提示: 版本号已自动升级，可使用 'skill-hub status' 查看更新后的状态")
+		printlnText("提示: 版本号已自动升级，可使用 'skill-hub status' 查看更新后的状态")
 	}
-	fmt.Println("使用 'skill-hub push' 同步到远程仓库")
+	printlnText("使用 'skill-hub push' 同步到远程仓库")
 
 	return nil
 }
@@ -404,6 +405,9 @@ func runFeedbackByPatterns(patterns []string) error {
 		return err
 	}
 	if len(ids) == 0 {
+		if feedbackJSON {
+			return writeJSON(&feedbackSummary{DryRun: feedbackDryRun, Force: feedbackForce, Items: []feedbackItem{}})
+		}
 		return nil
 	}
 
@@ -520,7 +524,7 @@ func feedbackOneViaService(client serviceFeedbackClient, projectPath, skillID st
 
 	if preview.Item != nil && preview.Item.NoChanges {
 		if render {
-			fmt.Println("✅ 技能内容未修改")
+			printlnText("✅ 技能内容未修改")
 		}
 		return feedbackItem{SkillID: skillID, Status: "skipped", Preview: preview.Item}
 	}
@@ -530,14 +534,14 @@ func feedbackOneViaService(client serviceFeedbackClient, projectPath, skillID st
 
 	if feedbackDryRun {
 		if render {
-			fmt.Println("\n✅ 演习模式完成，未进行实际修改")
+			printlnText("\n✅ 演习模式完成，未进行实际修改")
 		}
 		return feedbackItem{SkillID: skillID, Status: "planned", Preview: preview.Item}
 	}
 
 	if render {
 		if feedbackForce {
-			fmt.Println("\n🔧 强制模式，直接更新本地仓库...")
+			printlnText("\n🔧 强制模式，直接更新本地仓库...")
 		} else if !confirmFeedback() {
 			return feedbackItem{SkillID: skillID, Status: "skipped", Preview: preview.Item}
 		}
@@ -563,7 +567,7 @@ func feedbackOneLocal(projectPath, skillID string, render bool) feedbackItem {
 	}
 	if preview.NoChanges {
 		if render {
-			fmt.Println("✅ 技能内容未修改")
+			printlnText("✅ 技能内容未修改")
 		}
 		return feedbackItem{SkillID: skillID, Status: "skipped", Preview: preview}
 	}
@@ -572,7 +576,7 @@ func feedbackOneLocal(projectPath, skillID string, render bool) feedbackItem {
 	}
 	if feedbackDryRun {
 		if render {
-			fmt.Println("\n✅ 演习模式完成，未进行实际修改")
+			printlnText("\n✅ 演习模式完成，未进行实际修改")
 		}
 		return feedbackItem{SkillID: skillID, Status: "planned", Preview: preview}
 	}
@@ -587,12 +591,12 @@ func feedbackOneLocal(projectPath, skillID string, render bool) feedbackItem {
 }
 
 func confirmFeedback() bool {
-	fmt.Print("\n是否将这些修改更新到本地仓库？ [y/N]: ")
+	printText("\n是否将这些修改更新到本地仓库？ [y/N]: ")
 	var response string
-	fmt.Scanln(&response)
+	_ = scanInputToken(&response)
 	response = strings.TrimSpace(response)
 	if response != "y" && response != "Y" {
-		fmt.Println("❌ 取消反馈操作")
+		printlnText("❌ 取消反馈操作")
 		return false
 	}
 	return true
@@ -600,81 +604,81 @@ func confirmFeedback() bool {
 
 func renderFeedbackSummary(summary *feedbackSummary) {
 	if summary == nil {
-		fmt.Println("未返回反馈摘要")
+		printlnText("未返回反馈摘要")
 		return
 	}
 	if summary.DryRun {
-		fmt.Println("🔎 feedback 演习模式，未修改仓库")
+		printlnText("🔎 feedback 演习模式，未修改仓库")
 	}
-	fmt.Printf("项目路径: %s\n", summary.ProjectPath)
-	fmt.Printf("total:   %d\n", summary.Total)
-	fmt.Printf("applied: %d\n", summary.Applied)
-	fmt.Printf("planned: %d\n", summary.Planned)
-	fmt.Printf("skipped: %d\n", summary.Skipped)
-	fmt.Printf("failed:  %d\n", summary.Failed)
+	printfText("项目路径: %s\n", summary.ProjectPath)
+	printfText("total:   %d\n", summary.Total)
+	printfText("applied: %d\n", summary.Applied)
+	printfText("planned: %d\n", summary.Planned)
+	printfText("skipped: %d\n", summary.Skipped)
+	printfText("failed:  %d\n", summary.Failed)
 	for _, item := range summary.Items {
-		fmt.Printf("- [%s] %s", item.Status, item.SkillID)
+		printfText("- [%s] %s", item.Status, item.SkillID)
 		if item.Preview != nil && item.Preview.ResolvedVersion != "" && item.Preview.NeedsVersionBump {
-			fmt.Printf(" version=%s", item.Preview.ResolvedVersion)
+			printfText(" version=%s", item.Preview.ResolvedVersion)
 		}
 		if item.Error != "" {
-			fmt.Printf(" error=%s", item.Error)
+			printfText(" error=%s", item.Error)
 		}
-		fmt.Println()
+		printlnText()
 	}
 }
 
 func renderFeedbackPreview(preview *projectport.PreviewResult) {
 	if preview == nil {
-		fmt.Println("ℹ️  未返回反馈预览")
+		printlnText("ℹ️  未返回反馈预览")
 		return
 	}
 
-	fmt.Printf("收集技能 '%s' 的反馈...\n", preview.SkillID)
+	printfText("收集技能 '%s' 的反馈...\n", preview.SkillID)
 	if !preview.SkillExists {
-		fmt.Printf("ℹ️  技能 '%s' 在本地仓库中不存在，将作为新技能创建\n", preview.SkillID)
+		printfText("ℹ️  技能 '%s' 在本地仓库中不存在，将作为新技能创建\n", preview.SkillID)
 	}
 
 	if len(preview.Changes) == 0 && !preview.HasContentChanges && preview.SkillExists {
 		return
 	}
 
-	fmt.Println("\n🔍 检测到修改:")
-	fmt.Println("========================================")
-	fmt.Printf("技能目录: %s\n", preview.SkillID)
-	fmt.Printf("修改文件数: %d\n", len(preview.Changes))
+	printlnText("\n🔍 检测到修改:")
+	printlnText("========================================")
+	printfText("技能目录: %s\n", preview.SkillID)
+	printfText("修改文件数: %d\n", len(preview.Changes))
 	if len(preview.Changes) > 0 {
-		fmt.Println("\n修改的文件:")
+		printlnText("\n修改的文件:")
 		for _, change := range preview.Changes {
-			fmt.Printf("  - %s\n", change)
+			printfText("  - %s\n", change)
 		}
 	}
 	if preview.NeedsVersionBump {
-		fmt.Printf("\n🔧 自动升级版本号: %s -> %s\n", preview.ProjectVersion, preview.ResolvedVersion)
+		printfText("\n🔧 自动升级版本号: %s -> %s\n", preview.ProjectVersion, preview.ResolvedVersion)
 	} else if preview.ProjectVersion != "" {
-		fmt.Printf("\n✓ 使用用户指定的版本号: %s\n", preview.ProjectVersion)
+		printfText("\n✓ 使用用户指定的版本号: %s\n", preview.ProjectVersion)
 	}
 	if preview.Blocked {
-		fmt.Printf("\n⛔ 已阻止反馈: %s\n", preview.BlockReason)
+		printfText("\n⛔ 已阻止反馈: %s\n", preview.BlockReason)
 	}
-	fmt.Println("========================================")
+	printlnText("========================================")
 }
 
 func renderFeedbackCompletion(result *projectport.PreviewResult) {
 	if result == nil {
-		fmt.Println("\n✅ 反馈完成！")
+		printlnText("\n✅ 反馈完成！")
 		return
 	}
 
-	fmt.Println("✓ 更新本地仓库文件")
-	fmt.Println("✓ 技能索引已刷新")
-	fmt.Println("✓ 技能已归档到默认仓库")
-	fmt.Println("\n✅ 反馈完成！")
-	fmt.Printf("技能 '%s' 已保存到默认仓库: %s\n", result.SkillID, result.DefaultRepo)
+	printlnText("✓ 更新本地仓库文件")
+	printlnText("✓ 技能索引已刷新")
+	printlnText("✓ 技能已归档到默认仓库")
+	printlnText("\n✅ 反馈完成！")
+	printfText("技能 '%s' 已保存到默认仓库: %s\n", result.SkillID, result.DefaultRepo)
 	if result.NeedsVersionBump {
-		fmt.Println("提示: 版本号已自动升级，可使用 'skill-hub status' 查看更新后的状态")
+		printlnText("提示: 版本号已自动升级，可使用 'skill-hub status' 查看更新后的状态")
 	}
-	fmt.Println("使用 'skill-hub push' 同步到远程仓库")
+	printlnText("使用 'skill-hub push' 同步到远程仓库")
 }
 
 func getSkillVersionFromContent(content []byte) string {

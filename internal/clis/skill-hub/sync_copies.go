@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -38,7 +37,7 @@ func init() {
 	syncCopiesCmd.Flags().String("scope", ".", "扫描范围")
 	syncCopiesCmd.Flags().Bool("dry-run", false, "演习模式，仅报告将同步的副本")
 	syncCopiesCmd.Flags().Bool("no-backup", false, "同步前不创建备份")
-	syncCopiesCmd.Flags().Bool("json", false, "以JSON格式输出同步结果")
+
 	_ = syncCopiesCmd.MarkFlagRequired("canonical")
 }
 
@@ -78,32 +77,32 @@ func runSyncCopies(opts projectport.SyncCopiesOptions, jsonOutput bool) error {
 
 func renderSyncCopiesResult(result *projectport.SyncCopiesResult) {
 	if result == nil {
-		fmt.Println("未返回同步结果")
+		printlnText("未返回同步结果")
 		return
 	}
 	if result.DryRun {
-		fmt.Println("🔎 sync-copies 演习模式，未修改文件")
+		printlnText("🔎 sync-copies 演习模式，未修改文件")
 	}
-	fmt.Printf("扫描范围: %s\n", result.Scope)
-	fmt.Printf("canonical: %s\n", result.Canonical)
-	fmt.Printf("synced:    %d\n", result.Synced)
-	fmt.Printf("unchanged: %d\n", result.Unchanged)
-	fmt.Printf("skipped:   %d\n", result.Skipped)
-	fmt.Printf("failed:    %d\n", len(result.Failures))
+	printfText("扫描范围: %s\n", result.Scope)
+	printfText("canonical: %s\n", result.Canonical)
+	printfText("synced:    %d\n", result.Synced)
+	printfText("unchanged: %d\n", result.Unchanged)
+	printfText("skipped:   %d\n", result.Skipped)
+	printfText("failed:    %d\n", len(result.Failures))
 	for _, item := range result.Items {
-		fmt.Printf("- [%s] %s -> %s", item.Status, item.SourceDir, item.TargetDir)
+		printfText("- [%s] %s -> %s", item.Status, item.SourceDir, item.TargetDir)
 		if item.BackupDir != "" {
-			fmt.Printf(" backup=%s", item.BackupDir)
+			printfText(" backup=%s", item.BackupDir)
 		}
 		if item.Message != "" {
-			fmt.Printf(" %s", item.Message)
+			printfText(" %s", item.Message)
 		}
-		fmt.Println()
+		printlnText()
 	}
 	if len(result.Failures) > 0 {
-		fmt.Println("\n失败项:")
+		printlnText("\n失败项:")
 		for _, failure := range result.Failures {
-			fmt.Printf("- id=%s path=%s error=%s\n", failure.SkillID, failure.Path, failure.Error)
+			printfText("- id=%s path=%s error=%s\n", failure.SkillID, failure.Path, failure.Error)
 		}
 	}
 }

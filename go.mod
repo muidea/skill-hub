@@ -1,8 +1,8 @@
 module github.com/muidea/skill-hub
 
-go 1.24.0
+go 1.26.0
 
-toolchain go1.24.11
+toolchain go1.26.7
 
 require (
 	github.com/go-git/go-git/v5 v5.16.4

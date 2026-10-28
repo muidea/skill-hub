@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
@@ -16,21 +14,27 @@ var pruneCmd = &cobra.Command{
 }
 
 func runPrune() error {
-	fmt.Println("清理 state.json 失效项目记录...")
+	printlnText("清理 state.json 失效项目记录...")
 
 	removed, err := localRuntime.ProjectState().PruneInvalidProjects()
 	if err != nil {
 		return err
 	}
 
+	if jsonMode() {
+		if removed == nil {
+			removed = []string{}
+		}
+		return writeJSON(map[string]any{"removed": removed, "total": len(removed)})
+	}
 	if len(removed) == 0 {
-		fmt.Println("✓ 未发现失效项目记录")
+		printlnText("✓ 未发现失效项目记录")
 		return nil
 	}
 
-	fmt.Printf("✓ 已清理 %d 条失效项目记录\n", len(removed))
+	printfText("✓ 已清理 %d 条失效项目记录\n", len(removed))
 	for _, projectPath := range removed {
-		fmt.Printf("  - %s\n", projectPath)
+		printfText("  - %s\n", projectPath)
 	}
 
 	return nil

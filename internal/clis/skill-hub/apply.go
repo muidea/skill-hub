@@ -32,6 +32,15 @@ var applyCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if jsonMode() && len(args) == 1 {
+			if global {
+				return runApplyGlobal(args[0], nil, dryRun, force)
+			}
+			return runApply(args[0], dryRun, force)
+		}
+		if len(patterns) > 0 {
+			beginJSONBatch()
+		}
 		if global {
 			return runApplyGlobalByPatterns(patterns, nil, dryRun, force)
 		}
@@ -58,6 +67,9 @@ func runApplyGlobal(skillID string, agents []string, dryRun bool, force bool) er
 	if err != nil {
 		return errors.Wrap(err, "应用全局技能失败")
 	}
+	if jsonMode() {
+		return writeGlobalApplyJSON(result)
+	}
 	renderGlobalApplyResult(result)
 	return nil
 }
@@ -75,6 +87,9 @@ func runApplyGlobalViaService(client serviceGlobalApplyClient, skillID string, a
 	})
 	if err != nil {
 		return errors.Wrap(err, "通过服务应用全局技能失败")
+	}
+	if jsonMode() {
+		return writeGlobalApplyJSON(resp.Item)
 	}
 	renderGlobalApplyResult(resp.Item)
 	return nil
@@ -98,6 +113,9 @@ func runApply(skillID string, dryRun bool, force bool) error {
 	result, err := localRuntime.Project().Apply(ctx.Cwd, skillID, dryRun, force)
 	if err != nil {
 		return errors.Wrap(err, "应用技能失败")
+	}
+	if jsonMode() {
+		return writeApplyJSON(result)
 	}
 	renderApplyResult(result)
 
@@ -124,6 +142,9 @@ func runApplyViaService(client serviceApplyClient, skillID string, dryRun bool, 
 		return errors.Wrap(err, "通过服务应用技能失败")
 	}
 
+	if jsonMode() {
+		return writeApplyJSON(resp.Item)
+	}
 	renderApplyResult(resp.Item)
 	return nil
 }
@@ -149,7 +170,11 @@ func runApplyWithPatterns(patterns []string, dryRun bool, force bool) error {
 
 	var failed []string
 	for _, id := range ids {
+		before := jsonResultCount()
 		if err := runApply(id, dryRun, force); err != nil {
+			if before == jsonResultCount() {
+				recordBatchError(id, err)
+			}
 			fmt.Fprintf(os.Stderr, "❌ 应用技能 '%s' 失败: %v\n", id, err)
 			failed = append(failed, id)
 			continue
@@ -164,45 +189,45 @@ func runApplyWithPatterns(patterns []string, dryRun bool, force bool) error {
 }
 
 func renderApplyResult(result *projectport.ApplyResult) {
-	fmt.Println("正在应用技能到项目...")
+	printlnText("正在应用技能到项目...")
 	if result == nil {
-		fmt.Println("ℹ️  未返回应用结果")
+		printlnText("ℹ️  未返回应用结果")
 		return
 	}
 
-	fmt.Printf("项目路径: %s\n", result.ProjectPath)
+	printfText("项目路径: %s\n", result.ProjectPath)
 
 	if len(result.Items) == 0 {
-		fmt.Println("ℹ️  当前项目未启用任何技能")
-		fmt.Println("使用 'skill-hub use <skill-id>' 启用技能")
+		printlnText("ℹ️  当前项目未启用任何技能")
+		printlnText("使用 'skill-hub use <skill-id>' 启用技能")
 		return
 	}
 
-	fmt.Printf("启用技能数: %d\n", len(result.Items))
+	printfText("启用技能数: %d\n", len(result.Items))
 	if result.DryRun {
-		fmt.Println("\n=== 演习模式 (dry-run) ===")
-		fmt.Println("将显示将要执行的变更，不实际修改文件")
+		printlnText("\n=== 演习模式 (dry-run) ===")
+		printlnText("将显示将要执行的变更，不实际修改文件")
 	}
 
 	for _, item := range result.Items {
-		fmt.Printf("应用技能: %s\n", item.SkillID)
+		printfText("应用技能: %s\n", item.SkillID)
 		switch item.Status {
 		case "planned":
-			fmt.Println("  [演习] 将应用技能到标准项目技能目录")
-			fmt.Printf("  变量数量: %d\n", item.Variables)
+			printlnText("  [演习] 将应用技能到标准项目技能目录")
+			printfText("  变量数量: %d\n", item.Variables)
 		case "applied":
-			fmt.Printf("✓ 成功应用技能: %s\n", item.SkillID)
+			printfText("✓ 成功应用技能: %s\n", item.SkillID)
 		case "error":
-			fmt.Printf("⚠️  应用技能失败: %s: %s\n", item.SkillID, item.Message)
+			printfText("⚠️  应用技能失败: %s: %s\n", item.SkillID, item.Message)
 		default:
-			fmt.Printf("ℹ️  状态: %s\n", item.Status)
+			printfText("ℹ️  状态: %s\n", item.Status)
 		}
 	}
 
 	if result.DryRun {
-		fmt.Println("\n✅ 演习完成，未实际修改文件")
+		printlnText("\n✅ 演习完成，未实际修改文件")
 	} else {
-		fmt.Println("\n✅ 所有技能应用完成")
+		printlnText("\n✅ 所有技能应用完成")
 	}
 }
 
@@ -220,7 +245,11 @@ func runApplyGlobalByPatterns(patterns []string, agents []string, dryRun bool, f
 	}
 	var failed []string
 	for _, id := range ids {
+		before := jsonResultCount()
 		if err := runApplyGlobal(id, agents, dryRun, force); err != nil {
+			if before == jsonResultCount() {
+				recordBatchError(id, err)
+			}
 			fmt.Fprintf(os.Stderr, "❌ 全局应用技能 '%s' 失败: %v\n", id, err)
 			failed = append(failed, id)
 		}
@@ -233,18 +262,18 @@ func runApplyGlobalByPatterns(patterns []string, agents []string, dryRun bool, f
 }
 
 func renderGlobalApplyResult(result *globalport.ApplyResult) {
-	fmt.Println("正在刷新本机全局技能...")
+	printlnText("正在刷新本机全局技能...")
 	if result == nil {
-		fmt.Println("ℹ️  未返回应用结果")
+		printlnText("ℹ️  未返回应用结果")
 		return
 	}
-	fmt.Printf("全局镜像目录: %s\n", result.GlobalPath)
+	printfText("全局镜像目录: %s\n", result.GlobalPath)
 	if result.DryRun {
-		fmt.Println("\n=== 演习模式 (dry-run) ===")
+		printlnText("\n=== 演习模式 (dry-run) ===")
 	}
 	if len(result.Items) == 0 {
-		fmt.Println("ℹ️  当前未启用任何全局技能")
-		fmt.Println("使用 'skill-hub use <skill-id> --global' 启用全局技能")
+		printlnText("ℹ️  当前未启用任何全局技能")
+		printlnText("使用 'skill-hub use <skill-id> --global' 启用全局技能")
 		return
 	}
 	for _, item := range result.Items {
@@ -254,20 +283,50 @@ func renderGlobalApplyResult(result *globalport.ApplyResult) {
 		}
 		switch item.Status {
 		case globalport.StatusPlanned:
-			fmt.Printf("[计划] %s -> %s: %s\n", item.SkillID, target, item.TargetPath)
+			printfText("[计划] %s -> %s: %s\n", item.SkillID, target, item.TargetPath)
 		case globalport.StatusApplied:
-			fmt.Printf("✓ 已刷新 %s -> %s\n", item.SkillID, target)
+			printfText("✓ 已刷新 %s -> %s\n", item.SkillID, target)
 		case globalport.StatusConflict:
-			fmt.Printf("⚠️  冲突 %s -> %s: %s\n", item.SkillID, target, item.Message)
+			printfText("⚠️  冲突 %s -> %s: %s\n", item.SkillID, target, item.Message)
 		case globalport.StatusError:
-			fmt.Printf("❌ 失败 %s -> %s: %s\n", item.SkillID, target, item.Message)
+			printfText("❌ 失败 %s -> %s: %s\n", item.SkillID, target, item.Message)
 		default:
-			fmt.Printf("ℹ️  %s -> %s: %s %s\n", item.SkillID, target, item.Status, item.Message)
+			printfText("ℹ️  %s -> %s: %s %s\n", item.SkillID, target, item.Status, item.Message)
 		}
 	}
 	if result.DryRun {
-		fmt.Println("\n✅ 演习完成，未实际修改文件")
+		printlnText("\n✅ 演习完成，未实际修改文件")
 	} else {
-		fmt.Println("\n✅ 全局技能刷新完成")
+		printlnText("\n✅ 全局技能刷新完成")
 	}
+}
+
+func writeApplyJSON(result *projectport.ApplyResult) error {
+	if result == nil {
+		return errors.NewWithCode("apply", errors.ErrSystem, "未返回应用结果")
+	}
+	if err := writeJSON(result); err != nil {
+		return err
+	}
+	for _, item := range result.Items {
+		if item.Status == "error" {
+			return errors.NewWithCode("apply", errors.ErrFileOperation, "部分技能应用失败，详见 items")
+		}
+	}
+	return nil
+}
+
+func writeGlobalApplyJSON(result *globalport.ApplyResult) error {
+	if result == nil {
+		return errors.NewWithCode("apply", errors.ErrSystem, "未返回全局应用结果")
+	}
+	if err := writeJSON(result); err != nil {
+		return err
+	}
+	for _, item := range result.Items {
+		if item.Status == globalport.StatusError || item.Status == globalport.StatusConflict {
+			return errors.NewWithCode("apply", errors.ErrFileOperation, "部分全局技能应用失败，详见 items")
+		}
+	}
+	return nil
 }

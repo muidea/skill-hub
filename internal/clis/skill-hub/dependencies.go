@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -212,11 +211,24 @@ func EnsureProjectWorkspace(cwd string) (*spec.ProjectState, error) {
 
 	// 如果项目不存在于状态文件中，需要初始化
 	if projectState == nil {
-		fmt.Printf("当前目录 '%s' 未在skill-hub中注册\n", filepath.Base(cwd))
-		fmt.Print("是否创建新的项目工作区？ [Y/n]: ")
+		if nonInteractiveMode() {
+			command := activeOutput.command
+			switch command.Name() {
+			case "register", "use", "import", "create":
+				// Previews and archive-only imports must not initialize state.
+				if mustGetBoolFlag(command, "dry-run") || mustGetBoolFlag(command, "archive-only") {
+					return &spec.ProjectState{ProjectPath: cwd, Skills: map[string]spec.SkillVars{}}, nil
+				}
+				return createNewProjectWorkspace(cwd, localRuntime.ProjectState())
+			default:
+				return nil, errors.ProjectNotFound("EnsureProjectWorkspace", cwd)
+			}
+		}
+		printfText("当前目录 '%s' 未在skill-hub中注册\n", filepath.Base(cwd))
+		printText("是否创建新的项目工作区？ [Y/n]: ")
 
-		reader := bufio.NewReader(os.Stdin)
-		response, _ := reader.ReadString('\n')
+		reader := bufio.NewReader(inputSource())
+		response, _ := readInputLine(reader)
 		response = strings.TrimSpace(response)
 
 		if response == "" || strings.ToLower(response) == "y" {
@@ -244,7 +256,7 @@ func shouldCreateNestedWorkspace(cwd string, projectState *spec.ProjectState) bo
 
 // createNewProjectWorkspace 创建新的项目工作区。
 func createNewProjectWorkspace(cwd string, projectStatePort projectstateport.ProjectState) (*spec.ProjectState, error) {
-	fmt.Println("正在创建新的项目工作区...")
+	printlnText("正在创建新的项目工作区...")
 
 	if err := initializeWorkspaceFiles(cwd); err != nil {
 		return nil, errors.WrapWithCode(err, "createNewProjectWorkspace", errors.ErrFileOperation, "初始化工作区文件失败")
@@ -261,7 +273,7 @@ func createNewProjectWorkspace(cwd string, projectStatePort projectstateport.Pro
 		return nil, errors.WrapWithCode(err, "createNewProjectWorkspace", errors.ErrSystem, "保存项目状态失败")
 	}
 
-	fmt.Println("✅ 已创建项目工作区")
+	printlnText("✅ 已创建项目工作区")
 	return projectState, nil
 }
 
@@ -271,13 +283,13 @@ func initializeWorkspaceFiles(cwd string) error {
 	if err := os.MkdirAll(agentsDir, 0755); err != nil {
 		return errors.WrapWithCode(err, "initializeWorkspaceFiles", errors.ErrFileOperation, "创建.agents目录失败")
 	}
-	fmt.Printf("✓ 创建目录: %s\n", agentsDir)
+	printfText("✓ 创建目录: %s\n", agentsDir)
 
 	skillsDir := filepath.Join(agentsDir, "skills")
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
 		return errors.WrapWithCode(err, "initializeWorkspaceFiles", errors.ErrFileOperation, "创建skills目录失败")
 	}
-	fmt.Printf("✓ 创建目录: %s\n", skillsDir)
+	printfText("✓ 创建目录: %s\n", skillsDir)
 
 	return nil
 }

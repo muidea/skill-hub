@@ -41,6 +41,7 @@ var removeCmd = &cobra.Command{
 			return err
 		}
 		if len(patterns) > 0 {
+			beginJSONBatch()
 			if len(args) > 0 {
 				return errors.NewWithCode("remove", errors.ErrInvalidInput, "--pattern cannot be combined with positional skill ID")
 			}
@@ -60,6 +61,7 @@ var removeCmd = &cobra.Command{
 }
 
 func init() {
+	removeCmd.Flags().Bool("yes", false, "确认移除项目技能；JSON 模式需要显式确认")
 	removeCmd.Flags().Bool("global", false, "从本机全局状态和 agent 全局目录移除技能")
 	removeCmd.Flags().Bool("force", false, "强制移除全局冲突目录")
 	removeCmd.Flags().StringArray("pattern", nil, "技能 ID 通配符（可重复）。请引用通配符避免 shell 展开。")
@@ -95,10 +97,13 @@ func removeArgs(cmd *cobra.Command, args []string) error {
 
 func runRemoveGlobal(skillID string, agents []string, force bool) error {
 	if client, ok := hubClientIfAvailable(); ok {
-		fmt.Printf("正在从本机全局移除技能: %s\n", skillID)
+		printfText("正在从本机全局移除技能: %s\n", skillID)
 		resp, err := client.RemoveGlobalSkill(context.Background(), skillID, agents, force)
 		if err != nil {
 			return errors.Wrap(err, "通过服务移除全局技能失败")
+		}
+		if jsonMode() {
+			return writeGlobalRemoveJSON(resp.Item)
 		}
 		renderGlobalRemoveResult(resp.Item)
 		return nil
@@ -107,10 +112,13 @@ func runRemoveGlobal(skillID string, agents []string, force bool) error {
 	if err := CheckInitDependency(); err != nil {
 		return err
 	}
-	fmt.Printf("正在从本机全局移除技能: %s\n", skillID)
+	printfText("正在从本机全局移除技能: %s\n", skillID)
 	result, err := localRuntime.Global().Remove(skillID, agents, force)
 	if err != nil {
 		return errors.Wrap(err, "移除全局技能失败")
+	}
+	if jsonMode() {
+		return writeGlobalRemoveJSON(result)
 	}
 	renderGlobalRemoveResult(result)
 	return nil
@@ -127,7 +135,11 @@ func runRemoveGlobalByPatterns(patterns []string, agents []string, force bool) e
 func runRemoveGlobalIDs(ids []string, agents []string, force bool) error {
 	var lastErr error
 	for _, id := range ids {
+		before := jsonResultCount()
 		if err := runRemoveGlobal(id, agents, force); err != nil {
+			if before == jsonResultCount() {
+				recordBatchError(id, err)
+			}
 			fmt.Fprintf(os.Stderr, "❌ 技能 '%s' 全局移除失败: %v\n", id, err)
 			lastErr = err
 			continue
@@ -147,7 +159,11 @@ func runRemoveByPatterns(patterns []string) error {
 func runRemoveIDs(ids []string) error {
 	var lastErr error
 	for _, id := range ids {
+		before := jsonResultCount()
 		if err := runRemove(id); err != nil {
+			if before == jsonResultCount() {
+				recordBatchError(id, err)
+			}
 			fmt.Fprintf(os.Stderr, "❌ 技能 '%s' 移除失败: %v\n", id, err)
 			lastErr = err
 			continue
@@ -162,7 +178,7 @@ func runRemove(skillID string) error {
 		return err
 	}
 
-	fmt.Printf("正在从当前项目移除技能: %s\n", skillID)
+	printfText("正在从当前项目移除技能: %s\n", skillID)
 
 	hasSkill, err := localRuntime.ProjectState().HasSkill(ctx.Cwd, skillID)
 	if err != nil {
@@ -179,51 +195,56 @@ func runRemove(skillID string) error {
 
 	renderRemovalWarning(statusItem)
 
-	// 确认移除
-	if !confirmRemoval(skillID, statusItem) {
-		fmt.Println("❌ 操作已取消")
+	// JSON is not permission to discard local content.
+	if jsonMode() && !mustGetBoolFlag(activeOutput.command, "yes") {
+		return inputRequired("JSON 移除项目技能需要 --yes；请先使用 status --json 检查修改")
+	}
+	if !jsonMode() && !confirmRemoval(skillID, statusItem) {
+		printlnText("❌ 操作已取消")
 		return nil
 	}
 
 	// 物理删除项目本地工作区对应的文件/配置
-	fmt.Println("\n=== 物理清理 ===")
+	printlnText("\n=== 物理清理 ===")
 	if err := removeProjectSkillArtifacts(ctx.Cwd, skillID); err != nil {
 		return errors.Wrap(err, "清理项目技能文件失败")
 	}
 
-	fmt.Println("\n=== 更新状态 ===")
+	printlnText("\n=== 更新状态 ===")
 	if err := localRuntime.ProjectState().RemoveSkill(ctx.Cwd, skillID); err != nil {
 		return errors.Wrap(err, "从状态文件移除技能失败")
 	}
-	fmt.Printf("✓ 成功从 state.json 移除技能标记: %s\n", skillID)
+	printfText("✓ 成功从 state.json 移除技能标记: %s\n", skillID)
 
-	fmt.Println("\n✅ 技能移除完成")
-	fmt.Println("注意: 仓库中的源文件不受影响")
-	fmt.Println("使用 'skill-hub status' 检查当前状态")
-
+	printlnText("\n✅ 技能移除完成")
+	printlnText("注意: 仓库中的源文件不受影响")
+	printlnText("使用 'skill-hub status' 检查当前状态")
+	if jsonMode() {
+		return writeJSON(map[string]any{"project_path": ctx.Cwd, "skill_id": skillID, "status": "removed"})
+	}
 	return nil
 }
 
 func renderGlobalRemoveResult(result *globalservice.RemoveResult) {
 	if result == nil {
-		fmt.Println("ℹ️  未返回移除结果")
+		printlnText("ℹ️  未返回移除结果")
 		return
 	}
 	for _, item := range result.Items {
 		switch item.Status {
 		case globalservice.StatusRemoved:
-			fmt.Printf("✓ 已移除 %s -> %s\n", item.SkillID, item.Agent)
+			printfText("✓ 已移除 %s -> %s\n", item.SkillID, item.Agent)
 		case globalservice.StatusNotApplied, globalservice.StatusMissingAgentDir:
-			fmt.Printf("ℹ️  %s -> %s: %s\n", item.SkillID, item.Agent, item.Message)
+			printfText("ℹ️  %s -> %s: %s\n", item.SkillID, item.Agent, item.Message)
 		case globalservice.StatusConflict:
-			fmt.Printf("⚠️  冲突 %s -> %s: %s\n", item.SkillID, item.Agent, item.Message)
+			printfText("⚠️  冲突 %s -> %s: %s\n", item.SkillID, item.Agent, item.Message)
 		case globalservice.StatusError:
-			fmt.Printf("❌ 失败 %s -> %s: %s\n", item.SkillID, item.Agent, item.Message)
+			printfText("❌ 失败 %s -> %s: %s\n", item.SkillID, item.Agent, item.Message)
 		default:
-			fmt.Printf("ℹ️  %s -> %s: %s\n", item.SkillID, item.Agent, item.Status)
+			printfText("ℹ️  %s -> %s: %s\n", item.SkillID, item.Agent, item.Status)
 		}
 	}
-	fmt.Println("\n✅ 全局技能移除流程完成")
+	printlnText("\n✅ 全局技能移除流程完成")
 }
 
 func inspectRemovalStatus(projectPath, skillID string) (*projectstatusservice.SkillStatusItem, error) {
@@ -238,26 +259,26 @@ func inspectRemovalStatus(projectPath, skillID string) (*projectstatusservice.Sk
 }
 
 func renderRemovalWarning(item *projectstatusservice.SkillStatusItem) {
-	fmt.Println("⚠️  删除前安全检查:")
+	printlnText("⚠️  删除前安全检查:")
 	if item == nil {
-		fmt.Println("未获取到技能状态，将按常规删除处理")
+		printlnText("未获取到技能状态，将按常规删除处理")
 		return
 	}
 
-	fmt.Printf("  当前状态: %s\n", item.Status)
+	printfText("  当前状态: %s\n", item.Status)
 	if item.SourceRepository != "" {
-		fmt.Printf("  来源仓库: %s\n", item.SourceRepository)
+		printfText("  来源仓库: %s\n", item.SourceRepository)
 	}
 
 	switch item.Status {
 	case spec.SkillStatusModified:
-		fmt.Println("  警告: 本地存在未反馈修改，删除后这些修改将丢失。")
+		printlnText("  警告: 本地存在未反馈修改，删除后这些修改将丢失。")
 	case spec.SkillStatusOutdated:
-		fmt.Println("  提示: 本地与来源仓库不一致，删除后将放弃当前项目中的本地副本。")
+		printlnText("  提示: 本地与来源仓库不一致，删除后将放弃当前项目中的本地副本。")
 	case spec.SkillStatusMissing:
-		fmt.Println("  提示: 项目本地工作区文件已经缺失，将仅清理项目状态。")
+		printlnText("  提示: 项目本地工作区文件已经缺失，将仅清理项目状态。")
 	default:
-		fmt.Println("  本地工作区与来源仓库一致，可安全移除。")
+		printlnText("  本地工作区与来源仓库一致，可安全移除。")
 	}
 }
 
@@ -267,7 +288,7 @@ func removeProjectSkillArtifacts(projectPath, skillID string) error {
 		if err := os.RemoveAll(agentsSkillDir); err != nil {
 			return errors.Wrap(err, "removeProjectSkillArtifacts: 删除项目工作区技能目录失败")
 		}
-		fmt.Printf("✓ 删除项目工作区目录: .agents/skills/%s\n", skillID)
+		printfText("✓ 删除项目工作区目录: .agents/skills/%s\n", skillID)
 	}
 
 	return nil
@@ -275,20 +296,35 @@ func removeProjectSkillArtifacts(projectPath, skillID string) error {
 
 // confirmRemoval 确认是否继续移除
 func confirmRemoval(skillID string, item *projectstatusservice.SkillStatusItem) bool {
-	fmt.Printf("\n⚠️  警告: 将移除技能 %s\n", skillID)
+	printfText("\n⚠️  警告: 将移除技能 %s\n", skillID)
 	if item != nil {
 		switch item.Status {
 		case spec.SkillStatusModified:
-			fmt.Println("删除后将丢失未反馈的本地修改。")
+			printlnText("删除后将丢失未反馈的本地修改。")
 		case spec.SkillStatusOutdated:
-			fmt.Println("删除后将放弃当前项目中的旧版本本地副本。")
+			printlnText("删除后将放弃当前项目中的旧版本本地副本。")
 		}
 	}
-	fmt.Print("是否继续？(y/n): ")
+	printText("是否继续？(y/n): ")
 
 	var input string
-	_, _ = fmt.Fscan(os.Stdin, &input)
+	_ = scanInputToken(&input)
 	input = strings.TrimSpace(strings.ToLower(input))
 
 	return input == "y" || input == "yes"
+}
+
+func writeGlobalRemoveJSON(result *globalservice.RemoveResult) error {
+	if result == nil {
+		return errors.NewWithCode("remove", errors.ErrSystem, "未返回全局移除结果")
+	}
+	if err := writeJSON(result); err != nil {
+		return err
+	}
+	for _, item := range result.Items {
+		if item.Status == globalservice.StatusError || item.Status == globalservice.StatusConflict {
+			return errors.NewWithCode("remove", errors.ErrFileOperation, "部分全局技能移除失败，详见 items")
+		}
+	}
+	return nil
 }

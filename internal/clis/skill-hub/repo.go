@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/application/httpapi/biz"
@@ -128,14 +127,13 @@ var repoDefaultCmd = &cobra.Command{
 
 func init() {
 	// 添加命令标志
+	repoRemoveCmd.Flags().Bool("yes", false, "确认移除仓库配置")
+	repoDisableCmd.Flags().Bool("yes", false, "确认禁用仓库")
 	repoAddCmd.Flags().String("branch", "main", "Git分支")
 	repoAddCmd.Flags().String("type", "community", "仓库类型 (user/community/official)")
 	repoAddCmd.Flags().String("description", "", "仓库描述")
-	repoListCmd.Flags().Bool("json", false, "以JSON格式输出仓库列表")
 
 	repoSyncCmd.Flags().Bool("all", false, "同步所有仓库（包括禁用的）")
-	repoSyncCmd.Flags().Bool("json", false, "以JSON格式输出同步摘要")
-	repoRebuildIndexCmd.Flags().Bool("json", false, "以JSON格式输出重建结果")
 
 	// 添加子命令
 	repoCmd.AddCommand(repoAddCmd)
@@ -146,7 +144,6 @@ func init() {
 	repoCmd.AddCommand(repoEnableCmd)
 	repoCmd.AddCommand(repoDisableCmd)
 	repoCmd.AddCommand(repoDefaultCmd)
-
 }
 
 // runRepoAdd 执行添加仓库操作
@@ -186,16 +183,19 @@ func runRepoAdd(cmd *cobra.Command, args []string) error {
 		return errors.Wrap(err, "添加仓库失败")
 	}
 
-	fmt.Printf("✅ 仓库 '%s' 添加成功\n", name)
-	if url != "" {
-		fmt.Printf("   远程URL: %s\n", url)
-		fmt.Printf("   分支: %s\n", branch)
-	} else {
-		fmt.Println("   类型: 本地空仓库")
+	if jsonMode() {
+		return writeJSON(repoConfig)
 	}
-	fmt.Printf("   类型: %s\n", repoType)
+	printfText("✅ 仓库 '%s' 添加成功\n", name)
+	if url != "" {
+		printfText("   远程URL: %s\n", url)
+		printfText("   分支: %s\n", branch)
+	} else {
+		printlnText("   类型: 本地空仓库")
+	}
+	printfText("   类型: %s\n", repoType)
 	if description != "" {
-		fmt.Printf("   描述: %s\n", description)
+		printfText("   描述: %s\n", description)
 	}
 
 	return nil
@@ -237,14 +237,18 @@ func runRepoList(jsonOutput bool) error {
 
 // runRepoRemove 执行移除仓库操作
 func runRepoRemove(name string) error {
-	// 确认操作
-	fmt.Printf("确定要移除仓库 '%s' 吗？(y/N): ", name)
-	var confirm string
-	fmt.Scanln(&confirm)
-
-	if strings.ToLower(confirm) != "y" {
-		fmt.Println("操作已取消")
-		return nil
+	if jsonMode() {
+		if !mustGetBoolFlag(activeOutput.command, "yes") {
+			return inputRequired("JSON 移除仓库配置需要 --yes")
+		}
+	} else {
+		printfText("确定要移除仓库 '%s' 吗？(y/N): ", name)
+		var confirm string
+		_ = scanInputToken(&confirm)
+		if strings.ToLower(confirm) != "y" {
+			printlnText("操作已取消")
+			return nil
+		}
 	}
 
 	if client, ok := hubClientIfAvailable(); ok {
@@ -255,9 +259,11 @@ func runRepoRemove(name string) error {
 		return errors.Wrap(err, "移除仓库失败")
 	}
 
-	fmt.Printf("✅ 仓库 '%s' 已从配置中移除\n", name)
-	fmt.Println("注意：本地仓库文件仍然保留，如需完全删除请手动操作")
-
+	printfText("✅ 仓库 '%s' 已从配置中移除\n", name)
+	printlnText("注意：本地仓库文件仍然保留，如需完全删除请手动操作")
+	if jsonMode() {
+		return writeJSON(map[string]any{"name": name, "status": "removed"})
+	}
 	return nil
 }
 
@@ -304,7 +310,7 @@ func runRepoSync(args []string, syncAll bool, jsonOutput bool) error {
 	if len(args) > 0 {
 		// 同步指定仓库
 		name := args[0]
-		fmt.Printf("正在同步仓库 '%s'...\n", name)
+		printfText("正在同步仓库 '%s'...\n", name)
 
 		result, err := syncConfiguredRepository(name)
 		if err != nil {
@@ -314,9 +320,9 @@ func runRepoSync(args []string, syncAll bool, jsonOutput bool) error {
 			return errors.NewWithCodef("runRepoSync", errors.ErrGitOperation, "仓库 '%s' 同步未执行: %s", name, result.Message)
 		}
 
-		fmt.Printf("✅ 仓库 '%s' 同步完成 (%s)\n", name, result.Status)
+		printfText("✅ 仓库 '%s' 同步完成 (%s)\n", name, result.Status)
 		if result.Message != "" {
-			fmt.Printf("   %s\n", result.Message)
+			printfText("   %s\n", result.Message)
 		}
 	} else {
 		// 同步所有仓库
@@ -336,42 +342,42 @@ func runRepoSync(args []string, syncAll bool, jsonOutput bool) error {
 		}
 
 		if len(repos) == 0 {
-			fmt.Println("暂无仓库需要同步")
+			printlnText("暂无仓库需要同步")
 			return nil
 		}
 
-		fmt.Printf("正在同步 %d 个仓库...\n", len(repos))
+		printfText("正在同步 %d 个仓库...\n", len(repos))
 
 		successCount := 0
 		failedRepos := []string{}
 
 		for _, repo := range repos {
 			if !repo.Enabled && !syncAll {
-				fmt.Printf("跳过已禁用的仓库: %s\n", repo.Name)
+				printfText("跳过已禁用的仓库: %s\n", repo.Name)
 				continue
 			}
 
-			fmt.Printf("\n同步仓库: %s\n", repo.Name)
+			printfText("\n同步仓库: %s\n", repo.Name)
 			result, err := syncConfiguredRepository(repo.Name)
 			if err != nil {
-				fmt.Printf("❌ 同步失败: %v\n", err)
+				printfText("❌ 同步失败: %v\n", err)
 				failedRepos = append(failedRepos, repo.Name)
 			} else if isBlockedRepoSync(result) {
-				fmt.Printf("⚠️  同步未执行: %s\n", result.Message)
+				printfText("⚠️  同步未执行: %s\n", result.Message)
 				failedRepos = append(failedRepos, repo.Name)
 			} else {
 				successCount++
 				if result.Message != "" {
-					fmt.Printf("   %s\n", result.Message)
+					printfText("   %s\n", result.Message)
 				}
 			}
 		}
 
-		fmt.Printf("\n✅ 同步完成: %d 成功", successCount)
+		printfText("\n✅ 同步完成: %d 成功", successCount)
 		if len(failedRepos) > 0 {
-			fmt.Printf(", %d 失败: %v\n", len(failedRepos), failedRepos)
+			printfText(", %d 失败: %v\n", len(failedRepos), failedRepos)
 		} else {
-			fmt.Println()
+			printlnText()
 		}
 	}
 
@@ -398,7 +404,7 @@ func runRepoRebuildIndex(args []string, jsonOutput bool) error {
 	if jsonOutput {
 		return writeJSON(result)
 	}
-	fmt.Printf("✅ 仓库 '%s' 索引已重建\n", repoName)
+	printfText("✅ 仓库 '%s' 索引已重建\n", repoName)
 	return nil
 }
 
@@ -524,20 +530,27 @@ func runRepoEnable(name string) error {
 		return errors.Wrap(err, "启用仓库失败")
 	}
 
-	fmt.Printf("✅ 仓库 '%s' 已启用\n", name)
+	printfText("✅ 仓库 '%s' 已启用\n", name)
+	if jsonMode() {
+		return writeJSON(map[string]any{"name": name, "status": "enabled"})
+	}
 	return nil
 }
 
 // runRepoDisable 执行禁用仓库操作
 func runRepoDisable(name string) error {
-	// 确认操作
-	fmt.Printf("确定要禁用仓库 '%s' 吗？禁用后该仓库的技能将不可用。(y/N): ", name)
-	var confirm string
-	fmt.Scanln(&confirm)
-
-	if strings.ToLower(confirm) != "y" {
-		fmt.Println("操作已取消")
-		return nil
+	if jsonMode() {
+		if !mustGetBoolFlag(activeOutput.command, "yes") {
+			return inputRequired("JSON 禁用仓库需要 --yes")
+		}
+	} else {
+		printfText("确定要禁用仓库 '%s' 吗？禁用后该仓库的技能将不可用。(y/N): ", name)
+		var confirm string
+		_ = scanInputToken(&confirm)
+		if strings.ToLower(confirm) != "y" {
+			printlnText("操作已取消")
+			return nil
+		}
 	}
 
 	if client, ok := hubClientIfAvailable(); ok {
@@ -548,7 +561,10 @@ func runRepoDisable(name string) error {
 		return errors.Wrap(err, "禁用仓库失败")
 	}
 
-	fmt.Printf("✅ 仓库 '%s' 已禁用\n", name)
+	printfText("✅ 仓库 '%s' 已禁用\n", name)
+	if jsonMode() {
+		return writeJSON(map[string]any{"name": name, "status": "disabled"})
+	}
 	return nil
 }
 
@@ -568,20 +584,22 @@ func runRepoDefault(name string) error {
 		}
 	}
 
-	fmt.Printf("✅ 默认仓库已设置为 '%s'\n", name)
-	fmt.Println("注意：所有通过 feedback 命令修改的技能都会归档到此仓库")
-
+	printfText("✅ 默认仓库已设置为 '%s'\n", name)
+	printlnText("注意：所有通过 feedback 命令修改的技能都会归档到此仓库")
+	if jsonMode() {
+		return writeJSON(map[string]any{"name": name, "status": "default"})
+	}
 	return nil
 }
 
 func renderRepositoryList(repos []configport.RepositoryConfig, defaultRepo string) {
 	if len(repos) == 0 {
-		fmt.Println("暂无仓库配置")
+		printlnText("暂无仓库配置")
 		return
 	}
 
-	fmt.Println("已配置的仓库:")
-	fmt.Println(strings.Repeat("=", 80))
+	printlnText("已配置的仓库:")
+	printlnText(strings.Repeat("=", 80))
 
 	for _, repo := range repos {
 		marker := " "
@@ -599,25 +617,25 @@ func renderRepositoryList(repos []configport.RepositoryConfig, defaultRepo strin
 			archive = " [归档]"
 		}
 
-		fmt.Printf("%s %s %s%s\n", marker, status, repo.Name, archive)
-		fmt.Printf("   类型: %s\n", repo.Type)
+		printfText("%s %s %s%s\n", marker, status, repo.Name, archive)
+		printfText("   类型: %s\n", repo.Type)
 		if repo.Description != "" {
-			fmt.Printf("   描述: %s\n", repo.Description)
+			printfText("   描述: %s\n", repo.Description)
 		}
 		if repo.URL != "" {
-			fmt.Printf("   远程: %s\n", repo.URL)
-			fmt.Printf("   分支: %s\n", repo.Branch)
+			printfText("   远程: %s\n", repo.URL)
+			printfText("   分支: %s\n", repo.Branch)
 		} else {
-			fmt.Printf("   类型: 本地仓库\n")
+			printfText("   类型: 本地仓库\n")
 		}
 		if repo.LastSync != "" {
-			fmt.Printf("   最后同步: %s\n", repo.LastSync)
+			printfText("   最后同步: %s\n", repo.LastSync)
 		}
-		fmt.Println()
+		printlnText()
 	}
 
-	fmt.Printf("★ 表示默认仓库（归档仓库）\n")
-	fmt.Printf("✓ 表示已启用，✗ 表示已禁用\n")
+	printfText("★ 表示默认仓库（归档仓库）\n")
+	printfText("✓ 表示已启用，✗ 表示已禁用\n")
 }
 
 // isValidRepoName 验证仓库名称是否有效
