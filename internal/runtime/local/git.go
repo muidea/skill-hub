@@ -3,6 +3,7 @@ package local
 import (
 	gitpkg "github.com/muidea/skill-hub/internal/git"
 	"github.com/muidea/skill-hub/internal/pkg/gitport"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 type Git struct{}
@@ -29,21 +30,30 @@ func (g *Git) RepositoryRemoteURLs(path string) ([]string, error) {
 	return repo.GetRemote()
 }
 func (g *Git) SyncDefaultRepository(force bool) (int, error) {
+	result, err := g.SyncDefaultRepositoryWithResult(force)
+	return result.SkillCount, err
+}
+
+func (g *Git) SyncDefaultRepositoryWithResult(force bool) (*spec.PullResult, error) {
+	result := &spec.PullResult{}
 	repo, err := gitpkg.NewSkillRepository()
 	if err != nil {
-		return 0, err
+		return result, err
 	}
-	if err := repo.SyncWithOptions(gitpkg.SyncOptions{Force: force}); err != nil {
-		return 0, err
+	err = repo.SyncWithOptions(gitpkg.SyncOptions{Force: force})
+	result.StashRef = repo.StashRef()
+	if err != nil {
+		return result, err
 	}
 	if err := repo.UpdateRegistry(); err != nil {
-		return 0, err
+		return result, err
 	}
 	skills, err := repo.ListLocalSkills()
 	if err != nil {
-		return 0, err
+		return result, err
 	}
-	return len(skills), nil
+	result.SkillCount = len(skills)
+	return result, nil
 }
 func (g *Git) SyncSkillRepositoryAndRefresh() error {
 	_, err := g.SyncDefaultRepository(false)

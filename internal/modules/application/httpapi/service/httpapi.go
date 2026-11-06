@@ -1052,11 +1052,17 @@ func writeWrappedError(w http.ResponseWriter, err error) {
 	if message == "" {
 		message = err.Error()
 	}
-	writeError(w, httpStatusForErrorCode(code), string(code), message)
+	payload := map[string]any{"code": string(code), "message": message}
+	if details := apperrors.Details(err); len(details) > 0 {
+		payload["details"] = details
+	}
+	writeJSON(w, httpStatusForErrorCode(code), payload)
 }
 
 func httpStatusForErrorCode(code apperrors.ErrorCode) int {
 	switch code {
+	case apperrors.ErrGitDirty, apperrors.ErrGitConflict, apperrors.ErrGitDiverged:
+		return http.StatusConflict
 	case apperrors.ErrSkillNotFound, apperrors.ErrProjectNotFound, apperrors.ErrFileNotFound:
 		return http.StatusNotFound
 	case apperrors.ErrFilePermission:

@@ -6,7 +6,9 @@ import (
 	"github.com/spf13/cobra"
 
 	httpapibiz "github.com/muidea/skill-hub/internal/modules/application/httpapi/biz"
+	"github.com/muidea/skill-hub/internal/pkg/gitport"
 	"github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 var (
@@ -24,6 +26,7 @@ var pullCmd = &cobra.Command{
 此命令仅同步仓库层（~/.skill-hub/repositories/），不涉及项目工作目录的更新。
 使用 --check 选项可以检查可用更新但不实际执行拉取操作。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = true // Arguments have already been validated by Cobra.
 		pullJSON = mustGetBoolFlag(cmd, "json")
 		return runPull()
 	},
@@ -63,12 +66,22 @@ func runPull() error {
 
 	printlnText("正在从默认仓库远程拉取最新技能...")
 
-	skillCount, err := pullSyncDefaultRepository(client, useService)
+	result, err := pullSyncDefaultRepositoryResultQuiet(client, useService)
 	if err != nil {
+		if diagnostic := gitport.PullDiagnostic(err); diagnostic != nil {
+			renderPullDiagnostic(diagnostic)
+			return &reportedError{errors.Wrap(err, "同步技能仓库失败")}
+		}
+		if result != nil && result.StashRef != "" {
+			printfText("本地改动保存在 stash %s，未自动恢复\n", result.StashRef)
+		}
 		return errors.Wrap(err, "同步技能仓库失败")
 	}
 
-	printfText("\n✅ 默认仓库更新完成，共 %d 个技能\n", skillCount)
+	printfText("\n✅ 默认仓库更新完成，共 %d 个技能\n", result.SkillCount)
+	if result.StashRef != "" {
+		printfText("本地改动保存在 stash %s，未自动恢复\n", result.StashRef)
+	}
 	printlnText("使用 'skill-hub status' 检查项目技能状态")
 	printlnText("使用 'skill-hub apply' 将仓库更新应用到项目工作目录")
 	printlnText("如需同步所有启用仓库，请使用 'skill-hub repo sync'")
@@ -89,6 +102,7 @@ type pullSummary struct {
 	Ahead        int    `json:"ahead"`
 	Behind       int    `json:"behind"`
 	Error        string `json:"error,omitempty"`
+	StashRef     string `json:"stash_ref,omitempty"`
 }
 
 func runPullStructured() (*pullSummary, error) {
@@ -118,14 +132,21 @@ func runPullStructured() (*pullSummary, error) {
 		return summary, nil
 	}
 
-	skillCount, err := pullSyncDefaultRepositoryQuiet(client, useService)
+	result, err := pullSyncDefaultRepositoryResultQuiet(client, useService)
+	if result != nil {
+		summary.StashRef = result.StashRef
+	}
 	if err != nil {
+		if d := gitport.PullDiagnostic(err); d != nil {
+			summary.LocalCommit, summary.RemoteCommit = d.LocalCommit, d.RemoteCommit
+			summary.Ahead, summary.Behind, summary.HasUpdates = d.Ahead, d.Behind, d.Behind > 0
+		}
 		summary.Status = "failed"
 		summary.Error = err.Error()
 		return summary, errors.Wrap(err, "同步技能仓库失败")
 	}
 	summary.Status = "synced"
-	summary.SkillCount = skillCount
+	summary.SkillCount = result.SkillCount
 	return summary, nil
 }
 
@@ -190,29 +211,45 @@ func shortCommit(hash string) string {
 }
 
 func pullSyncDefaultRepository(client serviceBridgeClient, useService bool) (int, error) {
+	result, err := pullSyncDefaultRepositoryResult(client, useService)
+	if result == nil {
+		return 0, err
+	}
+	return result.SkillCount, err
+}
+
+func pullSyncDefaultRepositoryResult(client serviceBridgeClient, useService bool) (*spec.PullResult, error) {
 	if useService {
 		if pullForce {
-			return 0, errors.NewWithCode("pullSyncDefaultRepository", errors.ErrInvalidInput, "服务模式暂不支持 pull --force；请停止服务后本地执行，或先提交/暂存默认仓库更改")
+			return nil, errors.NewWithCode("pullSyncDefaultRepository", errors.ErrInvalidInput, "服务模式暂不支持 pull --force；请停止服务后本地执行，或先提交/暂存默认仓库更改")
 		}
 		data, err := client.SyncSkillRepositoryAndRefresh(context.Background())
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
-		return data.SkillCount, nil
+		return &spec.PullResult{SkillCount: data.SkillCount}, nil
 	}
 
-	return localRuntime.Git().SyncDefaultRepository(pullForce)
+	return localRuntime.Git().SyncDefaultRepositoryWithResult(pullForce)
+}
+
+func pullSyncDefaultRepositoryResultQuiet(client serviceBridgeClient, useService bool) (*spec.PullResult, error) {
+	if useService {
+		return pullSyncDefaultRepositoryResult(client, true)
+	}
+	var result *spec.PullResult
+	err := runSilencingStdout(func() error {
+		var syncErr error
+		result, syncErr = pullSyncDefaultRepositoryResult(nil, false)
+		return syncErr
+	})
+	return result, err
 }
 
 func pullSyncDefaultRepositoryQuiet(client serviceBridgeClient, useService bool) (int, error) {
-	if useService {
-		return pullSyncDefaultRepository(client, true)
+	result, err := pullSyncDefaultRepositoryResultQuiet(client, useService)
+	if result == nil {
+		return 0, err
 	}
-	var skillCount int
-	err := runSilencingStdout(func() error {
-		var syncErr error
-		skillCount, syncErr = pullSyncDefaultRepository(nil, false)
-		return syncErr
-	})
-	return skillCount, err
+	return result.SkillCount, err
 }

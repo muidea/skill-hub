@@ -12,14 +12,19 @@ import (
 
 	"github.com/muidea/skill-hub/internal/adapter"
 	"github.com/muidea/skill-hub/internal/config"
+	apperrors "github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
 )
 
 // SkillRepository 管理技能Git仓库
 type SkillRepository struct {
-	repo *Repository
+	repo     *Repository
+	stashRef string
 }
+
+// StashRef returns the stash created by the latest pull, without restoring it.
+func (sr *SkillRepository) StashRef() string { return sr.stashRef }
 
 type skillVersionConflict struct {
 	SkillID       string
@@ -47,6 +52,7 @@ type SyncOptions struct {
 
 // SyncWithOptions 同步技能仓库（拉取最新更改）
 func (sr *SkillRepository) SyncWithOptions(opts SyncOptions) error {
+	sr.stashRef = ""
 	fmt.Println("正在同步技能仓库...")
 
 	if !sr.repo.IsInitialized() {
@@ -54,18 +60,17 @@ func (sr *SkillRepository) SyncWithOptions(opts SyncOptions) error {
 	}
 
 	// 获取当前状态
-	status, err := sr.repo.GetStatus()
+	files, err := sr.repo.pullChangedFiles()
 	if err != nil {
 		return fmt.Errorf("获取仓库状态失败: %w", err)
 	}
 
 	// 检查是否有未提交的更改
-	hasChanges := hasRepositoryChanges(status)
+	if hasPullConflicts(files) {
+		return sr.pullFailure("merge_conflict", files, nil, "")
+	}
+	hasChanges := len(files) > 0
 	if hasChanges {
-		fmt.Println("⚠️  检测到未提交的更改，建议先提交或暂存")
-		fmt.Println("   使用 'skill-hub git commit' 提交更改")
-		fmt.Printf("   或使用 'git -C %s stash push -u' 暂存更改\n", sr.repo.GetPath())
-
 		updates, err := sr.CheckUpdates()
 		if err != nil {
 			return fmt.Errorf("检查远程更新失败: %w", err)
@@ -76,7 +81,7 @@ func (sr *SkillRepository) SyncWithOptions(opts SyncOptions) error {
 		}
 
 		if !opts.Force {
-			return fmt.Errorf("默认仓库存在未提交更改，无法安全拉取远程更新；请先提交、暂存，或使用 --force 自动 stash 后再拉取")
+			return sr.pullFailure("blocked_dirty", files, updates, "")
 		}
 		if err := sr.stashLocalChanges(); err != nil {
 			return err
@@ -86,6 +91,26 @@ func (sr *SkillRepository) SyncWithOptions(opts SyncOptions) error {
 	// 拉取最新更改
 	fmt.Println("从远程仓库拉取最新更改...")
 	if err := sr.repo.Pull(); err != nil {
+		if changed, inspectErr := sr.repo.pullChangedFiles(); inspectErr == nil {
+			d := sr.repo.pullDiagnostic("", changed, nil)
+			d.StashRef = sr.stashRef
+			switch {
+			case hasPullConflicts(changed):
+				d.Kind = "merge_conflict"
+			case apperrors.IsCode(err, apperrors.ErrGitDiverged):
+				d.Kind = "divergent"
+			case apperrors.IsCode(err, apperrors.ErrGitDirty):
+				d.Kind = "blocked_dirty"
+			}
+			if d.Kind != "" {
+				return pullDiagnosticError(d)
+			}
+		}
+		if sr.stashRef != "" {
+			return &apperrors.AppError{Op: "pull", Code: apperrors.ErrGitOperation, Err: err,
+				Message: "拉取失败；本地改动仍保存在 stash " + sr.stashRef + "，未自动恢复",
+				Details: map[string]any{"stash_ref": sr.stashRef}}
+		}
 		return fmt.Errorf("拉取失败: %w", err)
 	}
 
@@ -131,8 +156,12 @@ func (sr *SkillRepository) stashLocalChanges() error {
 	if err != nil {
 		return fmt.Errorf("自动暂存本地更改失败: %s: %w", strings.TrimSpace(string(output)), err)
 	}
-	fmt.Println("✅ 本地更改已暂存，可使用以下命令查看:")
-	fmt.Printf("   git -C %s stash list\n", sr.repo.GetPath())
+	ref, err := sr.repo.pullCommand("rev-parse", "--verify", "refs/stash").Output()
+	if err != nil {
+		return fmt.Errorf("更改已暂存，但读取 stash 引用失败: %w", err)
+	}
+	sr.stashRef = strings.TrimSpace(string(ref))
+	fmt.Printf("✅ 本地更改已保存在 stash %s\n", sr.stashRef)
 	return nil
 }
 

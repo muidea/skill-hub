@@ -427,7 +427,7 @@ func decode[T any](resp *http.Response) (T, error) {
 		return zero, err
 	}
 	if payload.Code != httpapibiz.CodeOK {
-		return zero, apiError(payload.Code, payload.Message, "request failed")
+		return zero, apiErrorWithDetails(payload.Code, payload.Message, "request failed", payload.Details)
 	}
 	return payload.Data, nil
 }
@@ -435,9 +435,32 @@ func decode[T any](resp *http.Response) (T, error) {
 func decodeAPIError(resp *http.Response, fallback string) error {
 	var errResp httpapibiz.Response[json.RawMessage]
 	if err := json.NewDecoder(resp.Body).Decode(&errResp); err == nil {
-		return apiError(errResp.Code, errResp.Message, fallback)
+		return apiErrorWithDetails(errResp.Code, errResp.Message, fallback, errResp.Details)
 	}
 	return apiError("", "", fallback)
+}
+
+func apiErrorWithDetails(code, message, fallback string, raw map[string]json.RawMessage) error {
+	err := apiError(code, message, fallback)
+	var appErr *apperrors.AppError
+	if !apperrors.As(err, &appErr) {
+		return err
+	}
+	details := map[string]any{}
+	for key, data := range raw {
+		if key == "pull" {
+			var diagnostic spec.PullDiagnostic
+			if json.Unmarshal(data, &diagnostic) == nil && diagnostic.Kind != "" {
+				details[key] = &diagnostic
+			}
+		} else {
+			var value any
+			if json.Unmarshal(data, &value) == nil {
+				details[key] = value
+			}
+		}
+	}
+	return appErr.WithDetails(details)
 }
 
 func apiError(code, message, fallback string) error {

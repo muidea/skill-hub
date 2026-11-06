@@ -109,7 +109,13 @@ Based on the business scenarios defined in the repo test documents and current C
    - Empty-project registration persists original request receipts; same-ID replay/query return the original effects after subsequent state changes, while different-path reuse is rejected.
    - Failed receipts are preserved; missing receipt queries have no side effects and queries remain available after live state/config removal.
 
-The JSON regression selection contains 10 e2e cases: 6 in `test_cli_json.py`, 3 in `test_bulk_import_register_status.py`, and 1 in `test_feedback_all_json.py`. Open-but-unwritten stdin, lost stdout during empty-project registration, queries from a different cwd, service bridge responses, empty pattern matches, confirmation requirements, and audit file responses are additionally covered by Go process tests in `internal/clis/skill-hub/output_test.go`. Concurrent registrations and running/interrupted request receipts are covered by `internal/state/project_registration_test.go`. The existing default runner and required CI JSON step both execute `test_cli_json.py`, including the new receipt cases.
+17. **Pull Diagnostics** (`test_pull_diagnostics.py`)
+   - Isolated local bare remotes cover staged/unstaged changes, untracked paths, potential remote overlap, and unrelated local edits.
+   - Existing merge conflicts and divergent commits produce actionable details and a nonzero exit status without Usage; invalid flags retain Usage.
+   - JSON stdout parses as one complete document with `command_error.details.pull`; blocked pulls preserve worktree/HEAD/stash state.
+   - Successful `--force` retains an identifiable stash, reports `stash_ref`, and does not restore it.
+
+The JSON and pull regression selection contains 15 e2e cases: 6 in `test_cli_json.py`, 5 in `test_pull_diagnostics.py`, 3 in `test_bulk_import_register_status.py`, and 1 in `test_feedback_all_json.py`. Open-but-unwritten stdin, lost stdout during empty-project registration, queries from a different cwd, service bridge responses, empty pattern matches, confirmation requirements, and audit file responses are additionally covered by Go process tests in `internal/clis/skill-hub/output_test.go`. Pull bridge diagnostic round trips are covered by Go process, HTTP handler, and hubclient tests. Concurrent registrations and running/interrupted request receipts are covered by `internal/state/project_registration_test.go`. The default runner and required CI step both execute this selection.
 
 ## Architecture
 
@@ -148,6 +154,7 @@ tests/e2e/
 ├── test_state_prune.py           # prune invalid state.json project records
 ├── test_bulk_import_register_status.py # register/status JSON/frontmatter fix/import archive
 ├── test_cli_json.py               # JSON stdout, errors, import previews, empty-project request receipts
+├── test_pull_diagnostics.py       # offline real-Git pull diagnostics and retained force stash
 ├── test_dedupe_sync_copies.py      # duplicate detection and canonical copy sync
 ├── test_path_lint.py              # local path portability lint and fix
 ├── test_validate_links.py         # Markdown local link validation
@@ -173,7 +180,7 @@ tests/e2e/
 - `skill-hub` binary: when running from the repo, `bin/skill-hub` is used if present (run `make build` first); otherwise PATH or `SKILL_HUB_BIN` is used
 - Network connectivity (for pull/push/git remote tests)
 
-`pull --check --json`, `push --dry-run --json`, `git status --json`, and `git sync --json` failure summaries are covered without network access. Actual pull/push tests still require a configured remote.
+`pull --check --json`, `push --dry-run --json`, `git status --json`, and `git sync --json` failure summaries are covered without network access. `test_pull_diagnostics.py` uses isolated local bare remotes for actual pulls and requires Git, with no network access. Other remote pull/push tests require a configured remote.
 
 ### Python Dependencies
 Install with: `pip install -r tests/e2e/requirements.txt`
@@ -192,12 +199,13 @@ Run from the repository root after `make build`:
 ```bash
 python3 -m pytest -p no:rerunfailures \
   tests/e2e/test_cli_json.py \
+  tests/e2e/test_pull_diagnostics.py \
   tests/e2e/test_bulk_import_register_status.py \
   tests/e2e/test_feedback_all_json.py \
   -c tests/e2e/pytest.ini
 ```
 
-The repository's Python environment is available at `~/codespace/venv/bin/python3`. These cases use temporary project/state directories and do not require remote repositories. The explicit file list in `run_tests.py` includes these three files; CI also runs this selection as a required step. This selection does not represent a full e2e suite run.
+The repository's Python environment is available at `~/codespace/venv/bin/python3`. These cases use temporary project/state directories and local Git repositories; they do not require network access. The explicit file list in `run_tests.py` includes these four files; CI also runs this selection as a required step. This selection does not represent a full e2e suite run.
 
 The client contract is documented in [CLI command specification](../../docs/Skill-Hub命令规范.md#cli-json-调用合同). Tests must parse the entire stdout with `json.loads`, capture stderr separately, and check the exit status for partial failures.
 

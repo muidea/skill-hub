@@ -314,6 +314,24 @@ func TestWriteWrappedErrorUsesAppErrorCode(t *testing.T) {
 	}
 }
 
+func TestWriteWrappedErrorPreservesPullDiagnostic(t *testing.T) {
+	rec := httptest.NewRecorder()
+	diagnostic := &spec.PullDiagnostic{Kind: "blocked_dirty", RepositoryPath: "/repo", Files: []spec.PullFileChange{{Path: "SKILL.md", StagedDiff: "+local"}}}
+	writeWrappedError(rec, &apperrors.AppError{Code: apperrors.ErrGitDirty, Message: "blocked", Details: map[string]any{"pull": diagnostic}})
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", rec.Code)
+	}
+	var payload struct {
+		Code    string `json:"code"`
+		Details struct {
+			Pull spec.PullDiagnostic `json:"pull"`
+		} `json:"details"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil || payload.Details.Pull.Files[0].StagedDiff != "+local" {
+		t.Fatalf("lost diagnostic: %s, %v", rec.Body.String(), err)
+	}
+}
+
 func TestSkillRepositoryChangedFiles(t *testing.T) {
 	status := "技能仓库状态:\n文件状态:\n M  skills/one/SKILL.md\n?? skills/two/SKILL.md\n D  skills/old/SKILL.md\n"
 	files := skillRepositoryChangedFiles(status)

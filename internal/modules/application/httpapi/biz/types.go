@@ -1,6 +1,7 @@
 package biz
 
 import (
+	"encoding/json"
 	"github.com/muidea/skill-hub/internal/config"
 	globalservice "github.com/muidea/skill-hub/internal/modules/application/global/service"
 	projectapplyservice "github.com/muidea/skill-hub/internal/modules/application/project_apply/service"
@@ -20,9 +21,10 @@ const (
 )
 
 type Response[T any] struct {
-	Code    string `json:"code"`
-	Message string `json:"message,omitempty"`
-	Data    T      `json:"data"`
+	Code    string                     `json:"code"`
+	Message string                     `json:"message,omitempty"`
+	Data    T                          `json:"data"`
+	Details map[string]json.RawMessage `json:"details,omitempty"`
 }
 
 type HealthData struct {

@@ -99,6 +99,8 @@ skill-hub status --json
 
 `--json` 不自动确认删除或覆盖；例如移除项目技能需要 `remove <id> --yes --json`。完整规则见 [CLI JSON 调用合同](docs/Skill-Hub命令规范.md#cli-json-调用合同)，回归用例与运行方式见 [e2e 文档](tests/e2e/README.md#cli-json-regression-selection)。
 
+`pull` 遇到未提交改动、已有合并冲突或提交分叉时，会直接显示相关文件、差异预览或双方提交，返回非零退出码，不再附带 Usage。远端也修改同一路径只标为潜在冲突；已有合并冲突单独展示冲突类型与差异。自动化调用可从 `pull --json` 的 `command_error.details.pull` 读取同样的诊断。`pull --force` 自动 stash 后仅执行快进拉取，返回 `stash_ref`，不会自动恢复本地改动，也不会解决已有冲突或提交分叉；服务桥接暂不支持 `--force`。详见 [pull 命令](docs/Skill-Hub命令规范.md#413-pull---从远程仓库拉取最新技能)。
+
 `project register [path]` 显式登记空项目，无需创建占位技能；重复登记已有项目保留其技能状态。调用方须先保存 `--request-id`：同一 Hub home 内，同 ID、同绝对路径重放原回执，不重新执行；同 ID、不同路径返回 `REQUEST_CONFLICT`。回执保留原请求的 `status`、`executed`、`finished` 与 `result`（是否新建项目、创建的目录和当时技能数），不随后续项目变化而改变。
 
 `--query` 只读取原回执，允许从其他目录查询，且不要求当前项目或配置文件仍然存在。查询成功的退出码为 0，原请求是否成功须读取 `status`；未找到回执返回 `REQUEST_NOT_FOUND`。异常中断后没有最终回执时，返回 `unknown`，`executed` 和 `finished` 为 `null`，相同 ID 不会重新执行。回执保存在 `${SKILL_HUB_HOME:-~/.skill-hub}/project-registrations/`；保留该目录和原请求 ID 才能继续查询，v0.13.6 及以前未记录的请求无法补查。详细约定见 [空项目登记与请求回执](docs/Skill-Hub命令规范.md#42-project-register---空项目登记与请求回执)。

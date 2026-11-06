@@ -37,6 +37,9 @@ const (
 	// Git操作错误
 	ErrGitOperation ErrorCode = "GIT_OPERATION_FAILED"
 	ErrGitRemote    ErrorCode = "GIT_REMOTE_ERROR"
+	ErrGitDirty     ErrorCode = "GIT_WORKTREE_DIRTY"
+	ErrGitConflict  ErrorCode = "GIT_CONFLICT"
+	ErrGitDiverged  ErrorCode = "GIT_DIVERGED"
 
 	// 网络错误
 	ErrNetwork    ErrorCode = "NETWORK_ERROR"

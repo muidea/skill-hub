@@ -850,6 +850,20 @@ skill-hub prune
 
 `--check` 会执行不修改工作树的远端检查：有远端时通过 fetch 更新远端引用并比较 `main` 分支提交；无远端时返回 `no_remote`。JSON 输出中的 `status` 可能为 `no_remote`、`up_to_date`、`updates_available`、`ahead` 或 `divergent`，并包含 `ahead` / `behind` 计数。若默认仓库存在未提交更改但远端已是最新，普通 `pull` 不应失败；若远端有更新，则要求用户先提交/暂存，或使用 `--force` 触发自动 stash。
 
+**拉取受阻诊断**：文本模式直接在 stderr 展示诊断，业务失败保持非零退出码，不附带 Usage；参数或选项错误仍显示用法。诊断区分以下情况：
+
+| 类型 / 错误码 | 展示内容 |
+| --- | --- |
+| `blocked_dirty` / `GIT_WORKTREE_DIRTY` | 未提交文件及暂存区/工作区状态，已暂存与未暂存差异；未跟踪文件列出路径。同路径或文件/目录路径重叠标为潜在冲突，并展示相关远端差异，不断言已发生内容冲突。没有路径重叠时明确说明当前策略仍要求先处理本地改动。 |
+| `merge_conflict` / `GIT_CONFLICT` | 已有未解决冲突的路径、Git 冲突类型和冲突差异。已有冲突时在 fetch/stash 前停止，`--force` 也不会自动解决。 |
+| `divergent` / `GIT_DIVERGED` | 双方提交哈希、各自领先计数和双方独有提交摘要（各最多 5 条）。拉取仍使用 `--ff-only`，不自动 merge 或 rebase。 |
+
+文件详情最多展示 100 项，每段差异最多 4 KiB，文件差异预览总预算 64 KiB；省略文件数、差异截断及无法完整检查的原因会显式返回。二进制文件标明无法展示文本差异。
+
+`--json` 保留既有拉取摘要字段，失败时在 `command_error.details.pull` 增加诊断对象，本地执行与服务桥接采用相同结构：`kind`、`repository_path`、`local_commit` / `remote_commit`、`ahead` / `behind`、`overlap_known`、`files`、`local_commits` / `remote_commits`，以及可选的 `omitted_files`、`inspection_errors`、`stash_ref`。`files` 包含 `path`、可选 `original_path`、`index_status` / `worktree_status`、`conflict_type`、`overlaps_remote`、各类 `*_diff`、`binary` 和 `truncated`。`overlap_known=false` 表示检查未能确认重叠关系，不能据此推断没有冲突。stdout 始终是一个完整 JSON 文档。
+
+`--force` 创建的 stash 不会自动恢复；成功或失败时都会提示保留的 stash 哈希，JSON 拉取摘要增加可选 `stash_ref`。可用 `git -C <仓库路径> stash show -p <stash_ref>` 查看，再自行决定恢复方式。若 stash 已创建但随后拉取失败，工作区已因暂存而改变。服务桥接暂不支持 `pull --force`。
+
 `git sync`、`git pull` 以及 `repo sync` 也遵循同样的索引刷新原则：仓库内容变化后会重建对应 repo 的 `registry.json`，默认仓库同时会刷新根目录兼容索引。
 
 **多仓库说明**：此命令仅处理默认仓库。如需同步指定仓库或所有启用仓库，请使用 `skill-hub repo sync`。
@@ -859,7 +873,7 @@ skill-hub prune
 
 **关键行为**:
 1. `--check` 只检查默认仓库远端引用，不修改工作树或项目目录
-2. 对默认仓库执行 `git pull` 从远程仓库获取最新技能
+2. 对默认仓库执行 `git pull --ff-only` 从远程仓库获取最新技能
 3. 更新本地技能注册表（作为只读缓存）
 4. 不修改项目状态或项目工作目录中的文件
 5. 不更新项目的 `LastSync` 时间戳
@@ -1407,3 +1421,4 @@ skill-hub repo rebuild-index skills-repo --json
 | 1.29 | 2026-05-23 | 增加项目工作区 skill 来源指纹、`ModifiedAgainstOutdatedRepo` 状态和低版本 `feedback` 防护 |
 | 1.30 | 2026-06-03 | 增加 `list/use/status/apply/feedback/validate` 基于技能 ID 字段的 glob pattern 支持（`*` / `?` / `**`），单字面量参数仍按精确 ID 兼容处理，详见 §6 |
 | 1.31 | 2026-10-28 | 增加 `project register --request-id` 空项目登记与 `--query` 原请求回执查询，覆盖回复丢失后的安全重放 |
+| 1.32 | 2026-11-06 | 补齐 pull 文件与冲突诊断、JSON/服务桥接错误详情、快进拉取及保留 stash 的约定 |

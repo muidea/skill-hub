@@ -113,6 +113,7 @@ def run_tests(scenarios=None, verbose=False, debug=False):
         "test_skill_content_commands.py",
         "test_state_prune.py",
         "test_cli_json.py",
+        "test_pull_diagnostics.py",
         "test_bulk_import_register_status.py",
         "test_feedback_all_json.py",
         "test_service_mode.py",

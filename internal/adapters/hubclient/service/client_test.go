@@ -358,6 +358,25 @@ func TestClient_AvailableAndListEndpoints(t *testing.T) {
 	}
 }
 
+func TestClientPullDiagnosticDetails(t *testing.T) {
+	client := New("http://example.test")
+	client.httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusConflict, map[string]any{
+			"code": "GIT_CONFLICT", "message": "unmerged", "details": map[string]any{"pull": &spec.PullDiagnostic{
+				Kind: "merge_conflict", RepositoryPath: "/repo", Files: []spec.PullFileChange{{Path: "skill.md", ConflictDiff: "<<<<<<< ours"}},
+			}},
+		}), nil
+	})}
+	_, err := client.SyncSkillRepositoryAndRefresh(context.Background())
+	if !apperrors.IsCode(err, apperrors.ErrGitConflict) {
+		t.Fatalf("code lost: %v", err)
+	}
+	diagnostic, ok := apperrors.Details(err)["pull"].(*spec.PullDiagnostic)
+	if !ok || diagnostic.Files[0].ConflictDiff != "<<<<<<< ours" {
+		t.Fatalf("typed details lost: %v", err)
+	}
+}
+
 func TestClientSendsSecretKeyHeader(t *testing.T) {
 	client := NewWithSecret("http://127.0.0.1:5525", "write-secret")
 	seen := map[string]bool{}

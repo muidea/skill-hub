@@ -103,6 +103,8 @@ func executeCommand(root *cobra.Command, args []string) error {
 	if selected == nil {
 		selected = root
 	}
+	oldSelectedUsage := selected.SilenceUsage
+	defer func() { selected.SilenceUsage = oldSelectedUsage }()
 	output := &commandOutput{command: selected, json: requestsJSON(selected, args)}
 	activeOutput = output
 	defer func() { activeOutput = previous }()

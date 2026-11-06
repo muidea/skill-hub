@@ -14,6 +14,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/muidea/skill-hub/internal/config"
+	apperrors "github.com/muidea/skill-hub/pkg/errors"
 	"github.com/muidea/skill-hub/pkg/utils"
 )
 
@@ -239,6 +240,7 @@ func (r *Repository) Pull() error {
 	}
 
 	cmd := exec.Command("git", "-C", r.path, "pull", "--ff-only", r.remoteName, "main")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if len(output) > 0 {
 		fmt.Print(string(output))
@@ -250,6 +252,14 @@ func (r *Repository) Pull() error {
 		errMsg := fmt.Sprintf("拉取仓库失败: %v", err)
 		if outputText != "" {
 			errMsg = fmt.Sprintf("拉取仓库失败: %s: %v", outputText, err)
+		}
+		// Classify only the actual Git failure, not stale tracking-ref state.
+		// LC_ALL=C above makes these Git diagnostics independent of the host locale.
+		if strings.Contains(outputText, "Not possible to fast-forward") {
+			return apperrors.NewWithCode("git.pull", apperrors.ErrGitDiverged, errMsg)
+		}
+		if strings.Contains(outputText, "would be overwritten by merge") {
+			return apperrors.NewWithCode("git.pull", apperrors.ErrGitDirty, errMsg)
 		}
 		diagnosticText := err.Error() + "\n" + outputText
 		if strings.Contains(diagnosticText, "SSH_AUTH_SOCK") {

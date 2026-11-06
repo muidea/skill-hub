@@ -121,11 +121,12 @@ jobs:
             pip install -r tests/e2e/requirements.txt
           fi
 
-      - name: Run CLI JSON contract e2e tests
+      - name: Run CLI JSON contract and pull diagnostics e2e tests
         run: |
           python3 -m pip install pytest
           python3 -m pytest -p no:rerunfailures \
             tests/e2e/test_cli_json.py \
+            tests/e2e/test_pull_diagnostics.py \
             tests/e2e/test_bulk_import_register_status.py \
             tests/e2e/test_feedback_all_json.py \
             -c tests/e2e/pytest.ini
