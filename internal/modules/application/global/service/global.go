@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/muidea/skill-hub/internal/config"
@@ -384,7 +386,7 @@ func (g *Global) Apply(skillID string, agentFilters []string, dryRun, force bool
 			skillState.ContentHash = sourceHash
 			skillState.Version = sourceVersion
 			skillState.AppliedAt = now
-			skillState.Agents = targetAgents
+			skillState.Agents = mergeStrings(skillState.Agents, targetAgents)
 			state.EnabledSkills[id] = skillState
 		}
 	}
@@ -594,10 +596,11 @@ func (g *Global) applyToAgent(skillState SkillState, agent AgentInfo, srcDir, so
 		if !info.IsDir() {
 			if !force {
 				item.Status = StatusConflict
+				item.Reason = "target_not_directory"
 				item.Message = "目标路径已存在但不是目录；使用 --force 覆盖"
 				return item
 			}
-			if err := backupAndRemove(targetDir); err != nil {
+			if err := backupAndRemove(agent.Name, skillState.SkillID, targetDir); err != nil {
 				item.Status = StatusError
 				item.Message = err.Error()
 				return item
@@ -605,13 +608,36 @@ func (g *Global) applyToAgent(skillState SkillState, agent AgentInfo, srcDir, so
 		} else if manifest, err := readManifest(filepath.Join(targetDir, ManifestFileName)); err != nil || !isManagedManifest(manifest, skillState.SkillID, agent.Name) {
 			if !force {
 				item.Status = StatusConflict
+				item.Reason = "target_unmanaged"
 				item.Message = "目标目录存在但不是 Skill-Hub 托管目录；使用 --force 覆盖"
 				return item
 			}
-			if err := backupAndRemove(targetDir); err != nil {
+			if err := backupAndRemove(agent.Name, skillState.SkillID, targetDir); err != nil {
 				item.Status = StatusError
 				item.Message = err.Error()
 				return item
+			}
+		} else {
+			actualHash, hashErr := hashDirectory(targetDir)
+			if hashErr != nil {
+				item.Status = StatusError
+				item.Message = hashErr.Error()
+				return item
+			}
+			if actualHash != manifest.AppliedHash && actualHash != sourceHash {
+				if !force {
+					item.Status = StatusConflict
+					item.Reason = "target_modified"
+					item.Message = "目标目录存在本地修改；使用 --force 覆盖"
+					item.AppliedHash = manifest.AppliedHash
+					item.ActualHash = actualHash
+					return item
+				}
+				if err := backupAndRemove(agent.Name, skillState.SkillID, targetDir); err != nil {
+					item.Status = StatusError
+					item.Message = err.Error()
+					return item
+				}
 			}
 		}
 	} else if err != nil && !os.IsNotExist(err) {
@@ -714,13 +740,13 @@ func (g *Global) resolveAgents(agentNames []string, requireDetected bool) ([]Age
 
 	agents := DetectAgents()
 	if requireDetected && len(agents) == 0 {
-		return nil, errors.NewWithCode("resolveAgents", errors.ErrInvalidInput, "未检测到可用 agent；请先安装或配置 Codex、OpenCode 或 Claude 的 skills 目录")
+		return nil, errors.NewWithCode("resolveAgents", errors.ErrInvalidInput, "未检测到可用 agent；请先安装或配置 Codex、OpenCode、Claude 或 AGY 的 skills 目录")
 	}
 	return agents, nil
 }
 
 func DetectAgents() []AgentInfo {
-	candidates := []string{"codex", "opencode", "claude"}
+	candidates := []string{"codex", "opencode", "claude", "agy"}
 	var agents []AgentInfo
 	for _, name := range candidates {
 		agent := ResolveAgent(name)
@@ -772,13 +798,64 @@ func ResolveAgent(name string) AgentInfo {
 			info.SkillsDir = filepath.Join(homeDir, ".claude", "skills")
 			info.Detected = pathExists(filepath.Join(homeDir, ".claude")) || commandExists("claude")
 		}
+	case "agy":
+		switch {
+		case strings.TrimSpace(os.Getenv("AGY_SKILLS_DIR")) != "":
+			info.SkillsDir = filepath.Clean(strings.TrimSpace(os.Getenv("AGY_SKILLS_DIR")))
+			info.Detected = true
+			info.Reason = "env:AGY_SKILLS_DIR"
+		case strings.TrimSpace(os.Getenv("AGY_CONFIG_HOME")) != "":
+			info.SkillsDir = filepath.Join(filepath.Clean(strings.TrimSpace(os.Getenv("AGY_CONFIG_HOME"))), "skills")
+			info.Detected = true
+			info.Reason = "env:AGY_CONFIG_HOME"
+		case strings.TrimSpace(os.Getenv("AGY_HOME")) != "":
+			cleaned := filepath.Clean(strings.TrimSpace(os.Getenv("AGY_HOME")))
+			if dirExists(filepath.Join(cleaned, "config")) || filepath.Base(cleaned) == ".gemini" {
+				info.SkillsDir = filepath.Join(cleaned, "config", "skills")
+			} else {
+				info.SkillsDir = filepath.Join(cleaned, "skills")
+			}
+			info.Detected = true
+			info.Reason = "env:AGY_HOME"
+		default:
+			if cfg, err := config.GetConfig(); err == nil && cfg != nil && strings.TrimSpace(cfg.AgyConfigPath) != "" {
+				info.SkillsDir = resolveAgyConfigSkillsDir(cfg.AgyConfigPath, homeDir)
+				info.Detected = true
+				info.Reason = "config:agy_config_path"
+			} else if homeDir != "" {
+				configDir := filepath.Join(homeDir, ".gemini", "config")
+				skillsDir := filepath.Join(configDir, "skills")
+				cliDir := filepath.Join(homeDir, ".gemini", "antigravity-cli")
+				info.SkillsDir = skillsDir
+				// Never treat bare ~/.gemini as AGY because standard Gemini CLI also uses it.
+				switch {
+				case dirExists(skillsDir):
+					info.Detected = true
+					info.Reason = "agy_skills_dir"
+				case pathExists(filepath.Join(configDir, "config.json")) ||
+					pathExists(filepath.Join(configDir, ".migrated")) ||
+					pathExists(filepath.Join(configDir, "skills.json")):
+					info.Detected = true
+					info.Reason = "agy_config_dir"
+				case dirExists(cliDir):
+					info.Detected = true
+					info.Reason = "agy_cli_dir"
+				case commandExists("agy"):
+					info.Detected = true
+					info.Reason = "path:agy"
+				default:
+					info.Detected = false
+					info.Reason = "not_detected"
+				}
+			}
+		}
 	default:
 		info.SkillsDir = ""
 		info.Detected = false
 		info.Reason = "unknown_agent"
 	}
 
-	info.Configured = info.SkillsDir != "" && pathExists(info.SkillsDir)
+	info.Configured = info.SkillsDir != "" && dirExists(info.SkillsDir)
 	if info.Reason == "" {
 		switch {
 		case info.Configured:
@@ -883,19 +960,62 @@ func scanOrphanedManagedSkills(state *State, agents []AgentInfo) ([]StatusItem, 
 		if !agent.Configured {
 			continue
 		}
-		err := filepath.Walk(agent.SkillsDir, func(path string, info os.FileInfo, err error) error {
+		if agent.Name == "agy" {
+			entries, err := os.ReadDir(agent.SkillsDir)
+			if err != nil {
+				return orphaned, err
+			}
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				targetDir := filepath.Join(agent.SkillsDir, entry.Name())
+				manifest, err := readManifest(filepath.Join(targetDir, ManifestFileName))
+				if err != nil || manifest.ManagedBy != "skill-hub" || manifest.Scope != "global" {
+					continue
+				}
+				if manifest.Agent != "" && manifest.Agent != agent.Name {
+					continue
+				}
+				skillState, ok := state.EnabledSkills[manifest.SkillID]
+				if ok && containsString(skillState.Agents, agent.Name) {
+					continue
+				}
+				orphaned = append(orphaned, StatusItem{
+					SkillID:          manifest.SkillID,
+					Agent:            agent.Name,
+					Status:           StatusOrphaned,
+					LegacyStatus:     "orphaned",
+					Reason:           "state_missing",
+					Message:          "agent 目录存在 Skill-Hub manifest，但全局状态不再记录",
+					SourceRepository: manifest.SourceRepository,
+					SourceHash:       manifest.SourceHash,
+					AppliedHash:      manifest.AppliedHash,
+					TargetPath:       targetDir,
+				})
+			}
+			continue
+		}
+		cleanRoot := filepath.Clean(agent.SkillsDir)
+		err := filepath.Walk(cleanRoot, func(path string, info os.FileInfo, err error) error {
 			if err != nil || info == nil || info.IsDir() || info.Name() != ManifestFileName {
+				return nil
+			}
+			targetDir := filepath.Dir(path)
+			if filepath.Clean(targetDir) == cleanRoot {
 				return nil
 			}
 			manifest, err := readManifest(path)
 			if err != nil || manifest.ManagedBy != "skill-hub" || manifest.Scope != "global" {
 				return nil
 			}
+			if manifest.Agent != "" && manifest.Agent != agent.Name {
+				return nil
+			}
 			skillState, ok := state.EnabledSkills[manifest.SkillID]
 			if ok && containsString(skillState.Agents, agent.Name) {
 				return nil
 			}
-			targetDir := filepath.Dir(path)
 			orphaned = append(orphaned, StatusItem{
 				SkillID:          manifest.SkillID,
 				Agent:            agent.Name,
@@ -1075,14 +1195,33 @@ func hashDirectory(dir string) (string, error) {
 	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func backupAndRemove(path string) error {
-	parent := filepath.Dir(path)
-	base := filepath.Base(path)
-	backupPath := filepath.Join(parent, fmt.Sprintf("%s.skill-hub-backup.%s", base, time.Now().Format("20060102150405")))
-	if err := os.Rename(path, backupPath); err != nil {
+func backupAndRemove(agentName, skillID, path string) error {
+	rootDir, err := config.GetRootDir()
+	if err != nil {
 		return err
 	}
-	return nil
+	backupRoot := filepath.Join(rootDir, "backups", "global", agentName)
+	baseName := fmt.Sprintf("%s.%s", filepath.FromSlash(skillID), time.Now().Format("20060102150405"))
+	backupPath := filepath.Join(backupRoot, baseName)
+	for suffix := 1; pathExists(backupPath); suffix++ {
+		backupPath = filepath.Join(backupRoot, fmt.Sprintf("%s.%d", baseName, suffix))
+	}
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
+		return err
+	}
+	err = os.Rename(path, backupPath)
+	if err == nil {
+		return nil
+	}
+	if !stderrors.Is(err, syscall.EXDEV) {
+		return err
+	}
+	// Fallback across filesystems (EXDEV): copy into managed backup root, then remove original.
+	if err := copyPath(path, backupPath); err != nil {
+		_ = os.RemoveAll(backupPath)
+		return err
+	}
+	return os.RemoveAll(path)
 }
 
 func normalizeAgentNames(agentNames []string) []string {
@@ -1105,6 +1244,8 @@ func normalizeAgentName(name string) string {
 		return "opencode"
 	case "claude", "claude_code":
 		return "claude"
+	case "agy", "antigravity":
+		return "agy"
 	default:
 		return strings.ToLower(strings.TrimSpace(name))
 	}
@@ -1187,6 +1328,95 @@ func pathExists(path string) bool {
 	}
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func dirExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+func expandHomePath(path, homeDir string) string {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" || homeDir == "" {
+		return trimmed
+	}
+	if trimmed == "~" {
+		return homeDir
+	}
+	if strings.HasPrefix(trimmed, "~/") || strings.HasPrefix(trimmed, "~\\") {
+		return filepath.Join(homeDir, trimmed[2:])
+	}
+	return trimmed
+}
+
+func resolveAgyConfigSkillsDir(cfgPath, homeDir string) string {
+	cleaned := filepath.Clean(expandHomePath(cfgPath, homeDir))
+	if filepath.Base(cleaned) == "skills" {
+		return cleaned
+	}
+	return filepath.Join(cleaned, "skills")
+}
+
+func copyPath(src, dst string) error {
+	info, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return copySymlink(src, dst)
+	}
+	if !info.IsDir() {
+		return copyRegularFile(src, dst, info.Mode())
+	}
+	return filepath.Walk(src, func(path string, entryInfo os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, relPath)
+		if entryInfo.Mode()&os.ModeSymlink != 0 {
+			return copySymlink(path, target)
+		}
+		if entryInfo.IsDir() {
+			return os.MkdirAll(target, entryInfo.Mode())
+		}
+		return copyRegularFile(path, target, entryInfo.Mode())
+	})
+}
+
+func copySymlink(src, dst string) error {
+	linkTarget, err := os.Readlink(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	return os.Symlink(linkTarget, dst)
+}
+
+func copyRegularFile(src, dst string, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }
 
 func commandExists(name string) bool {

@@ -65,7 +65,7 @@ var useCmd = &cobra.Command{
 }
 
 func init() {
-	useCmd.Flags().Bool("global", false, "将技能标记为本机全局使用（默认处理全部检测/配置的 agent）")
+	useCmd.Flags().Bool("global", false, "将技能标记为本机全局使用（默认处理全部检测/配置的 agent：codex、opencode、claude、agy）")
 	useCmd.Flags().StringArray("pattern", nil, "技能 ID 通配符（可重复）。请引用通配符避免 shell 展开。")
 	useCmd.Flags().String("repo", "", "精确指定技能来源仓库")
 	useCmd.Flags().Bool("dry-run", false, "仅解析并预览启用结果，不写入状态")

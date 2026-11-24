@@ -227,3 +227,34 @@ func TestValidator_ValidateWithOptions(t *testing.T) {
 		}
 	})
 }
+
+func TestValidator_ValidateAgySkillFile(t *testing.T) {
+	tempDir := t.TempDir()
+	skillDir := filepath.Join(tempDir, "agy-workflow-skill")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill dir: %v", err)
+	}
+	skillPath := filepath.Join(skillDir, "SKILL.md")
+	content := `---
+name: agy-workflow-skill
+description: Standard AGY and antigravity workflow skill with complete instructions.
+metadata:
+  version: "1.0.0"
+  author: "tester"
+---
+# AGY Workflow Skill
+
+Use this skill for AGY and Antigravity CLI workflows.
+`
+	if err := os.WriteFile(skillPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write SKILL.md: %v", err)
+	}
+
+	result, err := NewValidator().ValidateFile(skillPath)
+	if err != nil {
+		t.Fatalf("ValidateFile() error = %v", err)
+	}
+	if !result.IsValid || len(result.Errors) != 0 || len(result.Warnings) != 0 {
+		t.Fatalf("unexpected validation result: valid=%v errors=%+v warnings=%+v", result.IsValid, result.Errors, result.Warnings)
+	}
+}

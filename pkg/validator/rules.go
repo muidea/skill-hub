@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-// Rule 校验规则接口
+// Rule 校验规则接口。
+// 遵循标准 SKILL.md 规范，统一适用于 codex、opencode、claude 及 agy（antigravity）等受支持目标。
 type Rule interface {
 	Validate(result *ValidationResult) bool
 	Name() string

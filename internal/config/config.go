@@ -31,6 +31,7 @@ type MultiRepoConfig struct {
 type Config struct {
 	ClaudeConfigPath string           `mapstructure:"claude_config_path"`
 	CursorConfigPath string           `mapstructure:"cursor_config_path"`
+	AgyConfigPath    string           `mapstructure:"agy_config_path" yaml:"agy_config_path,omitempty" json:"agy_config_path,omitempty"`
 	DefaultTool      string           `mapstructure:"default_tool"`
 	GitToken         string           `mapstructure:"git_token"`
 	MultiRepo        *MultiRepoConfig `mapstructure:"multi_repo" yaml:"multi_repo" json:"multi_repo"`
@@ -110,6 +111,7 @@ func loadConfig() (*Config, error) {
 	// 设置默认值
 	cfgViper.SetDefault("claude_config_path", filepath.Join(homeDir, ".claude", "config.json"))
 	cfgViper.SetDefault("cursor_config_path", filepath.Join(homeDir, ".cursor", "rules"))
+	cfgViper.SetDefault("agy_config_path", "")
 	cfgViper.SetDefault("default_tool", "open_code")
 	cfgViper.SetDefault("git_token", "")
 

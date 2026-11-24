@@ -51,7 +51,7 @@ var applyCmd = &cobra.Command{
 func init() {
 	applyCmd.Flags().Bool("dry-run", false, "演习模式，仅显示将要执行的变更，不实际修改文件")
 	applyCmd.Flags().Bool("force", false, "强制应用，即使检测到冲突也继续执行")
-	applyCmd.Flags().Bool("global", false, "应用本机全局启用的技能")
+	applyCmd.Flags().Bool("global", false, "应用本机全局启用的技能（支持 codex、opencode、claude、agy）")
 	applyCmd.Flags().StringArray("pattern", nil, "技能 ID 通配符（可重复）。请引用通配符避免 shell 展开。")
 }
 

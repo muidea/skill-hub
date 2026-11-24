@@ -504,6 +504,10 @@ func TestInitializeWorkspaceFiles(t *testing.T) {
 					t.Errorf("不应创建.claude目录")
 					return false
 				}
+				if _, err := os.Stat(filepath.Join(cwd, ".agy")); err == nil {
+					t.Errorf("不应创建.agy目录")
+					return false
+				}
 				if _, err := os.Stat(filepath.Join(cwd, ".cursorrules")); err == nil {
 					t.Errorf("不应创建.cursorrules")
 					return false

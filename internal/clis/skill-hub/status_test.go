@@ -258,6 +258,7 @@ func TestRenderGlobalStatusSummaryAggregatesAgentsBySkill(t *testing.T) {
 			{SkillID: "demo-skill", Version: "1.2.3", Agent: "opencode", Status: globalservice.StatusOK},
 			{SkillID: "demo-skill", Version: "1.2.3", Agent: "codex", Status: globalservice.StatusOK},
 			{SkillID: "demo-skill", Version: "1.2.3", Agent: "claude", Status: globalservice.StatusOK},
+			{SkillID: "demo-skill", Version: "1.2.3", Agent: "agy", Status: globalservice.StatusOK},
 		},
 	}
 
@@ -267,7 +268,7 @@ func TestRenderGlobalStatusSummaryAggregatesAgentsBySkill(t *testing.T) {
 	if got := strings.Count(output, "demo-skill"); got != 1 {
 		t.Fatalf("demo-skill appeared %d times, want one aggregated row: %q", got, output)
 	}
-	if !strings.Contains(output, "claude,codex,opencode") {
+	if !strings.Contains(output, "agy,claude,codex,opencode") {
 		t.Fatalf("output must include the aggregated agent list, got %q", output)
 	}
 }

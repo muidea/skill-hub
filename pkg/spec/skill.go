@@ -72,6 +72,7 @@ const (
 	TargetCursor     = "cursor"
 	TargetClaudeCode = "claude_code"
 	TargetOpenCode   = "open_code"
+	TargetAgy        = "agy"
 )
 
 // ProjectState 表示项目与技能的关联状态（向后兼容）

@@ -52,7 +52,7 @@ pattern 的已启用技能。请引用带通配符的 pattern，避免 shell 在
 func init() {
 	statusCmd.Flags().Bool("verbose", false, "显示详细差异信息")
 
-	statusCmd.Flags().Bool("global", false, "检查本机全局技能状态")
+	statusCmd.Flags().Bool("global", false, "检查本机全局技能状态（支持 codex、opencode、claude、agy）")
 	statusCmd.Flags().StringArray("pattern", nil, "技能 ID 通配符（可重复）。请引用通配符避免 shell 展开。")
 }
 

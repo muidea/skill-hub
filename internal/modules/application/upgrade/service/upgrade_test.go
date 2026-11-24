@@ -60,10 +60,17 @@ func TestInstallBundledAgentSkillsUsesDedicatedDirectoryOnly(t *testing.T) {
 	codexDir := filepath.Join(tempDir, "codex-skills")
 	opencodeDir := filepath.Join(tempDir, "opencode-skills")
 	claudeDir := filepath.Join(tempDir, "claude-skills")
+	agySkillsDir := filepath.Join(tempDir, "agy-skills")
+	agyConfigHome := filepath.Join(tempDir, "agy-config-home")
+	agyHome := filepath.Join(tempDir, "agy-home")
+	t.Setenv("HOME", tempDir)
 	t.Setenv("SKILL_HUB_AGENT_SKILLS_DIR", dedicatedDir)
 	t.Setenv("CODEX_SKILLS_DIR", codexDir)
 	t.Setenv("OPENCODE_SKILLS_DIR", opencodeDir)
 	t.Setenv("CLAUDE_SKILLS_DIR", claudeDir)
+	t.Setenv("AGY_SKILLS_DIR", agySkillsDir)
+	t.Setenv("AGY_CONFIG_HOME", agyConfigHome)
+	t.Setenv("AGY_HOME", agyHome)
 
 	count, warnings := installBundledAgentSkills(sourceDir)
 	if count != 1 || len(warnings) != 0 {
@@ -72,7 +79,7 @@ func TestInstallBundledAgentSkillsUsesDedicatedDirectoryOnly(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dedicatedDir, "skill-hub-workflow", "SKILL.md")); err != nil {
 		t.Fatalf("bundled skill was not installed into dedicated directory: %v", err)
 	}
-	for _, dir := range []string{codexDir, opencodeDir, claudeDir} {
+	for _, dir := range []string{codexDir, opencodeDir, claudeDir, agySkillsDir, agyConfigHome, agyHome, filepath.Join(tempDir, ".gemini")} {
 		if _, err := os.Stat(dir); !os.IsNotExist(err) {
 			t.Fatalf("bundled skill installer must not write managed global directory %q: %v", dir, err)
 		}

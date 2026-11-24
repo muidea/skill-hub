@@ -58,3 +58,64 @@ multi_repo:
 
 	wg.Wait()
 }
+
+func TestAgyConfigPathDefaultAndExplicit(t *testing.T) {
+	t.Run("defaults to empty when omitted", func(t *testing.T) {
+		ResetForTest()
+		defer ResetForTest()
+
+		rootDir := t.TempDir()
+		t.Setenv("SKILL_HUB_HOME", rootDir)
+
+		configContent := []byte(`
+multi_repo:
+  enabled: true
+  default_repo: main
+  repositories:
+    main:
+      name: main
+      enabled: true
+`)
+		if err := os.WriteFile(filepath.Join(rootDir, "config.yaml"), configContent, 0644); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+
+		cfg, err := GetConfig()
+		if err != nil {
+			t.Fatalf("GetConfig() error = %v", err)
+		}
+		if cfg.AgyConfigPath != "" {
+			t.Fatalf("AgyConfigPath = %q, want empty string", cfg.AgyConfigPath)
+		}
+	})
+
+	t.Run("loads explicit agy_config_path", func(t *testing.T) {
+		ResetForTest()
+		defer ResetForTest()
+
+		rootDir := t.TempDir()
+		t.Setenv("SKILL_HUB_HOME", rootDir)
+
+		configContent := []byte(`
+agy_config_path: "~/.gemini/config"
+multi_repo:
+  enabled: true
+  default_repo: main
+  repositories:
+    main:
+      name: main
+      enabled: true
+`)
+		if err := os.WriteFile(filepath.Join(rootDir, "config.yaml"), configContent, 0644); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+
+		cfg, err := GetConfig()
+		if err != nil {
+			t.Fatalf("GetConfig() error = %v", err)
+		}
+		if cfg.AgyConfigPath != "~/.gemini/config" {
+			t.Fatalf("AgyConfigPath = %q, want %q", cfg.AgyConfigPath, "~/.gemini/config")
+		}
+	})
+}
