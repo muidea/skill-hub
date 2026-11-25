@@ -13,6 +13,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/muidea/skill-hub/internal/config"
+	apperrors "github.com/muidea/skill-hub/pkg/errors"
 )
 
 func TestConvertSSHToHTTPS(t *testing.T) {
@@ -393,6 +394,214 @@ func TestSkillRepositoryResolvesRemoteSkillConflictByHigherVersion(t *testing.T)
 	if err := repo.Push(); err != nil {
 		t.Fatalf("push resolved history: %v", err)
 	}
+}
+
+func TestRepositoryCommitCleanWorktree(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git executable not available")
+	}
+
+	tmpDir := t.TempDir()
+	localDir := filepath.Join(tmpDir, "local")
+	runGitCommand(t, tmpDir, "init", "-b", "main", localDir)
+	runGitCommand(t, localDir, "config", "user.name", "tester")
+	runGitCommand(t, localDir, "config", "user.email", "tester@example.com")
+	writeSystemGitCommit(t, localDir, "README.md", "one\n", "initial commit")
+
+	repo, err := NewRepository(localDir)
+	if err != nil {
+		t.Fatalf("NewRepository() error = %v", err)
+	}
+	err = repo.Commit("should fail on clean repo")
+	if err == nil || !strings.Contains(err.Error(), "没有要提交的更改") {
+		t.Fatalf("Commit() error = %v, want 没有要提交的更改", err)
+	}
+}
+
+func TestRepositoryCommitUsesSystemGitEnvAndIncludeIf(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git executable not available")
+	}
+
+	setupRepoWithInitialCommit := func(t *testing.T) (string, string) {
+		t.Helper()
+		tmpDir := t.TempDir()
+		remoteDir := filepath.Join(tmpDir, "remote.git")
+		seedDir := filepath.Join(tmpDir, "seed")
+		localDir := filepath.Join(tmpDir, "local")
+
+		runGitCommand(t, tmpDir, "init", "--bare", remoteDir)
+		runGitCommand(t, tmpDir, "init", "-b", "main", seedDir)
+		runGitCommand(t, seedDir, "config", "user.name", "seed")
+		runGitCommand(t, seedDir, "config", "user.email", "seed@example.com")
+		runGitCommand(t, seedDir, "remote", "add", "origin", remoteDir)
+		writeSystemGitCommit(t, seedDir, "README.md", "one\n", "initial commit")
+		writeSystemGitCommit(t, seedDir, "obsolete.txt", "bye\n", "add obsolete")
+		runGitCommand(t, seedDir, "push", "-u", "origin", "main")
+
+		runGitCommand(t, tmpDir, "clone", "--branch", "main", remoteDir, localDir)
+		return remoteDir, localDir
+	}
+
+	t.Run("include.path in gitconfig", func(t *testing.T) {
+		homeDir := t.TempDir()
+		t.Setenv("HOME", homeDir)
+		t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+		unsetEnvForTest(t, "GIT_CONFIG_GLOBAL")
+		unsetEnvForTest(t, "XDG_CONFIG_HOME")
+		unsetEnvForTest(t, "GIT_AUTHOR_NAME")
+		unsetEnvForTest(t, "GIT_AUTHOR_EMAIL")
+		unsetEnvForTest(t, "GIT_COMMITTER_NAME")
+		unsetEnvForTest(t, "GIT_COMMITTER_EMAIL")
+		unsetEnvForTest(t, "EMAIL")
+
+		remoteDir, localDir := setupRepoWithInitialCommit(t)
+
+		includedCfg := filepath.Join(homeDir, ".gitconfig-user")
+		if err := os.WriteFile(includedCfg, []byte("[user]\n\tname = Included User\n\temail = included@example.com\n"), 0644); err != nil {
+			t.Fatalf("write included gitconfig: %v", err)
+		}
+		mainCfg := filepath.Join(homeDir, ".gitconfig")
+		if err := os.WriteFile(mainCfg, []byte("[include]\n\tpath = "+includedCfg+"\n"), 0644); err != nil {
+			t.Fatalf("write gitconfig: %v", err)
+		}
+
+		if err := os.WriteFile(filepath.Join(localDir, "README.md"), []byte("updated\n"), 0644); err != nil {
+			t.Fatalf("modify README.md: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(localDir, "added.txt"), []byte("new\n"), 0644); err != nil {
+			t.Fatalf("write added.txt: %v", err)
+		}
+		if err := os.Remove(filepath.Join(localDir, "obsolete.txt")); err != nil {
+			t.Fatalf("remove obsolete.txt: %v", err)
+		}
+
+		repo, err := NewRepository(localDir)
+		if err != nil {
+			t.Fatalf("NewRepository() error = %v", err)
+		}
+		if err := (&SkillRepository{repo: repo}).PushChanges("include config commit"); err != nil {
+			t.Fatalf("PushChanges() error = %v", err)
+		}
+
+		if got := runGitCommand(t, remoteDir, "show", "main:README.md"); got != "updated\n" {
+			t.Fatalf("remote README.md = %q, want %q", got, "updated\n")
+		}
+		if got := runGitCommand(t, remoteDir, "show", "main:added.txt"); got != "new\n" {
+			t.Fatalf("remote added.txt = %q, want %q", got, "new\n")
+		}
+		if err := exec.Command("git", "-C", remoteDir, "cat-file", "-e", "main:obsolete.txt").Run(); err == nil {
+			t.Fatalf("remote obsolete.txt should have been deleted")
+		}
+	})
+
+	t.Run("GIT_AUTHOR and GIT_COMMITTER env vars", func(t *testing.T) {
+		homeDir := t.TempDir()
+		t.Setenv("HOME", homeDir)
+		t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+		unsetEnvForTest(t, "GIT_CONFIG_GLOBAL")
+		unsetEnvForTest(t, "XDG_CONFIG_HOME")
+		t.Setenv("GIT_AUTHOR_NAME", "Env Author")
+		t.Setenv("GIT_AUTHOR_EMAIL", "env-author@example.com")
+		t.Setenv("GIT_COMMITTER_NAME", "Env Committer")
+		t.Setenv("GIT_COMMITTER_EMAIL", "env-committer@example.com")
+
+		remoteDir, localDir := setupRepoWithInitialCommit(t)
+
+		if err := os.WriteFile(filepath.Join(localDir, "env.txt"), []byte("from env\n"), 0644); err != nil {
+			t.Fatalf("write env.txt: %v", err)
+		}
+
+		repo, err := NewRepository(localDir)
+		if err != nil {
+			t.Fatalf("NewRepository() error = %v", err)
+		}
+		if err := (&SkillRepository{repo: repo}).PushChanges("env identity commit"); err != nil {
+			t.Fatalf("PushChanges() error = %v", err)
+		}
+
+		if got := runGitCommand(t, remoteDir, "show", "main:env.txt"); got != "from env\n" {
+			t.Fatalf("remote env.txt = %q, want %q", got, "from env\n")
+		}
+	})
+}
+
+func TestRepositoryCommitMissingIdentityReturnsActionableError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git executable not available")
+	}
+
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	unsetEnvForTest(t, "GIT_CONFIG_GLOBAL")
+	unsetEnvForTest(t, "XDG_CONFIG_HOME")
+	unsetEnvForTest(t, "GIT_AUTHOR_NAME")
+	unsetEnvForTest(t, "GIT_AUTHOR_EMAIL")
+	unsetEnvForTest(t, "GIT_COMMITTER_NAME")
+	unsetEnvForTest(t, "GIT_COMMITTER_EMAIL")
+	unsetEnvForTest(t, "EMAIL")
+
+	tmpDir := t.TempDir()
+	remoteDir := filepath.Join(tmpDir, "remote.git")
+	seedDir := filepath.Join(tmpDir, "seed")
+	localDir := filepath.Join(tmpDir, "local")
+
+	runGitCommand(t, tmpDir, "init", "--bare", remoteDir)
+	runGitCommand(t, tmpDir, "init", "-b", "main", seedDir)
+	runGitCommand(t, seedDir, "config", "user.name", "seed")
+	runGitCommand(t, seedDir, "config", "user.email", "seed@example.com")
+	runGitCommand(t, seedDir, "remote", "add", "origin", remoteDir)
+	writeSystemGitCommit(t, seedDir, "README.md", "one\n", "initial commit")
+	runGitCommand(t, seedDir, "push", "-u", "origin", "main")
+
+	runGitCommand(t, tmpDir, "clone", "--branch", "main", remoteDir, localDir)
+	// Ensure git does not fall back to OS username/hostname regardless of host FQDN.
+	runGitCommand(t, localDir, "config", "user.useConfigOnly", "true")
+
+	if err := os.WriteFile(filepath.Join(localDir, "README.md"), []byte("changed\n"), 0644); err != nil {
+		t.Fatalf("modify README.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localDir, "untracked.txt"), []byte("new\n"), 0644); err != nil {
+		t.Fatalf("write untracked.txt: %v", err)
+	}
+
+	repo, err := NewRepository(localDir)
+	if err != nil {
+		t.Fatalf("NewRepository() error = %v", err)
+	}
+	err = (&SkillRepository{repo: repo}).PushChanges("should fail")
+	if err == nil {
+		t.Fatal("PushChanges() succeeded without git user identity, want error")
+	}
+	if !apperrors.IsCode(err, apperrors.ErrGitOperation) {
+		t.Fatalf("error code = %q, want %q (err=%v)", apperrors.Code(err), apperrors.ErrGitOperation, err)
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "author field is required") {
+		t.Fatalf("error should not leak go-git ErrMissingAuthor: %v", err)
+	}
+	if !strings.Contains(msg, "git config --global user.name") || !strings.Contains(msg, "user.email") {
+		t.Fatalf("error should contain actionable git config guidance, got: %v", err)
+	}
+	if staged := strings.TrimSpace(runGitCommand(t, localDir, "diff", "--cached", "--name-only")); staged != "" {
+		t.Fatalf("failed commit should not stage files, got staged: %q", staged)
+	}
+}
+
+func unsetEnvForTest(t *testing.T, key string) {
+	t.Helper()
+	prev, had := os.LookupEnv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatalf("unsetenv %s: %v", key, err)
+	}
+	t.Cleanup(func() {
+		if had {
+			_ = os.Setenv(key, prev)
+			return
+		}
+		_ = os.Unsetenv(key)
+	})
 }
 
 func writeAndCommit(t *testing.T, worktree *gogit.Worktree, repoDir, content string) {

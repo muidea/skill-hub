@@ -62,6 +62,8 @@ func FormatError(err error) string {
 
 func init() {
 	rootCmd.PersistentFlags().Bool("json", false, "输出完整 JSON，禁止交互，适合 agent 和自动化调用")
+	rootCmd.PersistentFlags().String("log-file", "", "将本次命令的详细运行日志写入指定文件（默认仅在失败且有详细日志时写入临时文件）")
+	rootCmd.PersistentFlags().Bool("debug", false, "在 stderr 实时输出详细运行日志（也可通过环境变量 SKILL_HUB_VERBOSE=1 开启）")
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		if activeOutput != nil {
 			activeOutput.command = cmd
@@ -114,7 +116,12 @@ func markCommandExecution(command *cobra.Command) {
 		command.RunE = func(cmd *cobra.Command, args []string) error {
 			if activeOutput != nil {
 				activeOutput.started = true
+				if activeOutput.silencedCmd == nil {
+					activeOutput.silencedCmd = cmd
+					activeOutput.silencedPrev = cmd.SilenceUsage
+				}
 			}
+			cmd.SilenceUsage = true
 			return run(cmd, args)
 		}
 	}

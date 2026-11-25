@@ -26,7 +26,6 @@ var pullCmd = &cobra.Command{
 此命令仅同步仓库层（~/.skill-hub/repositories/），不涉及项目工作目录的更新。
 使用 --check 选项可以检查可用更新但不实际执行拉取操作。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cmd.SilenceUsage = true // Arguments have already been validated by Cobra.
 		pullJSON = mustGetBoolFlag(cmd, "json")
 		return runPull()
 	},
@@ -237,13 +236,7 @@ func pullSyncDefaultRepositoryResultQuiet(client serviceBridgeClient, useService
 	if useService {
 		return pullSyncDefaultRepositoryResult(client, true)
 	}
-	var result *spec.PullResult
-	err := runSilencingStdout(func() error {
-		var syncErr error
-		result, syncErr = pullSyncDefaultRepositoryResult(nil, false)
-		return syncErr
-	})
-	return result, err
+	return pullSyncDefaultRepositoryResult(nil, false)
 }
 
 func pullSyncDefaultRepositoryQuiet(client serviceBridgeClient, useService bool) (int, error) {

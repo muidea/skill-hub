@@ -15,6 +15,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/muidea/skill-hub/internal/config"
 	apperrors "github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/logging"
 	"github.com/muidea/skill-hub/pkg/utils"
 )
 
@@ -130,7 +131,9 @@ func (r *Repository) SetRemote(url string) error {
 
 	if _, err := r.repo.Remote(r.remoteName); err == nil {
 		cmd := exec.Command("git", "-C", r.path, "remote", "set-url", r.remoteName, url)
-		if output, err := cmd.CombinedOutput(); err != nil {
+		output, err := cmd.CombinedOutput()
+		logging.LogCommandOutput("git", cmd.Args[1:], output, err)
+		if err != nil {
 			return fmt.Errorf("更新远程仓库URL失败: %s: %w", strings.TrimSpace(string(output)), err)
 		}
 		repo, err := git.PlainOpen(r.path)
@@ -167,7 +170,7 @@ func (r *Repository) Clone(url string) error {
 	// 准备克隆选项
 	cloneOpts := &git.CloneOptions{
 		URL:      url,
-		Progress: os.Stdout,
+		Progress: logging.DetailWriter(),
 	}
 
 	// 根据URL类型设置认证
@@ -194,12 +197,12 @@ func (r *Repository) Clone(url string) error {
 		if strings.HasPrefix(url, "git@") {
 			httpsURL := ConvertSSHToHTTPS(url)
 			if httpsURL != "" {
-				fmt.Printf("SSH克隆失败，尝试HTTPS URL: %s\n", httpsURL)
+				logging.DetailPrintf("SSH克隆失败，尝试HTTPS URL: %s\n", httpsURL)
 				cloneOpts.URL = httpsURL
 				cloneOpts.Auth, _ = r.getAuth() // 使用HTTP认证
 				repo, err = git.PlainClone(r.path, false, cloneOpts)
 				if err == nil {
-					fmt.Println("✅ 使用HTTPS URL克隆成功")
+					logging.DetailPrintln("✅ 使用HTTPS URL克隆成功")
 					r.repo = repo
 					r.remoteURL = httpsURL // 更新为HTTPS URL
 					return nil
@@ -226,7 +229,7 @@ func (r *Repository) Clone(url string) error {
 	backupDir := r.path + ".bak"
 	if _, err := os.Stat(backupDir); err == nil {
 		if err := os.RemoveAll(backupDir); err != nil {
-			fmt.Printf("⚠️  清理备份目录失败: %v\n", err)
+			logging.DetailPrintf("⚠️  清理备份目录失败: %v\n", err)
 		}
 	}
 
@@ -242,9 +245,7 @@ func (r *Repository) Pull() error {
 	cmd := exec.Command("git", "-C", r.path, "pull", "--ff-only", r.remoteName, "main")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
-	if len(output) > 0 {
-		fmt.Print(string(output))
-	}
+	logging.LogCommandOutput("git", cmd.Args[1:], output, err)
 
 	if err != nil {
 		// 提供更详细的错误信息
@@ -286,9 +287,7 @@ func (r *Repository) MergeRemoteMainAllowConflicts() error {
 	// the version-based resolver downstream never fires.
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
-	if len(output) > 0 {
-		fmt.Print(string(output))
-	}
+	logging.LogCommandOutput("git", cmd.Args[1:], output, err)
 	if err == nil {
 		return nil
 	}
@@ -309,9 +308,7 @@ func (r *Repository) FetchMain() error {
 
 	cmd := exec.Command("git", "-C", r.path, "fetch", r.remoteName, "main")
 	output, err := cmd.CombinedOutput()
-	if len(output) > 0 {
-		fmt.Print(string(output))
-	}
+	logging.LogCommandOutput("git", cmd.Args[1:], output, err)
 	if err != nil {
 		outputText := strings.TrimSpace(string(output))
 		if outputText != "" {
@@ -446,9 +443,7 @@ func (r *Repository) Push() error {
 
 	cmd := exec.Command("git", "-C", r.path, "push", r.remoteName, "HEAD")
 	output, err := cmd.CombinedOutput()
-	if len(output) > 0 {
-		fmt.Print(string(output))
-	}
+	logging.LogCommandOutput("git", cmd.Args[1:], output, err)
 
 	if err != nil {
 		// 提供更详细的错误信息
@@ -493,48 +488,120 @@ func isNonFastForwardOutput(output string) bool {
 
 // Commit 提交更改
 func (r *Repository) Commit(message string) error {
-	worktree, err := r.repo.Worktree()
+	statusCmd := exec.Command("git", "-C", r.path, "status", "--porcelain")
+	statusCmd.Env = append(os.Environ(), "LC_ALL=C")
+	statusOutput, err := statusCmd.CombinedOutput()
+	logging.LogCommandOutput("git", statusCmd.Args[1:], statusOutput, err)
 	if err != nil {
-		return fmt.Errorf("获取工作树失败: %w", err)
-	}
-
-	// 添加所有更改
-	_, err = worktree.Add(".")
-	if err != nil {
-		return fmt.Errorf("添加文件失败: %w", err)
-	}
-
-	// 检查是否有更改
-	status, err := worktree.Status()
-	if err != nil {
+		outputText := strings.TrimSpace(string(statusOutput))
+		if outputText != "" {
+			return fmt.Errorf("检查状态失败: %s: %w", outputText, err)
+		}
 		return fmt.Errorf("检查状态失败: %w", err)
 	}
 
-	if status.IsClean() {
+	if strings.TrimSpace(string(statusOutput)) == "" {
 		return fmt.Errorf("没有要提交的更改")
 	}
 
-	// 提交更改
-	_, err = worktree.Commit(message, &git.CommitOptions{
-		All: true,
-	})
-	return err
+	return r.CommitWithSystemGit(message)
 }
 
 func (r *Repository) CommitWithSystemGit(message string) error {
-	addOutput, err := exec.Command("git", "-C", r.path, "add", "-A").CombinedOutput()
+	if err := r.ensureCommitIdentity(); err != nil {
+		return err
+	}
+
+	addCmd := exec.Command("git", "-C", r.path, "add", "-A")
+	addCmd.Env = append(os.Environ(), "LC_ALL=C")
+	addOutput, err := addCmd.CombinedOutput()
+	logging.LogCommandOutput("git", addCmd.Args[1:], addOutput, err)
 	if err != nil {
 		return fmt.Errorf("添加文件失败: %s: %w", strings.TrimSpace(string(addOutput)), err)
 	}
 
-	commitOutput, err := exec.Command("git", "-C", r.path, "commit", "-m", message).CombinedOutput()
-	if len(commitOutput) > 0 {
-		fmt.Print(string(commitOutput))
-	}
+	commitCmd := exec.Command("git", "-C", r.path, "commit", "-m", message)
+	commitCmd.Env = append(os.Environ(), "LC_ALL=C")
+	commitOutput, err := commitCmd.CombinedOutput()
+	logging.LogCommandOutput("git", commitCmd.Args[1:], commitOutput, err)
 	if err != nil {
-		return fmt.Errorf("提交失败: %s: %w", strings.TrimSpace(string(commitOutput)), err)
+		outputText := strings.TrimSpace(string(commitOutput))
+		if isGitIdentityError(outputText) {
+			return r.missingCommitIdentityError()
+		}
+		if strings.Contains(outputText, "nothing to commit") {
+			return fmt.Errorf("没有要提交的更改")
+		}
+		if outputText != "" {
+			return fmt.Errorf("提交失败: %s: %w", outputText, err)
+		}
+		return fmt.Errorf("提交失败: %w", err)
+	}
+
+	if reopened, err := git.PlainOpen(r.path); err == nil {
+		r.repo = reopened
 	}
 	return nil
+}
+
+func (r *Repository) ensureCommitIdentity() error {
+	for _, identVar := range []string{"GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"} {
+		cmd := exec.Command("git", "-C", r.path, "var", identVar)
+		cmd.Env = append(os.Environ(), "LC_ALL=C")
+		output, err := cmd.CombinedOutput()
+		logging.LogCommandOutput("git", cmd.Args[1:], output, err)
+		if err != nil {
+			outputText := strings.TrimSpace(string(output))
+			if isGitIdentityError(outputText) {
+				return r.missingCommitIdentityError()
+			}
+			if outputText != "" {
+				return fmt.Errorf("检查Git提交身份失败: %s: %w", outputText, err)
+			}
+			return fmt.Errorf("检查Git提交身份失败: %w", err)
+		}
+	}
+	return nil
+}
+
+func isGitIdentityError(output string) bool {
+	for _, pattern := range []string{
+		"Author identity unknown",
+		"Committer identity unknown",
+		"Please tell me who you are",
+		"empty ident name",
+		"unable to auto-detect email address",
+		"unable to auto-detect name",
+		"no email was given",
+		"no name was given",
+	} {
+		if strings.Contains(output, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Repository) missingCommitIdentityError() error {
+	return apperrors.NewWithCode(
+		"git.commit",
+		apperrors.ErrGitOperation,
+		fmt.Sprintf(
+			"未配置 Git 提交身份（user.name / user.email），无法创建提交。\n"+
+				"请先执行以下命令配置全局提交身份：\n"+
+				"  git config --global user.name \"Your Name\"\n"+
+				"  git config --global user.email \"you@example.com\"\n"+
+				"或仅为当前仓库配置：\n"+
+				"  git -C %s config user.name \"Your Name\"\n"+
+				"  git -C %s config user.email \"you@example.com\"",
+			quoteShellPath(r.path),
+			quoteShellPath(r.path),
+		),
+	)
+}
+
+func quoteShellPath(path string) string {
+	return "'" + strings.ReplaceAll(path, "'", "'\"'\"'") + "'"
 }
 
 // GetStatus 获取仓库状态

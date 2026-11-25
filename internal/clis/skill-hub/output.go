@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	apperrors "github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -17,12 +18,14 @@ import (
 // commandOutput is scoped to one CLI invocation. The Cobra command tree is
 // already process-local; neither runtime nor the daemon uses this state.
 type commandOutput struct {
-	command *cobra.Command
-	json    bool
-	started bool
-	value   json.RawMessage
-	batch   bool
-	results []json.RawMessage
+	command      *cobra.Command
+	json         bool
+	started      bool
+	silencedCmd  *cobra.Command
+	silencedPrev bool
+	value        json.RawMessage
+	batch        bool
+	results      []json.RawMessage
 }
 
 var activeOutput *commandOutput
@@ -105,9 +108,15 @@ func executeCommand(root *cobra.Command, args []string) error {
 	}
 	oldSelectedUsage := selected.SilenceUsage
 	defer func() { selected.SilenceUsage = oldSelectedUsage }()
-	output := &commandOutput{command: selected, json: requestsJSON(selected, args)}
+	opts := parseGlobalOutputOptions(selected, args)
+	output := &commandOutput{command: selected, json: opts.json}
 	activeOutput = output
-	defer func() { activeOutput = previous }()
+	defer func() {
+		if output.silencedCmd != nil {
+			output.silencedCmd.SilenceUsage = output.silencedPrev
+		}
+		activeOutput = previous
+	}()
 	oldUsage := root.SilenceUsage
 	if output.json {
 		root.SilenceUsage = true
@@ -118,12 +127,54 @@ func executeCommand(root *cobra.Command, args []string) error {
 		root.SetVersionTemplate("{{jsonVersion .Version}}")
 	}
 	defer root.SetVersionTemplate(oldVersionTemplate)
+
+	var runLog *logging.RunLog
+	if !isCompletionCommand(selected) {
+		var mirror io.Writer
+		if opts.debug {
+			mirror = output.command.ErrOrStderr()
+		}
+		runLog = logging.NewRunLog(logging.RunLogOptions{
+			Command: selected.CommandPath(),
+			LogFile: opts.logFile,
+			Mirror:  mirror,
+		})
+		restoreDetail := logging.SetDetailWriter(runLog)
+		defer restoreDetail()
+
+		logLevel := logging.LevelInfo
+		if opts.debug {
+			logLevel = logging.LevelDebug
+		}
+		restoreLogger := logging.BindGlobalLogger(runLog, logLevel)
+		defer restoreLogger()
+	}
+
 	root.SetArgs(args)
 	_, runErr := root.ExecuteC()
 	if runErr != nil && !output.started && apperrors.Code(runErr) == apperrors.ErrSystem {
 		runErr = apperrors.NewWithCode("arguments", apperrors.ErrInvalidInput, runErr.Error())
 	}
+
+	savedLogPath := ""
+	if runLog != nil && (opts.logFile != "" || (runErr != nil && runLog.HasEntries())) {
+		if runErr != nil {
+			runLog.RecordError(runErr)
+		}
+		persistedPath, persistErr := runLog.Persist()
+		if persistErr != nil {
+			if runErr == nil && opts.logFile != "" {
+				runErr = apperrors.WrapWithCode(persistErr, "log-file", apperrors.ErrFileOperation, "写入日志文件失败")
+			}
+		} else {
+			savedLogPath = persistedPath
+		}
+	}
+
 	if !output.json {
+		if savedLogPath != "" {
+			_, _ = fmt.Fprintf(output.command.ErrOrStderr(), "详细日志已保存至: %s\n", savedLogPath)
+		}
 		return runErr
 	}
 
@@ -141,14 +192,25 @@ func executeCommand(root *cobra.Command, args []string) error {
 				fields = map[string]any{"data": json.RawMessage(data)}
 			}
 		}
+		details := apperrors.Details(runErr)
+		if savedLogPath != "" {
+			copied := make(map[string]any, len(details)+1)
+			for k, v := range details {
+				copied[k] = v
+			}
+			copied["log_file"] = savedLogPath
+			details = copied
+		}
 		fields["command_error"] = commandError{
-			Code: apperrors.Code(runErr), Message: FormatError(runErr), Details: apperrors.Details(runErr),
+			Code: apperrors.Code(runErr), Message: FormatError(runErr), Details: details,
 		}
 		var err error
 		data, err = json.MarshalIndent(fields, "", "  ")
 		if err != nil {
 			return err
 		}
+	} else if savedLogPath != "" {
+		_, _ = fmt.Fprintf(output.command.ErrOrStderr(), "详细日志已保存至: %s\n", savedLogPath)
 	}
 	if _, err := fmt.Fprintln(output.command.OutOrStdout(), string(data)); err != nil {
 		return err
@@ -159,16 +221,49 @@ func executeCommand(root *cobra.Command, args []string) error {
 	return nil
 }
 
-// Detect JSON before Cobra parses flags so parse/argument errors also obey the
-// output contract. Known flag values and positional arguments after -- must
-// not be mistaken for output options.
+type globalOutputOptions struct {
+	json    bool
+	debug   bool
+	logFile string
+}
+
+func isCompletionCommand(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	switch cmd.Name() {
+	case "__complete", "__completeNoDesc", "completion":
+		return true
+	default:
+		return false
+	}
+}
+
+func isTruthyEnv(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+// Detect global output/logging flags before Cobra parses flags so parse/argument
+// errors also obey the output contract. Known flag values and positional arguments
+// after -- must not be mistaken for output options.
 func requestsJSON(selected *cobra.Command, args []string) bool {
+	return parseGlobalOutputOptions(selected, args).json
+}
+
+func parseGlobalOutputOptions(selected *cobra.Command, args []string) globalOutputOptions {
 	flags := pflag.NewFlagSet("output", pflag.ContinueOnError)
 	for command := selected; command != nil; command = command.Parent() {
 		flags.AddFlagSet(command.Flags())
 		flags.AddFlagSet(command.PersistentFlags())
 	}
-	jsonOutput := false
+	opts := globalOutputOptions{
+		debug: isTruthyEnv(os.Getenv("SKILL_HUB_VERBOSE")),
+	}
 	auditJSON := false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -177,12 +272,29 @@ func requestsJSON(selected *cobra.Command, args []string) bool {
 		}
 		if strings.HasPrefix(arg, "--") {
 			name, value, hasValue := strings.Cut(strings.TrimPrefix(arg, "--"), "=")
-			if name == "json" {
-				jsonOutput = true
+			switch name {
+			case "json":
+				opts.json = true
 				if hasValue {
 					if parsed, err := strconv.ParseBool(value); err == nil {
-						jsonOutput = parsed
+						opts.json = parsed
 					}
+				}
+				continue
+			case "debug":
+				opts.debug = true
+				if hasValue {
+					if parsed, err := strconv.ParseBool(value); err == nil {
+						opts.debug = parsed
+					}
+				}
+				continue
+			case "log-file":
+				if hasValue {
+					opts.logFile = value
+				} else if i+1 < len(args) {
+					i++
+					opts.logFile = args[i]
 				}
 				continue
 			}
@@ -206,7 +318,8 @@ func requestsJSON(selected *cobra.Command, args []string) bool {
 			}
 		}
 	}
-	return jsonOutput || auditJSON
+	opts.json = opts.json || auditJSON
+	return opts
 }
 
 func inputRequired(message string) error {

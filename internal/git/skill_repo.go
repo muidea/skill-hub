@@ -13,6 +13,7 @@ import (
 	"github.com/muidea/skill-hub/internal/adapter"
 	"github.com/muidea/skill-hub/internal/config"
 	apperrors "github.com/muidea/skill-hub/pkg/errors"
+	"github.com/muidea/skill-hub/pkg/logging"
 	"github.com/muidea/skill-hub/pkg/skill"
 	"github.com/muidea/skill-hub/pkg/spec"
 )
@@ -53,7 +54,7 @@ type SyncOptions struct {
 // SyncWithOptions 同步技能仓库（拉取最新更改）
 func (sr *SkillRepository) SyncWithOptions(opts SyncOptions) error {
 	sr.stashRef = ""
-	fmt.Println("正在同步技能仓库...")
+	logging.DetailPrintln("正在同步技能仓库...")
 
 	if !sr.repo.IsInitialized() {
 		return fmt.Errorf("技能仓库未初始化，请先设置远程仓库URL")
@@ -76,7 +77,7 @@ func (sr *SkillRepository) SyncWithOptions(opts SyncOptions) error {
 			return fmt.Errorf("检查远程更新失败: %w", err)
 		}
 		if updates != nil && !updates.HasUpdates {
-			fmt.Println("✅ 远程仓库已是最新，保留本地未提交更改")
+			logging.DetailPrintln("✅ 远程仓库已是最新，保留本地未提交更改")
 			return nil
 		}
 
@@ -89,7 +90,7 @@ func (sr *SkillRepository) SyncWithOptions(opts SyncOptions) error {
 	}
 
 	// 拉取最新更改
-	fmt.Println("从远程仓库拉取最新更改...")
+	logging.DetailPrintln("从远程仓库拉取最新更改...")
 	if err := sr.repo.Pull(); err != nil {
 		if changed, inspectErr := sr.repo.pullChangedFiles(); inspectErr == nil {
 			d := sr.repo.pullDiagnostic("", changed, nil)
@@ -114,7 +115,7 @@ func (sr *SkillRepository) SyncWithOptions(opts SyncOptions) error {
 		return fmt.Errorf("拉取失败: %w", err)
 	}
 
-	fmt.Println("✅ 技能仓库同步完成")
+	logging.DetailPrintln("✅ 技能仓库同步完成")
 	return nil
 }
 
@@ -151,8 +152,10 @@ func isGitStatusCode(status byte) bool {
 
 func (sr *SkillRepository) stashLocalChanges() error {
 	message := fmt.Sprintf("skill-hub pull auto-stash %s", time.Now().Format("20060102-150405"))
-	fmt.Printf("使用 git stash 暂存本地更改: %s\n", message)
-	output, err := exec.Command("git", "-C", sr.repo.GetPath(), "stash", "push", "-u", "-m", message).CombinedOutput()
+	logging.DetailPrintf("使用 git stash 暂存本地更改: %s\n", message)
+	cmd := exec.Command("git", "-C", sr.repo.GetPath(), "stash", "push", "-u", "-m", message)
+	output, err := cmd.CombinedOutput()
+	logging.LogCommandOutput("git", cmd.Args[1:], output, err)
 	if err != nil {
 		return fmt.Errorf("自动暂存本地更改失败: %s: %w", strings.TrimSpace(string(output)), err)
 	}
@@ -161,7 +164,7 @@ func (sr *SkillRepository) stashLocalChanges() error {
 		return fmt.Errorf("更改已暂存，但读取 stash 引用失败: %w", err)
 	}
 	sr.stashRef = strings.TrimSpace(string(ref))
-	fmt.Printf("✅ 本地更改已保存在 stash %s\n", sr.stashRef)
+	logging.DetailPrintf("✅ 本地更改已保存在 stash %s\n", sr.stashRef)
 	return nil
 }
 
@@ -193,8 +196,15 @@ func (sr *SkillRepository) PushChanges(message string) error {
 			message = SuggestedCommitMessageFromStatus(status)
 		}
 
-		fmt.Println("提交更改...")
+		logging.DetailPrintln("提交更改...")
 		if err := sr.repo.Commit(message); err != nil {
+			var appErr *apperrors.AppError
+			if apperrors.As(err, &appErr) {
+				return err
+			}
+			if strings.HasPrefix(err.Error(), "提交失败:") {
+				return err
+			}
 			return fmt.Errorf("提交失败: %w", err)
 		}
 	}
@@ -208,23 +218,23 @@ func (sr *SkillRepository) PushChanges(message string) error {
 	}
 
 	// 推送到远程
-	fmt.Println("推送到远程仓库...")
+	logging.DetailPrintln("推送到远程仓库...")
 	if err := sr.repo.Push(); err != nil {
 		if _, ok := err.(*NonFastForwardError); ok {
-			fmt.Println("远程仓库已有新提交，按技能版本自动合并后重试推送...")
+			logging.DetailPrintln("远程仓库已有新提交，按技能版本自动合并后重试推送...")
 			if resolveErr := sr.resolveRemoteSkillUpdatesByVersion(); resolveErr != nil {
 				return fmt.Errorf("自动合并远程更新失败: %w", resolveErr)
 			}
 			if err := sr.repo.Push(); err != nil {
 				return fmt.Errorf("推送失败: %w", err)
 			}
-			fmt.Println("✅ 更改已推送到远程仓库")
+			logging.DetailPrintln("✅ 更改已推送到远程仓库")
 			return nil
 		}
 		return fmt.Errorf("推送失败: %w", err)
 	}
 
-	fmt.Println("✅ 更改已推送到远程仓库")
+	logging.DetailPrintln("✅ 更改已推送到远程仓库")
 	return nil
 }
 
@@ -252,7 +262,7 @@ func (sr *SkillRepository) resolveRemoteSkillUpdatesByVersion() error {
 	}
 
 	if updates.Ahead > 0 {
-		fmt.Println("本地与远程存在分叉，按 skill 版本自动合并远程更新...")
+		logging.DetailPrintln("本地与远程存在分叉，按 skill 版本自动合并远程更新...")
 		if err := sr.repo.MergeRemoteMainAllowConflicts(); err != nil {
 			return err
 		}
@@ -260,7 +270,7 @@ func (sr *SkillRepository) resolveRemoteSkillUpdatesByVersion() error {
 			return err
 		}
 	} else {
-		fmt.Println("从远程仓库拉取最新更改...")
+		logging.DetailPrintln("从远程仓库拉取最新更改...")
 		if err := sr.repo.Pull(); err != nil {
 			if stashed {
 				return fmt.Errorf("拉取远程更新失败，本地更改仍保留在 stash 中: %w", err)
@@ -270,7 +280,7 @@ func (sr *SkillRepository) resolveRemoteSkillUpdatesByVersion() error {
 	}
 
 	if stashed {
-		fmt.Println("恢复本地更改并按 skill 版本解决冲突...")
+		logging.DetailPrintln("恢复本地更改并按 skill 版本解决冲突...")
 		if err := sr.popStashedChangesAllowConflicts(); err != nil {
 			return err
 		}
@@ -294,9 +304,7 @@ func (sr *SkillRepository) popStashedChangesAllowConflicts() error {
 	// the host's LANG/LC_ALL.
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
-	if len(output) > 0 {
-		fmt.Print(string(output))
-	}
+	logging.LogCommandOutput("git", cmd.Args[1:], output, err)
 	if err == nil {
 		return nil
 	}
@@ -330,12 +338,12 @@ func (sr *SkillRepository) resolveSkillConflictsByVersion() error {
 			if err := sr.checkoutConflictSkillSide(skillID, "--ours"); err != nil {
 				return err
 			}
-			fmt.Printf("保留本地版本: %s local=%s remote=%s\n", skillID, localVersion, remoteVersion)
+			logging.DetailPrintf("保留本地版本: %s local=%s remote=%s\n", skillID, localVersion, remoteVersion)
 		case "theirs":
 			if err := sr.checkoutConflictSkillSide(skillID, "--theirs"); err != nil {
 				return err
 			}
-			fmt.Printf("采用远端版本: %s local=%s remote=%s\n", skillID, localVersion, remoteVersion)
+			logging.DetailPrintf("采用远端版本: %s local=%s remote=%s\n", skillID, localVersion, remoteVersion)
 		default:
 			unresolved = append(unresolved, skillVersionConflict{
 				SkillID:       skillID,
@@ -368,7 +376,9 @@ func (sr *SkillRepository) commitAutoMergeIfNeeded() error {
 }
 
 func (sr *SkillRepository) resolveRegistryConflict() error {
-	output, err := exec.Command("git", "-C", sr.repo.GetPath(), "diff", "--name-only", "--diff-filter=U", "--", "registry.json").CombinedOutput()
+	diffCmd := exec.Command("git", "-C", sr.repo.GetPath(), "diff", "--name-only", "--diff-filter=U", "--", "registry.json")
+	output, err := diffCmd.CombinedOutput()
+	logging.LogCommandOutput("git", diffCmd.Args[1:], output, err)
 	if err != nil {
 		return fmt.Errorf("检查 registry.json 冲突失败: %s: %w", strings.TrimSpace(string(output)), err)
 	}
@@ -378,7 +388,9 @@ func (sr *SkillRepository) resolveRegistryConflict() error {
 	if err := sr.UpdateRegistry(); err != nil {
 		return fmt.Errorf("重建 registry.json 失败: %w", err)
 	}
-	output, err = exec.Command("git", "-C", sr.repo.GetPath(), "add", "registry.json").CombinedOutput()
+	addCmd := exec.Command("git", "-C", sr.repo.GetPath(), "add", "registry.json")
+	output, err = addCmd.CombinedOutput()
+	logging.LogCommandOutput("git", addCmd.Args[1:], output, err)
 	if err != nil {
 		return fmt.Errorf("暂存 registry.json 合并结果失败: %s: %w", strings.TrimSpace(string(output)), err)
 	}
@@ -386,7 +398,9 @@ func (sr *SkillRepository) resolveRegistryConflict() error {
 }
 
 func (sr *SkillRepository) unmergedSkillIDs() ([]string, error) {
-	output, err := exec.Command("git", "-C", sr.repo.GetPath(), "diff", "--name-only", "--diff-filter=U").CombinedOutput()
+	cmd := exec.Command("git", "-C", sr.repo.GetPath(), "diff", "--name-only", "--diff-filter=U")
+	output, err := cmd.CombinedOutput()
+	logging.LogCommandOutput("git", cmd.Args[1:], output, err)
 	if err != nil {
 		return nil, fmt.Errorf("读取冲突文件失败: %s: %w", strings.TrimSpace(string(output)), err)
 	}
@@ -430,7 +444,9 @@ func (sr *SkillRepository) chooseSkillConflictSide(skillID string) (string, stri
 
 func (sr *SkillRepository) conflictSkillVersion(skillID, stagePrefix string) (string, error) {
 	ref := fmt.Sprintf("%sskills/%s/SKILL.md", stagePrefix, skillID)
-	output, err := exec.Command("git", "-C", sr.repo.GetPath(), "show", ref).CombinedOutput()
+	cmd := exec.Command("git", "-C", sr.repo.GetPath(), "show", ref)
+	output, err := cmd.CombinedOutput()
+	logging.LogCommandOutput("git", cmd.Args[1:], output, err)
 	if err != nil {
 		return "", fmt.Errorf("读取技能 %s 的冲突版本失败: %s: %w", skillID, strings.TrimSpace(string(output)), err)
 	}
@@ -439,11 +455,15 @@ func (sr *SkillRepository) conflictSkillVersion(skillID, stagePrefix string) (st
 
 func (sr *SkillRepository) checkoutConflictSkillSide(skillID, side string) error {
 	pattern := fmt.Sprintf("skills/%s", skillID)
-	output, err := exec.Command("git", "-C", sr.repo.GetPath(), "checkout", side, "--", pattern).CombinedOutput()
+	checkoutCmd := exec.Command("git", "-C", sr.repo.GetPath(), "checkout", side, "--", pattern)
+	output, err := checkoutCmd.CombinedOutput()
+	logging.LogCommandOutput("git", checkoutCmd.Args[1:], output, err)
 	if err != nil {
 		return fmt.Errorf("选择技能 %s 的%s版本失败: %s: %w", skillID, side, strings.TrimSpace(string(output)), err)
 	}
-	output, err = exec.Command("git", "-C", sr.repo.GetPath(), "add", pattern).CombinedOutput()
+	addCmd := exec.Command("git", "-C", sr.repo.GetPath(), "add", pattern)
+	output, err = addCmd.CombinedOutput()
+	logging.LogCommandOutput("git", addCmd.Args[1:], output, err)
 	if err != nil {
 		return fmt.Errorf("暂存技能 %s 合并结果失败: %s: %w", skillID, strings.TrimSpace(string(output)), err)
 	}
@@ -545,7 +565,7 @@ func skillIDsFromChangedFiles(changedFiles []string) []string {
 
 // CloneRemote 克隆远程技能仓库
 func (sr *SkillRepository) CloneRemote(url string) error {
-	fmt.Printf("正在克隆远程技能仓库: %s\n", url)
+	logging.DetailPrintf("正在克隆远程技能仓库: %s\n", url)
 
 	// 获取技能目录路径
 	skillsDir, err := config.GetSkillsDir()
@@ -556,7 +576,7 @@ func (sr *SkillRepository) CloneRemote(url string) error {
 	// 如果目录已存在，备份
 	if _, err := os.Stat(skillsDir); err == nil {
 		backupDir := skillsDir + ".bak." + time.Now().Format("20060102-150405")
-		fmt.Printf("备份现有技能目录到: %s\n", backupDir)
+		logging.DetailPrintf("备份现有技能目录到: %s\n", backupDir)
 		if err := os.Rename(skillsDir, backupDir); err != nil {
 			return fmt.Errorf("备份失败: %w", err)
 		}
@@ -586,11 +606,11 @@ func (sr *SkillRepository) CloneRemote(url string) error {
 		}
 	}
 
-	fmt.Println("✅ 远程技能仓库克隆完成")
+	logging.DetailPrintln("✅ 远程技能仓库克隆完成")
 
 	// 清理可能创建的备份目录
 	if err := adapter.CleanupTimestampedBackupDirs(skillsDir); err != nil {
-		fmt.Printf("⚠️  清理备份目录失败: %v\n", err)
+		logging.DetailPrintf("⚠️  清理备份目录失败: %v\n", err)
 	}
 
 	return nil
@@ -739,7 +759,7 @@ func (sr *SkillRepository) ImportSkill(skillID string) error {
 		return fmt.Errorf("技能 '%s' 缺少SKILL.md文件", skillID)
 	}
 
-	fmt.Printf("✅ 技能 '%s' 已从远程仓库导入\n", skillID)
+	logging.DetailPrintf("✅ 技能 '%s' 已从远程仓库导入\n", skillID)
 	return nil
 }
 
@@ -793,17 +813,17 @@ metadata:
 		return fmt.Errorf("保存SKILL.md失败: %w", err)
 	}
 
-	fmt.Printf("✅ 技能 '%s' 创建成功\n", skill.ID)
+	logging.DetailPrintf("✅ 技能 '%s' 创建成功\n", skill.ID)
 	if err := sr.UpdateRegistry(); err != nil {
-		fmt.Printf("⚠️  技能索引刷新失败: %v\n", err)
+		logging.DetailPrintf("⚠️  技能索引刷新失败: %v\n", err)
 	}
 
 	// 推送到远程仓库
 	if sr.repo.IsInitialized() {
 		message := fmt.Sprintf("添加新技能: %s", skill.ID)
 		if err := sr.PushChanges(message); err != nil {
-			fmt.Printf("⚠️  技能创建成功，但推送到远程失败: %v\n", err)
-			fmt.Println("   使用 'skill-hub git push' 手动推送")
+			logging.DetailPrintf("⚠️  技能创建成功，但推送到远程失败: %v\n", err)
+			logging.DetailPrintln("   使用 'skill-hub git push' 手动推送")
 		}
 	}
 

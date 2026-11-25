@@ -3,8 +3,6 @@ package cli
 import (
 	"bufio"
 	"context"
-	"io"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -196,13 +194,11 @@ func runPushStructured() (*pushSummary, error) {
 			ExpectedChangedFiles: summary.ChangedFiles,
 		})
 	} else {
-		pushErr = runSilencingStdout(func() error {
-			return pushSkillRepositoryChanges(message)
-		})
+		pushErr = pushSkillRepositoryChanges(message)
 	}
 	if pushErr != nil {
 		summary.Status = "failed"
-		summary.Error = pushErr.Error()
+		summary.Error = FormatError(pushErr)
 		return summary, errors.Wrap(pushErr, "推送失败")
 	}
 
@@ -297,24 +293,4 @@ func isPushChangeLine(line string) bool {
 		}
 	}
 	return false
-}
-
-func runSilencingStdout(fn func() error) error {
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		return fn()
-	}
-	os.Stdout = w
-	done := make(chan struct{})
-	go func() {
-		_, _ = io.Copy(io.Discard, r)
-		close(done)
-	}()
-	err = fn()
-	_ = w.Close()
-	os.Stdout = oldStdout
-	<-done
-	_ = r.Close()
-	return err
 }

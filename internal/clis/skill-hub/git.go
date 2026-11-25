@@ -111,8 +111,12 @@ func runGitRepositorySync(command string, jsonOutput bool) error {
 			return err
 		}
 	}
-	_, err := pullSyncDefaultRepository(client, useService)
-	return err
+	skillCount, err := pullSyncDefaultRepository(client, useService)
+	if err != nil {
+		return err
+	}
+	printfText("✅ 默认仓库同步完成，共 %d 个技能\n", skillCount)
+	return nil
 }
 
 type gitSyncSummary struct {
@@ -237,6 +241,7 @@ func runGitCommit() error {
 	if jsonMode() {
 		return writeJSON(map[string]any{"status": "pushed", "message": message})
 	}
+	printlnText("✅ 默认仓库更改已提交并推送到远程仓库")
 	return nil
 }
 
@@ -279,6 +284,7 @@ func runGitPush() error {
 	if jsonMode() {
 		return writeJSON(map[string]any{"status": "pushed"})
 	}
+	printlnText("✅ 本地提交已推送到远程仓库")
 	return nil
 }
 

@@ -25,7 +25,7 @@ type RepositorySyncResult struct {
 func Clone(url, dir string) error {
 	logger := logging.GetGlobalLogger().WithOperation("Clone")
 	logger.Info("正在克隆仓库", "url", url, "dir", dir)
-	fmt.Printf("正在克隆仓库: %s -> %s\n", url, dir)
+	logging.DetailPrintf("正在克隆仓库: %s -> %s\n", url, dir)
 
 	// 确保目录不存在或为空
 	if _, err := os.Stat(dir); err == nil {
@@ -49,7 +49,7 @@ func Clone(url, dir string) error {
 	// 配置克隆选项
 	options := &git.CloneOptions{
 		URL:      url,
-		Progress: os.Stdout,
+		Progress: logging.DetailWriter(),
 	}
 
 	// 执行克隆
@@ -65,13 +65,13 @@ func Clone(url, dir string) error {
 		return fmt.Errorf("%s", errMsg)
 	}
 
-	fmt.Println("✅ 克隆完成")
+	logging.DetailPrintln("✅ 克隆完成")
 	return nil
 }
 
 // Init 初始化新的Git仓库
 func Init(dir string) error {
-	fmt.Printf("正在初始化Git仓库: %s\n", dir)
+	logging.DetailPrintf("正在初始化Git仓库: %s\n", dir)
 
 	// 确保目录存在
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -84,7 +84,7 @@ func Init(dir string) error {
 		return fmt.Errorf("初始化失败: %w", err)
 	}
 
-	fmt.Println("✅ 初始化完成")
+	logging.DetailPrintln("✅ 初始化完成")
 	return nil
 }
 
@@ -109,18 +109,18 @@ func Pull(dir string) error {
 // Sync fetches the tracked remote branch and only fast-forwards the worktree.
 // It never publishes local commits or creates merge commits.
 func Sync(dir string) (*RepositorySyncResult, error) {
-	fmt.Printf("正在拉取更新: %s\n", dir)
+	logging.DetailPrintf("正在拉取更新: %s\n", dir)
 
 	fetch := exec.Command("git", "-C", dir, "fetch")
 	output, err := fetch.CombinedOutput()
-	if len(output) > 0 {
-		fmt.Print(string(output))
-	}
+	logging.LogCommandOutput("git", fetch.Args[1:], output, err)
 	if err != nil {
 		return nil, formatPullError(err, output)
 	}
 
-	statusOutput, err := exec.Command("git", "-C", dir, "status", "--porcelain=v2", "--branch").CombinedOutput()
+	statusCmd := exec.Command("git", "-C", dir, "status", "--porcelain=v2", "--branch")
+	statusOutput, err := statusCmd.CombinedOutput()
+	logging.LogCommandOutput("git", statusCmd.Args[1:], statusOutput, err)
 	if err != nil {
 		return nil, fmt.Errorf("获取同步状态失败: %s: %w", strings.TrimSpace(string(statusOutput)), err)
 	}
@@ -138,26 +138,24 @@ func Sync(dir string) (*RepositorySyncResult, error) {
 	case ahead > 0:
 		result.Status = "local_ahead"
 		result.Message = fmt.Sprintf("本地有 %d 个提交尚未推送；未执行 pull", ahead)
-		fmt.Printf("⚠️  %s\n", result.Message)
+		logging.DetailPrintf("⚠️  %s\n", result.Message)
 		return result, nil
 	case behind == 0:
 		result.Status = "up_to_date"
 		result.Message = "远程仓库已是最新"
-		fmt.Println("✅ 拉取完成")
+		logging.DetailPrintln("✅ 拉取完成")
 		return result, nil
 	}
 
 	pull := exec.Command("git", "-C", dir, "pull", "--ff-only")
 	output, err = pull.CombinedOutput()
-	if len(output) > 0 {
-		fmt.Print(string(output))
-	}
+	logging.LogCommandOutput("git", pull.Args[1:], output, err)
 	if err != nil {
 		return nil, formatPullError(err, output)
 	}
 	result.Status = "synced"
 	result.Message = fmt.Sprintf("已拉取 %d 个远端提交", behind)
-	fmt.Println("✅ 拉取完成")
+	logging.DetailPrintln("✅ 拉取完成")
 	return result, nil
 }
 

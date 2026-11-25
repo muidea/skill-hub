@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/muidea/skill-hub/pkg/errors"
@@ -45,20 +46,7 @@ type Logger struct {
 
 // NewLogger 创建新的日志记录器
 func NewLogger(config Config) (*Logger, error) {
-	// 设置日志级别
-	var level slog.Level
-	switch config.Level {
-	case LevelDebug:
-		level = slog.LevelDebug
-	case LevelInfo:
-		level = slog.LevelInfo
-	case LevelWarn:
-		level = slog.LevelWarn
-	case LevelError:
-		level = slog.LevelError
-	default:
-		level = slog.LevelInfo
-	}
+	level := parseSlogLevel(config.Level)
 
 	// 设置输出
 	var output *os.File
@@ -194,7 +182,25 @@ func (l *Logger) Debug(msg string, args ...any) {
 }
 
 // Global logger instance
-var globalLogger *Logger
+var (
+	globalLoggerMu sync.RWMutex
+	globalLogger   *Logger
+)
+
+func parseSlogLevel(level LogLevel) slog.Level {
+	switch level {
+	case LevelDebug:
+		return slog.LevelDebug
+	case LevelInfo:
+		return slog.LevelInfo
+	case LevelWarn:
+		return slog.LevelWarn
+	case LevelError:
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
 
 // InitGlobalLogger 初始化全局日志记录器
 func InitGlobalLogger(config Config) error {
@@ -202,18 +208,56 @@ func InitGlobalLogger(config Config) error {
 	if err != nil {
 		return err
 	}
+	globalLoggerMu.Lock()
 	globalLogger = logger
+	globalLoggerMu.Unlock()
 	return nil
 }
 
 // GetGlobalLogger 获取全局日志记录器
 func GetGlobalLogger() *Logger {
+	globalLoggerMu.RLock()
+	logger := globalLogger
+	globalLoggerMu.RUnlock()
+	if logger != nil {
+		return logger
+	}
+
+	globalLoggerMu.Lock()
+	defer globalLoggerMu.Unlock()
 	if globalLogger == nil {
 		// 使用默认配置创建
-		logger, _ := NewLogger(DefaultConfig)
-		globalLogger = logger
+		created, _ := NewLogger(DefaultConfig)
+		globalLogger = created
 	}
 	return globalLogger
+}
+
+// BindGlobalLogger 临时将全局 logger（包含 pkg/errors 全局 logger）绑定到指定 writer，并返回恢复函数
+func BindGlobalLogger(w io.Writer, level LogLevel) func() {
+	if w == nil {
+		w = io.Discard
+	}
+	bound := &Logger{
+		Logger: slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: parseSlogLevel(level)})),
+		config: Config{Level: level, Format: "text"},
+	}
+
+	globalLoggerMu.Lock()
+	prevGlobal := globalLogger
+	prevErrLogger := errors.GetLogger()
+	globalLogger = bound
+	errors.SetLogger(bound)
+	globalLoggerMu.Unlock()
+
+	return func() {
+		globalLoggerMu.Lock()
+		globalLogger = prevGlobal
+		if prevErrLogger != nil {
+			errors.SetLogger(prevErrLogger)
+		}
+		globalLoggerMu.Unlock()
+	}
 }
 
 // DiscardLogger 返回一个丢弃所有输出的logger，用于测试

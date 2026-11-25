@@ -478,16 +478,7 @@ func syncConfiguredRepositoryWithClient(client serviceBridgeClient, useService b
 	if useService {
 		return client.SyncRepo(context.Background(), name)
 	}
-	if !quiet {
-		return syncRepository(name)
-	}
-	var result *httpapibiz.RepoSyncData
-	err := runSilencingStdout(func() error {
-		var syncErr error
-		result, syncErr = syncRepository(name)
-		return syncErr
-	})
-	return result, err
+	return syncRepository(name)
 }
 
 func applyRepoSyncResult(item *repoSyncItem, result *httpapibiz.RepoSyncData) {
