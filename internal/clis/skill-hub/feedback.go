@@ -221,6 +221,8 @@ func runFeedback(skillID string) error {
 	}
 
 	versionUpdated := false
+	needsVersionBump := false
+	newVersion := ""
 	if hasContentChanges || len(changes) > 0 {
 		projectVersion := normalizeVersionToXYZ(getSkillVersionFromContent(projectContent))
 		repoVersion := "0.0.0"
@@ -245,19 +247,9 @@ func runFeedback(skillID string) error {
 		}
 
 		if compareVersions(projectVersion, repoVersion) <= 0 {
-			newVersion := bumpPatchVersion(repoVersion)
+			newVersion = bumpPatchVersion(repoVersion)
+			needsVersionBump = true
 			printfText("\n🔧 自动升级版本号: %s -> %s\n", projectVersion, newVersion)
-
-			if err := updateSkillMdVersion(projectSkillPath, newVersion); err != nil {
-				return errors.Wrap(err, "更新版本号失败")
-			}
-			printfText("✓ 已更新项目工作区 SKILL.md 版本号\n")
-
-			_, err = os.ReadFile(projectSkillPath)
-			if err != nil {
-				return errors.Wrap(err, "重新读取项目文件失败")
-			}
-			versionUpdated = true
 		} else {
 			printfText("\n✓ 使用用户指定的版本号: %s\n", projectVersion)
 		}
@@ -284,7 +276,22 @@ func runFeedback(skillID string) error {
 		}
 	}
 
+	fileMode := os.FileMode(0644)
+	if needsVersionBump {
+		if info, statErr := os.Stat(projectSkillPath); statErr == nil {
+			fileMode = info.Mode()
+		}
+		if err := updateSkillMdVersion(projectSkillPath, newVersion); err != nil {
+			return errors.Wrap(err, "更新版本号失败")
+		}
+		printfText("✓ 已更新项目工作区 SKILL.md 版本号\n")
+		versionUpdated = true
+	}
+
 	if err := archiveToDefaultRepository(skillID, projectSkillDir); err != nil {
+		if versionUpdated {
+			_ = os.WriteFile(projectSkillPath, projectContent, fileMode)
+		}
 		return errors.Wrap(err, "归档技能到默认仓库失败")
 	}
 

@@ -137,7 +137,26 @@ func missingHeadings(existingContent, candidateContent []byte) []string {
 
 func skillHeadings(content []byte) map[string]struct{} {
 	headings := make(map[string]struct{})
-	for _, line := range strings.Split(string(content), "\n") {
+	lines := strings.Split(string(content), "\n")
+	startIdx := frontmatterEndLine(lines)
+
+	var fenceChar byte
+	var fenceLen int
+	for _, rawLine := range lines[startIdx:] {
+		line := strings.TrimSuffix(rawLine, "\r")
+		if fenceLen > 0 {
+			if isClosingFence(line, fenceChar, fenceLen) {
+				fenceChar = 0
+				fenceLen = 0
+			}
+			continue
+		}
+		if ch, n, ok := parseOpeningFence(line); ok {
+			fenceChar = ch
+			fenceLen = n
+			continue
+		}
+
 		matches := skillHeadingPattern.FindStringSubmatch(line)
 		if len(matches) != 2 {
 			continue
@@ -148,6 +167,53 @@ func skillHeadings(content []byte) map[string]struct{} {
 		}
 	}
 	return headings
+}
+
+func frontmatterEndLine(lines []string) int {
+	if len(lines) == 0 || strings.TrimSuffix(lines[0], "\r") != "---" {
+		return 0
+	}
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSuffix(lines[i], "\r") == "---" {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+func parseOpeningFence(line string) (byte, int, bool) {
+	trimmed := strings.TrimLeft(line, " \t")
+	if len(trimmed) < 3 {
+		return 0, 0, false
+	}
+	ch := trimmed[0]
+	if ch != '`' && ch != '~' {
+		return 0, 0, false
+	}
+	n := 0
+	for n < len(trimmed) && trimmed[n] == ch {
+		n++
+	}
+	if n < 3 {
+		return 0, 0, false
+	}
+	info := trimmed[n:]
+	if ch == '`' && strings.ContainsRune(info, '`') {
+		return 0, 0, false
+	}
+	return ch, n, true
+}
+
+func isClosingFence(line string, ch byte, minLen int) bool {
+	trimmed := strings.TrimLeft(line, " \t")
+	n := 0
+	for n < len(trimmed) && trimmed[n] == ch {
+		n++
+	}
+	if n < minLen {
+		return false
+	}
+	return strings.TrimSpace(trimmed[n:]) == ""
 }
 
 func missingCoreFiles(existingDir, candidateDir string) []string {

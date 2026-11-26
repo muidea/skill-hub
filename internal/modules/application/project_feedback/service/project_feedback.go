@@ -149,13 +149,25 @@ func (p *ProjectFeedback) Apply(projectPath, skillID string) (*PreviewResult, er
 
 	projectSkillDir := filepath.Join(preview.ProjectPath, ".agents", "skills", skillID)
 	projectSkillPath := filepath.Join(projectSkillDir, "SKILL.md")
+	var originalContent []byte
+	fileMode := os.FileMode(0644)
 	if preview.NeedsVersionBump {
+		if info, statErr := os.Stat(projectSkillPath); statErr == nil {
+			fileMode = info.Mode()
+		}
+		originalContent, err = os.ReadFile(projectSkillPath)
+		if err != nil {
+			return nil, errors.Wrap(err, "Apply: 读取项目技能文件失败")
+		}
 		if err := updateSkillMdVersion(projectSkillPath, preview.ResolvedVersion); err != nil {
 			return nil, errors.Wrap(err, "Apply: 更新版本号失败")
 		}
 	}
 
 	if err := p.repository.Archive(skillID, projectSkillDir); err != nil {
+		if preview.NeedsVersionBump {
+			_ = os.WriteFile(projectSkillPath, originalContent, fileMode)
+		}
 		return nil, errors.Wrap(err, "Apply: 归档技能到默认仓库失败")
 	}
 
